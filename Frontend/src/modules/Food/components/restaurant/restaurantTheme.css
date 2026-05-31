@@ -1,16 +1,18 @@
 .restaurant-theme {
-  --rt-primary: #7e3866;
-  --rt-primary-strong: #55254b;
-  --rt-primary-soft: #f9f0f7;
+  --rt-primary: #D51F10;
+  --rt-primary-strong: #9C120A;
+  --rt-primary-soft: #FFF5F5;
   --rt-surface: #ffffff;
-  --rt-border: #ead6e3;
+  --rt-border: #FAD2D0;
   --rt-text: #1f1f24;
   --rt-muted: #6d6470;
   color: var(--rt-text);
 }
 
-.restaurant-theme [class*="text-[#ff8100]"],
-.restaurant-theme [class*="text-[#EB590E]"],
+.restaurant-theme [class~="text-[#ff8100]"],
+.restaurant-theme [class~="text-[#EB590E]"],
+.restaurant-theme [class~="hover:text-[#ff8100]"]:hover,
+.restaurant-theme [class~="hover:text-[#EB590E]"]:hover,
 .restaurant-theme .text-orange-500,
 .restaurant-theme .text-orange-600,
 .restaurant-theme .text-amber-500,
@@ -22,8 +24,10 @@
   color: var(--rt-primary) !important;
 }
 
-.restaurant-theme [class*="bg-[#ff8100]"],
-.restaurant-theme [class*="bg-[#EB590E]"],
+.restaurant-theme [class~="bg-[#ff8100]"],
+.restaurant-theme [class~="bg-[#EB590E]"],
+.restaurant-theme [class~="hover:bg-[#ff8100]"]:hover,
+.restaurant-theme [class~="hover:bg-[#EB590E]"]:hover,
 .restaurant-theme .bg-orange-500,
 .restaurant-theme .bg-orange-600,
 .restaurant-theme .bg-amber-500,
@@ -40,9 +44,9 @@
 .restaurant-theme .hover\:bg-amber-600:hover,
 .restaurant-theme .hover\:bg-green-600:hover,
 .restaurant-theme .hover\:bg-emerald-600:hover,
-.restaurant-theme [class*="hover:bg-[#55254b]"]:hover,
-.restaurant-theme [class*="hover:bg-[#d84f0a]"]:hover,
-.restaurant-theme [class*="hover:bg-[#00A055]"]:hover {
+.restaurant-theme [class~="hover:bg-[#9C120A]"]:hover,
+.restaurant-theme [class~="hover:bg-[#d84f0a]"]:hover,
+.restaurant-theme [class~="hover:bg-[#00A055]"]:hover {
   background-color: var(--rt-primary-strong) !important;
 }
 
@@ -54,8 +58,10 @@
 .restaurant-theme .border-green-200,
 .restaurant-theme .border-green-500\/20,
 .restaurant-theme .border-emerald-200,
-.restaurant-theme [class*="border-[#ff8100]"],
-.restaurant-theme [class*="border-[#EB590E]"] {
+.restaurant-theme [class~="border-[#ff8100]"],
+.restaurant-theme [class~="border-[#EB590E]"],
+.restaurant-theme [class~="hover:border-[#ff8100]"]:hover,
+.restaurant-theme [class~="hover:border-[#EB590E]"]:hover {
   border-color: color-mix(in srgb, var(--rt-primary) 30%, #ffffff) !important;
 }
 
@@ -66,15 +72,17 @@
 .restaurant-theme .bg-orange-500\/10,
 .restaurant-theme .bg-green-500\/10,
 .restaurant-theme .bg-emerald-500\/10,
-.restaurant-theme [class*="bg-[#7e3866]/5"],
-.restaurant-theme [class*="bg-[#7e3866]/10"] {
+.restaurant-theme [class~="bg-[#D51F10]/5"],
+.restaurant-theme [class~="bg-[#D51F10]/10"],
+.restaurant-theme [class~="hover:bg-[#D51F10]/5"]:hover,
+.restaurant-theme [class~="hover:bg-[#D51F10]/10"]:hover {
   background-color: var(--rt-primary-soft) !important;
 }
 
-.restaurant-theme button[class*="bg-black"],
-.restaurant-theme button[class*="bg-gray-900"],
-.restaurant-theme [role="button"][class*="bg-black"],
-.restaurant-theme [role="button"][class*="bg-gray-900"] {
+.restaurant-theme button[class~="bg-black"],
+.restaurant-theme button[class~="bg-gray-900"],
+.restaurant-theme [role="button"][class~="bg-black"],
+.restaurant-theme [role="button"][class~="bg-gray-900"] {
   background-color: var(--rt-primary) !important;
   color: #ffffff !important;
 }

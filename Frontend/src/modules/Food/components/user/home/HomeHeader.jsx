@@ -1,25 +1,71 @@
-import { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
-import { MapPin, ChevronDown, Search, Mic, Bell, CheckCircle2, Tag, Gift, AlertCircle, Clock, BellOff, X, IndianRupee } from 'lucide-react';
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Navigation,
+  ChevronDown,
+  Search,
+  Mic,
+  Bookmark,
+  Bell,
+  BellOff,
+  X,
+  Pizza,
+  Beef,
+  ChefHat,
+  Soup,
+  Coffee,
+  Wallet,
+  MapPin,
+  ShoppingBag,
+  User,
+} from "lucide-react";
+import { Switch } from "@food/components/ui/switch";
 import {
   Popover,
   PopoverContent,
-  PopoverTrigger
+  PopoverTrigger,
 } from "@food/components/ui/popover";
 import { Badge } from "@food/components/ui/badge";
-import { Avatar, AvatarFallback } from "@food/components/ui/avatar";
-import foodIcon from "@food/assets/category-icons/food.png";
-import quickIcon from "@food/assets/category-icons/quick.png";
-import taxiIcon from "@food/assets/category-icons/taxi.png";
-import hotelIcon from "@food/assets/category-icons/hotel.png";
+import foodPattern from "@food/assets/food_pattern_background.png";
 import useNotificationInbox from "@food/hooks/useNotificationInbox";
+import { useCart } from "@food/context/CartContext";
+const RED = "#D51F10";
 
-const ICON_MAP = {
-  CheckCircle2,
-  Tag,
-  Gift,
-  AlertCircle
+const normalizeHex = (hex, fallback = "#8e24aa") => {
+  const value = String(hex || "").trim();
+  return /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+};
+
+const withAlpha = (hex, alpha) => {
+  const value = normalizeHex(hex).slice(1);
+  const r = parseInt(value.slice(0, 2), 16);
+  const g = parseInt(value.slice(2, 4), 16);
+  const b = parseInt(value.slice(4, 6), 16);
+  return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+};
+
+const quickTheme = (baseColor) => {
+  const base = normalizeHex(baseColor, "#67c6f5");
+  return {
+    topBg: `linear-gradient(140deg, ${withAlpha(base, 0.96)} 0%, ${withAlpha(base, 0.78)} 100%)`,
+    accent: base,
+    text: "#ffffff",
+    activeBg: "#ffffff",
+    activeText: base,
+    inactiveBg: withAlpha("#ffffff", 0.18),
+    inactiveBorder: withAlpha("#ffffff", 0.2),
+  };
+};
+
+const foodTheme = {
+  topBg: "transparent",
+  accent: RED,
+  text: "#ffffff",
+  activeBg: "#ffffff",
+  activeText: RED,
+  inactiveBg: "rgba(255,255,255,0.14)",
+  inactiveBorder: "rgba(255,255,255,0.12)",
 };
 
 export default function HomeHeader({
@@ -32,10 +78,17 @@ export default function HomeHeader({
   placeholderIndex,
   placeholders,
   vegMode = false,
-  handleVegModeChange
+  onVegModeChange,
+  bannerContent,
+  quickThemeColor,
+  showVegMode = true,
+  showBanner = true,
+  showHeaderContent = true,
+  hasScrolledPastBanner = false,
 }) {
   const [notifications, setNotifications] = useState(() => {
-    const saved = localStorage.getItem('food_user_notifications');
+    if (typeof window === "undefined") return [];
+    const saved = localStorage.getItem("food_user_notifications");
     return saved ? JSON.parse(saved) : [];
   });
   const {
@@ -43,241 +96,391 @@ export default function HomeHeader({
     unreadCount: broadcastUnreadCount,
     dismiss: dismissBroadcastNotification,
   } = useNotificationInbox("user", { limit: 20 });
+  const { getCartCount } = useCart();
+
+  const [isDark, setIsDark] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return localStorage.getItem("appTheme") === "dark";
+  });
 
   useEffect(() => {
     const syncNotifications = () => {
-      const saved = localStorage.getItem('food_user_notifications');
+      const saved = localStorage.getItem("food_user_notifications");
       setNotifications(saved ? JSON.parse(saved) : []);
     };
-
-    window.addEventListener('notificationsUpdated', syncNotifications);
-
-    return () => window.removeEventListener('notificationsUpdated', syncNotifications);
+    const syncTheme = () => {
+      setIsDark(localStorage.getItem("appTheme") === "dark");
+    };
+    window.addEventListener("notificationsUpdated", syncNotifications);
+    window.addEventListener("food-user-theme-change", syncTheme);
+    window.addEventListener("storage", syncTheme);
+    return () => {
+      window.removeEventListener("notificationsUpdated", syncNotifications);
+      window.removeEventListener("food-user-theme-change", syncTheme);
+      window.removeEventListener("storage", syncTheme);
+    };
   }, []);
+
+  const theme = activeTab === "quick" ? quickTheme(quickThemeColor) : foodTheme;
+  const isFood = activeTab === "food";
+  const useSolidHeader = isFood && hasScrolledPastBanner;
+
+  const isPinkBannerMode = isFood && !useSolidHeader;
+
+  const headerTextColor = useSolidHeader
+    ? (isDark ? "#ffffff" : "#111827")
+    : (isPinkBannerMode ? "#000000" : theme.text);
+
+  const subtitleClassName = useSolidHeader
+    ? "max-w-[190px] truncate text-[11px] font-medium text-gray-600 dark:text-gray-400"
+    : (isPinkBannerMode 
+        ? "max-w-[190px] truncate text-[9px] font-bold text-black/80" 
+        : "max-w-[190px] truncate text-[11px] font-medium text-white/75");
+
+  const actionButtonClassName = useSolidHeader
+    ? "relative h-[38px] w-[38px] rounded-full bg-white dark:bg-[#2a2a2a] border border-gray-200 dark:border-gray-800 flex items-center justify-center shadow-[0_4px_12px_rgba(15,23,42,0.08)]"
+    : (isPinkBannerMode
+        ? "relative h-8 w-8 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow-sm active:scale-90 transition-all"
+        : "relative h-[38px] w-[38px] rounded-full bg-black/18 border border-white/18 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.12)] backdrop-blur-[6px]");
+
+  const actionIconClassName = useSolidHeader
+    ? "h-[18px] w-[18px] text-gray-800 dark:text-white"
+    : (isPinkBannerMode ? "h-4 w-4 text-gray-700" : "h-[18px] w-[18px] text-white");
+
+  const cartButtonClassName = useSolidHeader
+    ? "relative flex h-[38px] w-[38px] items-center justify-center rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#2a2a2a] shadow-[0_4px_12px_rgba(15,23,42,0.08)]"
+    : (isPinkBannerMode
+        ? "relative flex h-8 w-8 items-center justify-center rounded-full bg-white border border-gray-200 shadow-sm active:scale-90 transition-all"
+        : "relative flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/18 bg-black/18 shadow-[0_4px_12px_rgba(0,0,0,0.12)] backdrop-blur-[6px]");
+
+  const searchBoxClassName = useSolidHeader
+    ? "flex-1 rounded-[12px] h-[46px] flex items-center px-3 cursor-pointer relative overflow-hidden bg-[#F3F4F6] dark:bg-[#2a2a2a] border border-gray-200 dark:border-gray-800 shadow-[0_4px_12px_rgba(15,23,42,0.06)]"
+    : (isPinkBannerMode
+        ? "relative bg-white rounded-2xl flex items-center px-4 py-3 shadow-lg border border-black/5 cursor-pointer active:scale-[0.98] transition-all duration-300 flex-1 h-[46px]"
+        : "flex-1 rounded-[12px] h-[46px] flex items-center px-3 cursor-pointer relative overflow-hidden bg-white dark:bg-[#1a1a1a] shadow-[0_6px_18px_rgba(15,23,42,0.10)]");
+  const locationTitle =
+    savedAddressText || location?.area || location?.city || "Select Location";
+  const locationSubtitle =
+    location?.formattedAddress || location?.address || location?.city || "Tap to choose delivery location";
 
   const mergedNotifications = useMemo(() => {
     const localItems = Array.isArray(notifications)
       ? notifications.map((item) => ({ ...item, source: "local" }))
       : [];
-    const broadcastItems = (broadcastNotifications || []).map((item) => ({
+    const remoteItems = (broadcastNotifications || []).map((item) => ({
       ...item,
+      id: item.id || item._id,
       source: "broadcast",
       time: item.createdAt
         ? new Date(item.createdAt).toLocaleString("en-IN", {
-          day: "2-digit",
-          month: "short",
-          hour: "2-digit",
-          minute: "2-digit",
-          hour12: true,
-        })
+            day: "2-digit",
+            month: "short",
+            hour: "2-digit",
+            minute: "2-digit",
+            hour12: true,
+          })
         : "Just now",
-      type: "broadcast",
-      icon: "Bell",
-      iconColor: "text-blue-600",
     }));
-
-    return [...broadcastItems, ...localItems].sort(
+    return [...remoteItems, ...localItems].sort(
       (a, b) =>
         new Date(b.createdAt || b.timestamp || 0).getTime() -
-        new Date(a.createdAt || a.timestamp || 0).getTime()
+        new Date(a.createdAt || a.timestamp || 0).getTime(),
     );
   }, [broadcastNotifications, notifications]);
 
-  const unreadCount = notifications.filter(n => !n.read).length + broadcastUnreadCount;
+  const unreadCount =
+    notifications.filter((item) => !item.read).length + broadcastUnreadCount;
+  const cartCount = getCartCount();
 
-  const handleDeleteNotification = (id, source = "local") => {
+  const removeNotification = (id, source) => {
     if (source === "broadcast") {
       dismissBroadcastNotification(id);
       return;
     }
     setNotifications((prev) => {
-      const next = prev.filter((notification) => notification.id !== id);
-      localStorage.setItem('food_user_notifications', JSON.stringify(next));
-      window.dispatchEvent(new CustomEvent('notificationsUpdated', { detail: { count: next.filter((n) => !n.read).length } }));
+      const next = prev.filter((item) => item.id !== id);
+      localStorage.setItem("food_user_notifications", JSON.stringify(next));
+      window.dispatchEvent(new CustomEvent("notificationsUpdated"));
       return next;
     });
   };
 
   return (
-    <div className="relative pt-2 pb-0 px-4 transition-all duration-700 overflow-hidden bg-transparent shadow-none">
-      {/* Subtle Artistic Glows - Adds depth without being 'boring' */}
-      <div className="absolute top-[-20%] right-[-10%] w-48 h-48 bg-[#7e3866]/5 blur-[80px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-20%] left-[-10%] w-48 h-48 bg-[#48c479]/5 blur-[80px] rounded-full pointer-events-none" />
+    <motion.div
+      className={`relative overflow-hidden transition-all duration-700 ${
+        showBanner && isFood 
+          ? (isPinkBannerMode ? "min-h-[330px]" : "min-h-[450px]") 
+          : "min-h-[90px]"
+      } ${useSolidHeader ? "border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-[#1a1a1a]" : ""}`}
+      style={{
+        background: isFood
+          ? useSolidHeader
+            ? (isDark ? "#1a1a1a" : "#ffffff")
+            : "transparent"
+          : theme.topBg,
+        color: headerTextColor,
+      }}
+    >
+      {showBanner && isFood && bannerContent && (
+        <div className="absolute inset-0 z-0 flex justify-center overflow-hidden">
+          {bannerContent}
+          {!isPinkBannerMode && (
+            <>
+              <div className="absolute inset-0 bg-gradient-to-b from-[#c93a31]/32 via-[#ffdad7]/14 via-[28%] to-black/16" />
+              <div className="absolute inset-0 bg-gradient-to-b from-black/18 via-transparent to-black/16" />
+            </>
+          )}
+        </div>
+      )}
 
-      {/* Main Header Content */}
-      <div className="relative z-10 space-y-2.5">
-        {/* Row 1: Location, Toggle, and Notifications */}
-        <div className="flex items-center justify-between gap-3">
-          {/* Location Selector */}
+      <div
+        className="absolute inset-0 z-[1] opacity-[0.1] pointer-events-none"
+        style={{
+          backgroundImage: `url(${foodPattern})`,
+          backgroundSize: "200px",
+          backgroundRepeat: "repeat",
+          mixBlendMode: "soft-light",
+          display: showBanner ? "block" : "none",
+        }}
+      />
+
+      {showBanner && isFood && (
+        <div className="absolute inset-0 pointer-events-none overflow-hidden">
+          <Pizza className="absolute top-10 right-[15%] opacity-[0.10]" style={{ color: RED }} size={64} />
+          <Beef className="absolute top-40 left-[10%] opacity-[0.08]" style={{ color: RED }} size={80} />
+          <ChefHat className="absolute bottom-[20%] right-[20%] opacity-[0.08]" style={{ color: RED }} size={56} />
+          <Coffee className="absolute top-20 left-[30%] opacity-[0.08]" style={{ color: RED }} size={48} />
+          <Soup className="absolute bottom-[40%] left-[5%] opacity-[0.05]" style={{ color: RED }} size={72} />
+        </div>
+      )}
+
+      {showHeaderContent && (
+        <div className="relative z-10 pt-0 pb-0">
+          {isFood && !useSolidHeader && !isPinkBannerMode && (
+            <div className="absolute inset-0 bg-gradient-to-b from-black/25 to-transparent pointer-events-none" />
+          )}
           <div
-            className="flex items-center gap-2 cursor-pointer group min-w-0 flex-1"
-            onClick={handleLocationClick}
+            className={`rounded-none border-none ${
+              useSolidHeader
+                ? "bg-white dark:bg-[#1a1a1a] shadow-[0_8px_22px_rgba(15,23,42,0.06)] px-3 pt-2 pb-2"
+                : (isPinkBannerMode
+                    ? "bg-transparent shadow-none pt-2 pb-0 px-3 relative overflow-hidden transition-all duration-700"
+                    : "bg-[linear-gradient(180deg,rgba(201,58,49,0.24),rgba(255,230,227,0.16))] shadow-[0_16px_34px_rgba(0,0,0,0.18)] backdrop-blur-[4px] px-3 pt-2 pb-2")
+            }`}
           >
-            <div className="bg-white/10 p-1 rounded-lg group-active:scale-95 transition-all">
-              <MapPin className="h-3.5 w-3.5 text-white/90 fill-white/20" />
-            </div>
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-1">
-                <span className="text-[14px] font-black text-white truncate drop-shadow-sm">
-                  {(() => {
-                    const area = location?.area || location?.subLocality || location?.mainTitle || location?.neighborhood;
-                    const city = (location?.city || "").toLowerCase();
-                    const state = (location?.state || "").toLowerCase();
-
-                    if (area && !/^-?\d+(\.\d+)?$/.test(area.trim())) {
-                      const areaLower = area.toLowerCase();
-                      if (areaLower !== city && areaLower !== state) {
-                        return area;
-                      }
-                    }
-                    
-                    // Fallback to a part of the address if area is missing or redundant
-                    if (location?.address && location.address !== "Select location") {
-                      const parts = location.address.split(',').map(p => p.trim());
-                      // Take the first part that isn't city or state
-                      for (const part of parts) {
-                        const partLower = part.toLowerCase();
-                        if (partLower && 
-                            partLower !== city && 
-                            partLower !== state && 
-                            !/^-?\d/.test(part) &&
-                            part.length > 2) {
-                          return part;
-                        }
-                      }
-                    }
-                    
-                    return location?.area || location?.city || "Select Location";
-                  })()}
-                </span>
-                <ChevronDown className="h-3 w-3 text-white/70" />
-              </div>
-              
-              <span className="text-[10px] font-medium text-white/90 truncate leading-tight mt-0.5">
-                {(() => {
-                  // Format Row 2: State, Pincode (matching screenshot)
-                  const state = location?.state || "";
-                  const pincode = location?.pincode || "";
-                  
-                  if (state && pincode) return `${state}, ${pincode}`;
-                  if (state) return state;
-                  if (pincode) return pincode;
-                  
-                  // Fallback to snippet of address if no state/pincode
-                  const addr = location?.address || "";
-                  if (addr && addr.length > 10) {
-                     return addr.split(',').slice(1, 3).join(',').trim() || "Pinpoint location";
-                  }
-                  
-                  return "Pinpoint location";
-                })()}
-              </span>
-              
-              <span className="text-[9px] font-black text-white/60 uppercase tracking-[0.25em] leading-tight mt-1">
-                {location?.city || "Indore"}
-              </span>
-            </div>
-          </div>
-
-          {/* Right Actions: Veg Toggle & Bell */}
-          <div className="flex items-center gap-2.5">
-            {/* Pure Veg Toggle */}
-            <div 
-              className={`flex items-center gap-1.5 px-2 py-1 rounded-full border transition-all duration-300 ${vegMode ? 'border-white/40 bg-white/10' : 'border-white/10 bg-white/5'}`}
-              onClick={() => handleVegModeChange?.(!vegMode)}
-            >
-              <div className={`w-3 h-3 rounded-sm border flex items-center justify-center transition-colors ${vegMode ? 'border-white bg-white' : 'border-white/30'}`}>
-                {vegMode && <div className="w-1 h-1 rounded-full bg-[#00b09b]" />}
-              </div>
-              <span className={`text-[8px] font-black uppercase tracking-tight ${vegMode ? 'text-white' : 'text-white/60'}`}>Veg</span>
-            </div>
- 
-            <Popover>
-              <PopoverTrigger asChild>
-                <div className="h-8 w-8 relative flex items-center justify-center rounded-full bg-white/10 border border-white/10 cursor-pointer active:scale-90 transition-all">
-                  <Bell className="h-4 w-4 text-white/90" />
-                  {unreadCount > 0 && (
-                    <span className={`absolute top-1.5 right-1.5 w-1.5 h-1.5 rounded-full border animate-pulse ${vegMode ? 'bg-orange-400 border-[#00b09b]' : 'bg-orange-400 border-[#7e3866]'}`} />
+            {isPinkBannerMode && (
+              <>
+                <div className="absolute top-[-20%] right-[-10%] w-48 h-48 bg-[#D51F10]/5 blur-[80px] rounded-full pointer-events-none"></div>
+                <div className="absolute bottom-[-20%] left-[-10%] w-48 h-48 bg-[#48c479]/5 blur-[80px] rounded-full pointer-events-none"></div>
+              </>
+            )}
+          <div className="relative z-10 flex items-center justify-between mb-3">
+            <div className="flex items-start gap-2 cursor-pointer flex-1 min-w-0" onClick={handleLocationClick}>
+              {isFood ? (
+                <>
+                  {isPinkBannerMode ? (
+                    <div className="bg-[#D51F10]/10 p-1 rounded-lg group-active:scale-95 transition-all">
+                      <MapPin
+                        className="h-3 w-3 text-[#D51F10] fill-[#D51F10]/20"
+                        strokeWidth={2}
+                      />
+                    </div>
+                  ) : (
+                    <Navigation
+                      className="h-[14px] w-[14px] rotate-[15deg] mt-[5px] shrink-0"
+                      style={{ color: theme.accent, fill: theme.accent }}
+                      strokeWidth={2.5}
+                    />
                   )}
+                   <div className="flex min-w-0 max-w-[190px] flex-col">
+                     <div className="flex items-center gap-[3px]">
+                       <span className={isPinkBannerMode ? "truncate text-[13px] font-black text-black" : "truncate text-[16px] font-extrabold tracking-[-0.3px]"}>
+                         {locationTitle}
+                       </span>
+                       <ChevronDown className={isPinkBannerMode ? "h-3 w-3 text-black shrink-0" : "h-[14px] w-[14px] shrink-0 opacity-80"} strokeWidth={isPinkBannerMode ? 2 : 3} />
+                     </div>
+                     <span className={subtitleClassName}>
+                       {locationSubtitle}
+                     </span>
+                   </div>
+                 </>
+              ) : (
+                <div className="flex flex-col min-w-0">
+                  <span className="text-[22px] font-black tracking-tighter leading-none mb-1">15 mins</span>
+                  <span className="text-[11px] font-bold truncate opacity-70">To {locationTitle}</span>
                 </div>
-              </PopoverTrigger>
-              <PopoverContent className="w-80 p-0 overflow-hidden border-none shadow-2xl rounded-2xl mt-2" align="end">
-                <div className="bg-white dark:bg-gray-900">
-                  <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-800/50">
-                    <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
-                      Notifications
-                      {unreadCount > 0 && (
-                        <Badge variant="secondary" className="bg-orange-100 text-[#7e3866] border-none text-[10px] h-4">
-                          {unreadCount} New
-                        </Badge>
-                      )}
-                    </h3>
-                  </div>
-                  <div className="max-h-96 overflow-y-auto">
-                    {mergedNotifications.length > 0 ? (
-                      mergedNotifications.slice(0, 5).map((notif) => {
-                        const Icon = ICON_MAP[notif.icon] || Bell;
-                        return (
-                          <div key={notif.id} className="p-4 flex items-start gap-3 border-b border-gray-50 dark:border-gray-800 hover:bg-gray-50 transition-colors">
-                            <div className="mt-1 p-2 rounded-full bg-gray-100 text-[#7e3866]">
-                              <Icon className="h-4 w-4" />
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              {isPinkBannerMode && (
+                <Link
+                  to="/food/user/wallet"
+                  className={actionButtonClassName}
+                >
+                  <Wallet className={actionIconClassName} strokeWidth={2} />
+                </Link>
+              )}
+
+              <Popover>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    className={actionButtonClassName}
+                  >
+                    <Bell className={actionIconClassName} />
+                    {unreadCount > 0 && (
+                      <span className="absolute top-1.5 right-1.5 h-2.5 w-2.5 rounded-full bg-yellow-400 border border-white" />
+                    )}
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0 overflow-hidden border-none shadow-2xl rounded-2xl mt-2 z-[100]" align="end">
+                  <div className="bg-white dark:bg-[#1a1a1a]">
+                    <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between bg-gray-50/50 dark:bg-gray-900/50">
+                      <h3 className="font-bold text-gray-900 dark:text-white flex items-center gap-2">
+                        Notifications
+                        {unreadCount > 0 && (
+                          <Badge variant="secondary" className="bg-red-100 dark:bg-red-950/40 text-red-600 dark:text-red-400 border-none text-[10px] h-4">
+                            {unreadCount} New
+                          </Badge>
+                        )}
+                      </h3>
+                      <Link to="/food/user/notifications" className="text-xs font-bold text-red-600 dark:text-red-400">
+                        {mergedNotifications.length > 0 ? "View All" : ""}
+                      </Link>
+                    </div>
+                    <div className="max-h-96 overflow-y-auto">
+                      {mergedNotifications.length > 0 ? (
+                        mergedNotifications.slice(0, 5).map((item) => (
+                          <div key={item.id} className="p-4 flex items-start gap-3 border-b border-gray-50 dark:border-gray-800/60 last:border-0">
+                            <div className="mt-1 p-2 rounded-full bg-red-100/50 dark:bg-red-950/30 text-red-600 dark:text-red-400">
+                              <Bell className="h-4 w-4" />
                             </div>
                             <div className="flex-1 min-w-0">
-                               <p className="text-sm font-bold text-gray-900 dark:text-white truncate">{notif.title}</p>
-                               <p className="text-xs text-gray-500 line-clamp-1">{notif.message}</p>
+                              <div className="flex items-center justify-between gap-2 mb-0.5">
+                                <span className="text-sm font-bold text-gray-900 dark:text-white truncate">{item.title}</span>
+                                <div className="flex items-center gap-1">
+                                  <span className="text-[10px] text-gray-400 whitespace-nowrap">{item.time}</span>
+                                  <button
+                                    type="button"
+                                    onClick={(event) => {
+                                      event.preventDefault();
+                                      event.stopPropagation();
+                                      removeNotification(item.id, item.source);
+                                    }}
+                                    className="rounded-full p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 transition-colors"
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              </div>
+                              <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 leading-relaxed">{item.message}</p>
                             </div>
                           </div>
-                        )
-                      })
-                    ) : (
-                      <div className="p-8 text-center flex flex-col items-center gap-2">
-                        <BellOff className="h-10 w-10 text-gray-200" />
-                        <p className="text-xs text-gray-400 font-medium">All caught up!</p>
-                      </div>
+                        ))
+                      ) : (
+                        <div className="p-8 text-center flex flex-col items-center gap-2">
+                          <BellOff className="h-10 w-10 text-gray-200 dark:text-gray-700" />
+                          <p className="text-xs text-gray-400 dark:text-gray-500 font-medium">All caught up!</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </PopoverContent>
+              </Popover>
+
+              {isPinkBannerMode ? (
+                <>
+                  <Link
+                    to="/food/user/cart"
+                    className={actionButtonClassName}
+                  >
+                    <ShoppingBag className={actionIconClassName} strokeWidth={2} />
+                    {cartCount > 0 && (
+                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-600 text-[10px] font-bold text-white">
+                        {cartCount}
+                      </span>
                     )}
-                  </div>
-                  <div className="p-3 bg-gray-50 dark:bg-gray-800/50 text-center">
-                    <Link to="/food/user/notifications" className="text-xs font-bold text-gray-400">View All</Link>
-                  </div>
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-
-        <div
-          className="relative bg-white rounded-2xl flex items-center px-4 py-3 shadow-lg border border-black/5 cursor-pointer active:scale-[0.98] transition-all duration-300 max-w-[95%] mx-auto"
-          onClick={handleSearchFocus}
-        >
-          <Search className="h-4.5 w-4.5 text-[#7e3866] mr-2 shrink-0" strokeWidth={3} />
-          
-          <div className="flex-1 overflow-hidden relative h-5">
-            <AnimatePresence mode="wait">
-              <motion.span
-                key={placeholderIndex}
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -10, opacity: 0 }}
-                transition={{ duration: 0.2 }}
-                className="absolute inset-0 text-sm font-bold text-gray-400 truncate flex items-center"
-              >
-                {placeholders?.[placeholderIndex] || 'Search'}
-              </motion.span>
-            </AnimatePresence>
+                  </Link>
+                  <Link
+                    to="/food/user/profile"
+                    className={actionButtonClassName}
+                  >
+                    <User className={actionIconClassName} strokeWidth={2} />
+                  </Link>
+                </>
+              ) : (
+                <Link
+                  to="/wallet"
+                  className={cartButtonClassName}
+                >
+                  <Wallet className={actionIconClassName} strokeWidth={2.2} />
+                </Link>
+              )}
+            </div>
           </div>
 
-          <div className="flex items-center gap-2 pl-2">
-            <div className="h-4 w-[1px] bg-gray-200" />
-            <Mic 
-              className="h-4.5 w-4.5 text-[#7e3866]" 
-              onClick={(e) => {
-                e.stopPropagation();
-                handleVoiceSearchClick?.();
-              }}
+          <div className="flex items-center gap-3 px-1 flex-1 min-w-0">
+          <div
+            className={searchBoxClassName}
+            onClick={handleSearchFocus}
+          >
+            {!isPinkBannerMode && <div className="absolute left-0 top-0 bottom-0 w-[2.5px] rounded-l-[12px]" style={{ background: `linear-gradient(to bottom, ${RED}, ${RED})` }} />}
+            <Search
+              className={isPinkBannerMode ? "h-4.5 w-4.5 text-[#D51F10] mr-2 shrink-0" : "h-[16px] w-[16px] ml-1.5 mr-2 flex-shrink-0"}
+              style={isPinkBannerMode ? undefined : { color: RED }}
+              strokeWidth={isPinkBannerMode ? 3 : 2.3}
             />
+            <div className="flex-1 overflow-hidden relative h-[20px]">
+              <AnimatePresence mode="wait">
+                <motion.span
+                  key={placeholderIndex}
+                  initial={{ y: 12, opacity: 0 }}
+                  animate={{ y: 0, opacity: 1 }}
+                  exit={{ y: -12, opacity: 0 }}
+                  transition={{ duration: 0.3 }}
+                  className={isPinkBannerMode ? "absolute inset-0 whitespace-nowrap leading-[20px] text-sm font-bold text-gray-600 truncate flex items-center" : "absolute inset-0 whitespace-nowrap leading-[22px] text-[12.5px] font-medium text-gray-400"}
+                >
+                  {placeholders?.[placeholderIndex] || "Search for food..."}
+                </motion.span>
+              </AnimatePresence>
+            </div>
+            {isPinkBannerMode && (
+              <div className="flex items-center gap-2 pl-2">
+                <div className="h-4 w-[1px] bg-gray-200"></div>
+                <Mic className="h-4.5 w-4.5 text-[#D51F10]" strokeWidth={2} />
+              </div>
+            )}
+          </div>
+
+          {isFood && showVegMode ? (
+            <div
+              onClick={() => onVegModeChange?.(!vegMode)}
+              className="flex flex-col items-center gap-1 cursor-pointer select-none"
+            >
+              <span className={isPinkBannerMode ? "text-[7px] font-black text-black uppercase tracking-tighter leading-none" : "text-[10px] font-black tracking-[0.4px] text-[#22C55E] mb-1 leading-none"}>Veg Mode</span>
+              <div className={isPinkBannerMode ? "scale-[0.78]" : "scale-[0.82]"}>
+                <Switch
+                  checked={vegMode}
+                  onCheckedChange={() => {}}
+                  className="data-[state=checked]:bg-green-500 data-[state=unchecked]:bg-gray-400 pointer-events-none"
+                />
+              </div>
+            </div>
+          ) : (
+            !isFood && (
+              <button
+                type="button"
+                className="rounded-[16px] h-[52px] w-[52px] flex items-center justify-center shadow-xl bg-white"
+              >
+                <Bookmark className="h-[22px] w-[22px]" style={{ color: theme.accent }} />
+              </button>
+            )
+          )}
+          </div>
           </div>
         </div>
-      </div>
-    </div>
+      )}
+    </motion.div>
   );
 }
