@@ -5,7 +5,7 @@ import { Phone, ArrowRight, ShieldCheck, Loader2, Utensils, Star, Heart, ShieldQ
 import { toast } from "sonner"
 import { authAPI, userAPI } from "@food/api"
 import { setAuthData } from "@food/utils/auth"
-import logoNew from "@/assets/logo.png"
+import logoNew from "@/assets/Tiffin_logo.png"
 import {
   Dialog,
   DialogContent,

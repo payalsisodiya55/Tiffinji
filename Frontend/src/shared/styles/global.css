@@ -18,31 +18,31 @@
   --radius: 0.625rem;
   
   --background: #F9F9FB;
-  --foreground: #3c0f3d;
+  --foreground: #1E0301;
   --card: #ffffff;
-  --card-foreground: #3c0f3d;
+  --card-foreground: #1E0301;
   --popover: #ffffff;
-  --popover-foreground: #3c0f3d;
-  --primary: #7e3866;
+  --popover-foreground: #1E0301;
+  --primary: #D51F10;
   --primary-foreground: #ffffff;
-  --secondary: #55254b;
+  --secondary: #9C120A;
   --secondary-foreground: #ffffff;
   --muted: #f1f5f9;
-  --muted-foreground: #b18da5;
-  --accent: #b18da5;
+  --muted-foreground: #E58D87;
+  --accent: #E58D87;
   --accent-foreground: #ffffff;
   --destructive: #ef4444;
   --border: #e2e8f0;
   --input: #e2e8f0;
-  --ring: #7e3866;
+  --ring: #D51F10;
   --sidebar: #ffffff;
-  --sidebar-foreground: #3c0f3d;
-  --sidebar-primary: #7e3866;
+  --sidebar-foreground: #1E0301;
+  --sidebar-primary: #D51F10;
   --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #55254b;
+  --sidebar-accent: #9C120A;
   --sidebar-accent-foreground: #ffffff;
   --sidebar-border: #e2e8f0;
-  --sidebar-ring: #7e3866;
+  --sidebar-ring: #D51F10;
 }
 
 @theme inline {
@@ -78,7 +78,7 @@
   --color-sidebar-ring: var(--sidebar-ring);
   
   --color-page-bg: #F9F9FB;
-  --color-primary-orange: #7e3866;
+  --color-primary-orange: #D51F10;
   --font-poppins: var(--font-poppins);
   --font-outfit: var(--font-outfit);
 }
@@ -166,3 +166,120 @@
   z-index: 999999 !important;
   pointer-events: auto !important;
 }
+
+/* Centralized Theme Overrides for User Module (replacing purple with #D51F10 and its variants) */
+[class*="[#7e3866]"] {
+  --tw-shadow-color: rgba(213, 31, 16, 0.2) !important;
+}
+
+/* Exact class overrides to prevent hover: classes from applying in normal states */
+[class~="bg-[#7e3866]"] {
+  background-color: #D51F10 !important;
+}
+[class~="text-[#7e3866]"] {
+  color: #D51F10 !important;
+}
+[class~="border-[#7e3866]"] {
+  border-color: #D51F10 !important;
+}
+[class~="ring-[#7e3866]"] {
+  --tw-ring-color: #D51F10 !important;
+}
+
+/* State overrides */
+[class~="focus:border-[#7e3866]"]:focus {
+  border-color: #D51F10 !important;
+}
+[class~="focus:ring-[#7e3866]"]:focus {
+  --tw-ring-color: #D51F10 !important;
+}
+[class~="hover:bg-[#7e3866]"]:hover {
+  background-color: #D51F10 !important;
+}
+[class~="hover:text-[#7e3866]"]:hover {
+  color: #D51F10 !important;
+}
+[class~="hover:border-[#7e3866]"]:hover {
+  border-color: #D51F10 !important;
+}
+[class~="active:bg-[#7e3866]"]:active {
+  background-color: #9C120A !important;
+}
+
+/* Secondary purple (#55254b) overrides */
+[class~="bg-[#55254b]"] {
+  background-color: #9C120A !important;
+}
+[class~="text-[#55254b]"] {
+  color: #9C120A !important;
+}
+[class~="border-[#55254b]"] {
+  border-color: #9C120A !important;
+}
+[class~="hover:bg-[#55254b]"]:hover {
+  background-color: #9C120A !important;
+}
+
+/* Muted/Accent purple (#b18da5) overrides */
+[class~="bg-[#b18da5]"] {
+  background-color: #E58D87 !important;
+}
+[class~="text-[#b18da5]"] {
+  color: #E58D87 !important;
+}
+[class~="border-[#b18da5]"] {
+  border-color: #E58D87 !important;
+}
+[class~="hover:bg-[#b18da5]"]:hover {
+  background-color: #E58D87 !important;
+}
+
+/* Dark purple foreground (#3c0f3d) overrides */
+[class~="bg-[#3c0f3d]"] {
+  background-color: #1E0301 !important;
+}
+[class~="text-[#3c0f3d]"] {
+  color: #1E0301 !important;
+}
+
+/* Semi-transparent overrides */
+[class~="bg-[#7e3866]/5"] {
+  background-color: rgba(213, 31, 16, 0.05) !important;
+}
+[class~="bg-[#7e3866]/10"] {
+  background-color: rgba(213, 31, 16, 0.1) !important;
+}
+[class~="bg-[#7e3866]/20"] {
+  background-color: rgba(213, 31, 16, 0.2) !important;
+}
+[class~="hover:bg-[#7e3866]/5"]:hover {
+  background-color: rgba(213, 31, 16, 0.05) !important;
+}
+[class~="hover:bg-[#7e3866]/10"]:hover {
+  background-color: rgba(213, 31, 16, 0.1) !important;
+}
+[class~="hover:bg-[#7e3866]/20"]:hover {
+  background-color: rgba(213, 31, 16, 0.2) !important;
+}
+[class~="hover:border-[#7e3866]/30"]:hover {
+  border-color: rgba(213, 31, 16, 0.3) !important;
+}
+
+[class*="shadow-[#7e3866]/"] {
+  --tw-shadow-color: rgba(213, 31, 16, 0.2) !important;
+}
+
+/* Gradients overrides */
+[class~="from-[#7e3866]"] {
+  --tw-gradient-from: #D51F10 var(--tw-gradient-from-position) !important;
+  --tw-gradient-to: rgba(213, 31, 16, 0) var(--tw-gradient-to-position) !important;
+  --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
+}
+[class~="to-[#55254b]"] {
+  --tw-gradient-to: #9C120A var(--tw-gradient-to-position) !important;
+}
+[class~="to-[#7e3866]"] {
+  --tw-gradient-to: #D51F10 var(--tw-gradient-to-position) !important;
+}
+
+

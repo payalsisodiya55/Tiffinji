@@ -391,6 +391,77 @@ const RestaurantImageCarousel = React.memo(
   },
 );
 
+// VideoCarousel - auto-plays next video when current ends, with dots
+const VideoCarousel = React.memo(function VideoCarousel({ videos }) {
+  const [current, setCurrent] = React.useState(0);
+  const containerRef = React.useRef(null);
+
+  const handleScroll = React.useCallback((e) => {
+    const container = e.currentTarget;
+    const width = container.offsetWidth;
+    if (width > 0) {
+      const index = Math.round(container.scrollLeft / width);
+      if (index !== current && index >= 0 && index < videos.length) {
+        setCurrent(index);
+      }
+    }
+  }, [current, videos.length]);
+
+  const goTo = React.useCallback((idx) => {
+    const container = containerRef.current;
+    if (container) {
+      const width = container.offsetWidth;
+      container.scrollTo({
+        left: idx * width,
+        behavior: 'smooth'
+      });
+      setCurrent(idx);
+    }
+  }, []);
+
+  if (!videos || videos.length === 0) return null;
+
+  return (
+    <div className="relative h-full w-full overflow-hidden">
+      <style dangerouslySetInnerHTML={{__html: `
+        .no-scrollbar::-webkit-scrollbar {
+          display: none !important;
+        }
+      `}} />
+      <div
+        ref={containerRef}
+        className="flex h-full w-full overflow-x-auto snap-x snap-mandatory scroll-smooth no-scrollbar"
+        style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}
+        onScroll={handleScroll}
+      >
+        {videos.map((src, idx) => (
+          <div key={idx} className="h-full w-full flex-shrink-0 snap-start snap-always relative">
+            <video
+              src={src}
+              autoPlay
+              muted
+              playsInline
+              loop
+              className="h-full w-full max-w-none object-cover object-center"
+            />
+          </div>
+        ))}
+      </div>
+      {videos.length > 1 && (
+        <div className="absolute bottom-4 left-0 right-0 flex justify-center gap-1.5 pointer-events-none z-10">
+          {videos.map((_, idx) => (
+            <button
+              key={idx}
+              className={`h-1.5 rounded-full transition-all duration-300 pointer-events-auto ${idx === current ? "w-5 bg-white" : "w-1.5 bg-white/50"}`}
+              onClick={() => goTo(idx)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+});
+
 export default function Home() {
   const HERO_BANNER_AUTO_SLIDE_MS = 3500;
   const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "");
@@ -418,6 +489,36 @@ export default function Home() {
   const [isStickyHeaderVisible, setIsStickyHeaderVisible] = useState(false);
   const [showStickySearch, setShowStickySearch] = useState(false);
   const lastScrollY = useRef(0);
+
+  const [mobileHeaderHeight, setMobileHeaderHeight] = useState(0);
+  const [headerVideoUrl, setHeaderVideoUrl] = useState("");
+  const [headerVideoUrls, setHeaderVideoUrls] = useState([]);
+  const [quickThemeColor, setQuickThemeColor] = useState("#67c6f5");
+  const headerBannerShellRef = useRef(null);
+
+  const [deliveryAddressMode, setDeliveryAddressMode] = useState(() => {
+    try {
+      return localStorage.getItem("deliveryAddressMode") || "saved";
+    } catch {
+      return "saved";
+    }
+  });
+
+  useEffect(() => {
+    const handleAddressModeUpdate = () => {
+      try {
+        setDeliveryAddressMode(localStorage.getItem("deliveryAddressMode") || "saved");
+      } catch {
+        setDeliveryAddressMode("saved");
+      }
+    };
+    window.addEventListener("storage", handleAddressModeUpdate);
+    window.addEventListener("userLocationUpdated", handleAddressModeUpdate);
+    return () => {
+      window.removeEventListener("storage", handleAddressModeUpdate);
+      window.removeEventListener("userLocationUpdated", handleAddressModeUpdate);
+    };
+  }, []);
 
   useEffect(() => {
     const handleScrollHeader = () => {
@@ -690,7 +791,7 @@ export default function Home() {
 
   useEffect(() => {
     const handleScroll = () => {
-      const heroShell = heroShellRef.current;
+      const heroShell = headerBannerShellRef.current || heroShellRef.current;
       const stickyHeader = stickyHeaderRef.current;
 
       if (!heroShell) {
@@ -710,6 +811,21 @@ export default function Home() {
     return () => {
       window.removeEventListener("scroll", handleScroll);
       window.removeEventListener("resize", handleScroll);
+    };
+  }, []);
+
+  useEffect(() => {
+    const updateHeaderHeight = () => {
+      const nextHeight =
+        stickyHeaderRef.current?.getBoundingClientRect().height || 0;
+      setMobileHeaderHeight(nextHeight);
+    };
+
+    updateHeaderHeight();
+    window.addEventListener("resize", updateHeaderHeight);
+
+    return () => {
+      window.removeEventListener("resize", updateHeaderHeight);
     };
   }, []);
 
@@ -916,6 +1032,13 @@ export default function Home() {
           settings.recommendedRestaurants || [],
         );
         setFestBannerVideoUrl(typeof settings.festBannerVideoUrl === "string" ? settings.festBannerVideoUrl : "");
+        const headerVid = settings.headerVideoUrl || settings.festBannerVideoUrl || "";
+        setHeaderVideoUrl(headerVid);
+        setHeaderVideoUrls(
+          Array.isArray(settings.headerVideoUrls) && settings.headerVideoUrls.length > 0
+            ? settings.headerVideoUrls
+            : (headerVid ? [headerVid] : [])
+        );
       })
       .catch(() => {
         if (!cancelled) {
@@ -923,6 +1046,8 @@ export default function Home() {
           setExploreMoreHeading("Explore More");
           setRecommendedRestaurantsFromSettings([]);
           setFestBannerVideoUrl("");
+          setHeaderVideoUrl("");
+          setHeaderVideoUrls([]);
         }
       })
       .finally(() => {
@@ -2481,6 +2606,12 @@ export default function Home() {
     );
   }, [displayCategories, showCategorySkeleton, navigate]);
 
+  const savedAddressTitle = useMemo(() => {
+    const defaultAddress = getDefaultAddress?.();
+    if (!defaultAddress) return "";
+    return defaultAddress.additionalDetails || defaultAddress.street || defaultAddress.city || "";
+  }, [getDefaultAddress]);
+
   return (
 
     <div className="relative min-h-screen bg-white dark:bg-[#0a0a0a] pb-16 md:pb-6 overflow-x-clip">
@@ -2609,42 +2740,61 @@ export default function Home() {
         </div>
 
         <div className="md:hidden relative overflow-x-clip bg-white dark:bg-[#0a0a0a]">
-          {/* Brand Top Section (Dark) */}
-          <div className="relative overflow-hidden bg-gradient-to-b from-[#3a142c] to-[#1a0a14] rounded-b-[2rem] shadow-lg mb-2">
-            {festVideoActive && (
-              <div className="absolute inset-0 z-0">
-                <video
-                  src={festBannerVideoUrl}
-                  className="w-full h-full object-cover"
-                  autoPlay
-                  muted
-                  loop
-                  playsInline
-                />
-                <div className="absolute inset-0 bg-black/40" />
-              </div>
-            )}
-            <div className="relative z-10">
-              <HomeHeader
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                location={effectiveLocation}
-                handleLocationClick={handleLocationClick}
-                handleSearchFocus={handleSearchFocus}
-                placeholderIndex={placeholderIndex}
-                placeholders={placeholders}
-                vegMode={vegMode}
-                handleVegModeChange={handleVegModeChange}
-              />
+          {/* Main Header - Mobile Only */}
+          <div
+            ref={stickyHeaderRef}
+            className={`md:hidden overflow-x-clip z-[80] ${
+              hasScrolledPastBanner 
+                ? "sticky top-0 bg-white dark:bg-[#1a1a1a] shadow-sm" 
+                : "relative bg-transparent"
+            }`}
+          >
+            <HomeHeader
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              location={effectiveLocation}
+              savedAddressText={deliveryAddressMode === "saved" ? savedAddressTitle : ""}
+              handleLocationClick={handleLocationClick}
+              handleSearchFocus={handleSearchFocus}
+              placeholderIndex={placeholderIndex}
+              placeholders={placeholders}
+              vegMode={vegMode}
+              onVegModeChange={handleVegModeChange}
+              quickThemeColor={quickThemeColor}
+              showBanner={false}
+              hasScrolledPastBanner={hasScrolledPastBanner}
+            />
+          </div>
 
-              {activeTab === "food" && (
-                <FestBanner
-                  isVegMode={vegMode}
-                  videoUrl={festVideoActive ? "" : festBannerVideoUrl}
-                  hideFoodImages={festVideoActive}
-                />
-              )}
-            </div>
+          <div
+            ref={headerBannerShellRef}
+            className="md:hidden overflow-x-clip"
+            style={mobileHeaderHeight > 0 ? { marginTop: -mobileHeaderHeight } : undefined}
+          >
+            <HomeHeader
+              activeTab={activeTab}
+              setActiveTab={setActiveTab}
+              location={effectiveLocation}
+              savedAddressText={deliveryAddressMode === "saved" ? savedAddressTitle : ""}
+              handleLocationClick={handleLocationClick}
+              handleSearchFocus={handleSearchFocus}
+              placeholderIndex={placeholderIndex}
+              placeholders={placeholders}
+              vegMode={vegMode}
+              onVegModeChange={handleVegModeChange}
+              quickThemeColor={quickThemeColor}
+              showHeaderContent={false}
+              bannerContent={
+                <div className="absolute inset-0 w-full h-full z-0">
+                  <img
+                    alt="Hero Banner"
+                    className="w-full h-full object-cover"
+                    draggable="false"
+                    src="https://res.cloudinary.com/appzeto-master-product/image/upload/v1773691198/food/hero-banners/hrm8ndfoim36q2h09kv7.png"
+                  />
+                </div>
+              }
+            />
           </div>
 
           <AnimatePresence mode="wait">
@@ -2825,8 +2975,7 @@ export default function Home() {
                   )}
                 </AnimatePresence>
 
-                {/* Admin Hero Banners Section - Now below categories */}
-                {HeroBannerSection}
+                {/* Admin Hero Banners Section - Moved to top */}
 
                 {/* Filters Sticky Sidebar Header */}
                 <section className="py-2.5 px-4 bg-white/95 dark:bg-[#0a0a0a]/95 backdrop-blur-md sticky top-0 z-[40] -mx-4 w-[calc(100%+2rem)] border-b border-gray-100 dark:border-white/5 shadow-sm transition-colors duration-300">

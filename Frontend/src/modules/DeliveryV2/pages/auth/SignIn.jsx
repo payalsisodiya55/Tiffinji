@@ -6,7 +6,7 @@ import { Button } from "@food/components/ui/button"
 import { toast } from "sonner"
 import { deliveryAPI } from "@food/api"
 import { clearModuleAuth } from "@food/utils/auth"
-import logoNew from "@/assets/logo.png"
+import logoNew from "@/assets/Tiffin_logo.png"
 
 const DEFAULT_COUNTRY_CODE = "+91"
 
