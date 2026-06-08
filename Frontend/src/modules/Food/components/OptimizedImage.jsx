@@ -24,10 +24,12 @@ const OptimizedImage = React.memo(({
   blurDataURL,
   onLoad,
   onError,
+  fallbackSrc,
   ...props
 }) => {
   const [isLoaded, setIsLoaded] = useState(false)
   const [hasError, setHasError] = useState(false)
+  const [fallbackFailed, setFallbackFailed] = useState(false)
   const [isInView, setIsInView] = useState(priority) // Start visible if priority
   const imgRef = useRef(null)
   const observerRef = useRef(null)
@@ -108,7 +110,11 @@ const OptimizedImage = React.memo(({
   }
 
   const handleError = (e) => {
-    setHasError(true)
+    if (hasError && fallbackSrc) {
+      setFallbackFailed(true)
+    } else {
+      setHasError(true)
+    }
     if (onError) onError(e)
   }
 
@@ -122,6 +128,21 @@ const OptimizedImage = React.memo(({
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
           <span className="text-xs text-gray-400 dark:text-gray-600">Image unavailable</span>
         </div>
+      </div>
+    )
+  }
+
+  if (hasError && fallbackSrc && !fallbackFailed) {
+    return (
+      <div className={`relative overflow-hidden ${className}`}>
+        <motion.img
+          key="fallback-image"
+          src={fallbackSrc}
+          alt={alt}
+          className={`w-full h-full ${objectFit === 'cover' ? 'object-cover' : objectFit === 'contain' ? 'object-contain' : ''}`}
+          onError={() => setFallbackFailed(true)}
+          {...props}
+        />
       </div>
     )
   }
@@ -166,6 +187,7 @@ const OptimizedImage = React.memo(({
 
           {/* Fallback to original format */}
           <motion.img
+            key="primary-image"
             src={imageSrc}
             srcSet={srcSet}
             sizes={supportsOptimization(imageSrc) ? sizes : undefined}
@@ -182,7 +204,7 @@ const OptimizedImage = React.memo(({
       )}
 
       {/* Error State */}
-      {hasError && (
+      {(hasError && (!fallbackSrc || fallbackFailed)) && (
         <div className="absolute inset-0 flex items-center justify-center bg-gray-100 dark:bg-gray-800">
           <span className="text-xs text-gray-400 dark:text-gray-600">Image unavailable</span>
         </div>

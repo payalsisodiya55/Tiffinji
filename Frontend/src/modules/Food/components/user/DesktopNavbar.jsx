@@ -29,7 +29,6 @@ export default function DesktopNavbar({ showLogo = true }) {
     const [heroSearch, setHeroSearch] = useState("")
     const [logoUrl, setLogoUrl] = useState(null)
     const [companyName, setCompanyName] = useState(null)
-    const [hasScrolledPastBanner, setHasScrolledPastBanner] = useState(false)
     const [under250PriceLimit, setUnder250PriceLimit] = useState(250)
     const navRef = useRef(null)
     const cartCount = getCartCount()
@@ -77,11 +76,6 @@ export default function DesktopNavbar({ showLogo = true }) {
     const isUnder250 = location.pathname === "/food/user/under-250" || location.pathname === "/food/under-250"
     const isProfile = location.pathname.startsWith("/food/user/profile") || location.pathname.startsWith("/food/profile")
     const isDelivery = !isDining && !isUnder250 && !isProfile && (location.pathname === "/food/user" || location.pathname === "/food" || (location.pathname.startsWith("/food/user") && !location.pathname.includes("/dining") && !location.pathname.includes("/under-250") && !location.pathname.includes("/profile")))
-    const isBannerRoute =
-        location.pathname === "/food/user" ||
-        location.pathname === "/food" ||
-        location.pathname === "/food/user/under-250" ||
-        location.pathname === "/food/under-250"
 
     // Load business settings logo
     useEffect(() => {
@@ -131,38 +125,6 @@ export default function DesktopNavbar({ showLogo = true }) {
         }
     }, [])
 
-    useEffect(() => {
-        if (!isBannerRoute) {
-            setHasScrolledPastBanner(true)
-            return
-        }
-
-        const handleScroll = () => {
-            const heroShell =
-                document.querySelector('[data-home-hero-shell="true"]') ||
-                document.querySelector('[data-banner-shell="true"]')
-            const navElement = navRef.current
-
-            if (!heroShell || !navElement) {
-                setHasScrolledPastBanner(false)
-                return
-            }
-
-            const heroRect = heroShell.getBoundingClientRect()
-            const navHeight = navElement.getBoundingClientRect().height || 0
-            setHasScrolledPastBanner(heroRect.bottom <= navHeight)
-        }
-
-        handleScroll()
-        window.addEventListener("scroll", handleScroll, { passive: true })
-        window.addEventListener("resize", handleScroll)
-
-        return () => {
-            window.removeEventListener("scroll", handleScroll)
-            window.removeEventListener("resize", handleScroll)
-        }
-    }, [isBannerRoute])
-
     // Fetch landing settings to get dynamic price limit
     useEffect(() => {
         let cancelled = false
@@ -183,13 +145,10 @@ export default function DesktopNavbar({ showLogo = true }) {
     return (
         <nav
             ref={navRef}
-            className={`hidden md:flex flex-col fixed top-0 left-0 right-0 z-50 py-2 transition-all duration-300 ${(isBannerRoute && !hasScrolledPastBanner)
-                ? "bg-transparent !bg-transparent border-0 shadow-none"
-                : "bg-white dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-gray-800 shadow-sm"
-                }`}
+            className="hidden md:flex flex-col fixed top-0 left-0 right-0 z-50 py-2 bg-white dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-gray-800 shadow-sm"
         >
             {/* Top Row: Location - Search - Icons */}
-            <div className={`w-full ${(isBannerRoute && !hasScrolledPastBanner) ? "border-b border-transparent" : "border-b border-gray-100 dark:border-gray-800"}`}>
+            <div className="w-full border-b border-gray-100 dark:border-gray-800">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-between h-16 gap-4">
                         {/* Left: Logo & Location */}
@@ -336,7 +295,7 @@ export default function DesktopNavbar({ showLogo = true }) {
             </div>
 
             {/* Bottom Row: Navigation Tabs & Veg Mode */}
-            <div className={`w-full pb-3 ${(isBannerRoute && !hasScrolledPastBanner) ? "bg-transparent !bg-transparent" : "bg-white dark:bg-[#1a1a1a]"}`}>
+            <div className="w-full pb-3 bg-white dark:bg-[#1a1a1a]">
                 <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
                     <div className="flex items-center justify-center h-12">
                         {/* Navigation Tabs - Centered with spacing */}
