@@ -26,14 +26,15 @@ export default function BottomNavigation() {
   }, [])
 
   // Check active routes - support both /user/* and /* paths
-  const isDining = pathname === "/food/dining" || pathname.startsWith("/food/user/dining")
-  const isUnder250 = pathname === "/food/under-250" || pathname.startsWith("/food/user/under-250")
+  const isDining = pathname === "/food/dining" || pathname.startsWith("/food/user/dining") || pathname.startsWith("/food/dining")
+  const isUnder250 = pathname === "/food/under-250" || pathname.startsWith("/food/user/under-250") || pathname.startsWith("/food/under-250")
   const isProfile = pathname.startsWith("/food/profile") || pathname.startsWith("/food/user/profile")
   const isDelivery =
     !isDining &&
     !isUnder250 &&
     !isProfile &&
-    (pathname === "/food" ||
+    (pathname === "/" ||
+      pathname === "/food" ||
       pathname === "/food/" ||
       pathname === "/food/user" ||
       (pathname.startsWith("/food/user") &&
@@ -50,16 +51,16 @@ export default function BottomNavigation() {
         <Link
           to="/"
           className={`flex flex-1 flex-col items-center gap-1.5 px-2 sm:px-3 py-2 transition-all duration-200 relative ${isDelivery
-              ? "text-[#7e3866]"
+              ? "text-[#D51F10]"
               : "text-gray-600 dark:text-gray-400"
             }`}
         >
-          < Truck className={`h-5 w-5 ${isDelivery ? "text-[#7e3866] fill-[#7e3866]/10" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
-          <span className={`text-xs sm:text-sm font-medium ${isDelivery ? "text-[#7e3866] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
+          < Truck className={`h-5 w-5 ${isDelivery ? "text-[#D51F10] fill-[#D51F10]/10" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
+          <span className={`text-xs sm:text-sm font-medium ${isDelivery ? "text-[#D51F10] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
             Delivery
           </span>
           {isDelivery && (
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#7e3866] rounded-b-full" />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#D51F10] rounded-b-full" />
           )}
         </Link>
 
@@ -70,16 +71,16 @@ export default function BottomNavigation() {
         <Link
           to="/food/user/dining"
           className={`flex flex-1 flex-col items-center gap-1.5 px-2 sm:px-3 py-2 transition-all duration-200 relative ${isDining
-              ? "text-[#7e3866]"
+              ? "text-[#D51F10]"
               : "text-gray-600 dark:text-gray-400"
             }`}
         >
-          <UtensilsCrossed className={`h-5 w-5 ${isDining ? "text-[#7e3866]" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
-          <span className={`text-xs sm:text-sm font-medium ${isDining ? "text-[#7e3866] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
+          <UtensilsCrossed className={`h-5 w-5 ${isDining ? "text-[#D51F10]" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
+          <span className={`text-xs sm:text-sm font-medium ${isDining ? "text-[#D51F10] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
             Dining
           </span>
           {isDining && (
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#7e3866] rounded-b-full" />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#D51F10] rounded-b-full" />
           )}
         </Link>
 
@@ -90,16 +91,16 @@ export default function BottomNavigation() {
         <Link
           to="/food/user/under-250"
           className={`flex flex-1 flex-col items-center gap-1.5 px-2 sm:px-3 py-2 transition-all duration-200 relative ${isUnder250
-              ? "text-[#7e3866]"
+              ? "text-[#D51F10]"
               : "text-gray-600 dark:text-gray-400"
             }`}
         >
-          <Tag className={`h-5 w-5 ${isUnder250 ? "text-[#7e3866] fill-[#7e3866]/10" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
-          <span className={`text-xs sm:text-sm font-medium ${isUnder250 ? "text-[#7e3866] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
+          <Tag className={`h-5 w-5 ${isUnder250 ? "text-[#D51F10] fill-[#D51F10]/10" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
+          <span className={`text-xs sm:text-sm font-medium ${isUnder250 ? "text-[#D51F10] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
             Under ₹{under250PriceLimit}
           </span>
           {isUnder250 && (
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#7e3866] rounded-b-full" />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#D51F10] rounded-b-full" />
           )}
         </Link>
 
@@ -110,16 +111,16 @@ export default function BottomNavigation() {
         <Link
           to="/food/user/profile"
           className={`flex flex-1 flex-col items-center gap-1.5 px-2 sm:px-3 py-2 transition-all duration-200 relative ${isProfile
-              ? "text-[#7e3866]"
+              ? "text-[#D51F10]"
               : "text-gray-600 dark:text-gray-400"
             }`}
         >
-          <User className={`h-5 w-5 ${isProfile ? "text-[#7e3866] fill-[#7e3866]/10" : "text-gray-600 dark:text-gray-400"}`} />
-          <span className={`text-xs sm:text-sm font-medium ${isProfile ? "text-[#7e3866] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
+          <User className={`h-5 w-5 ${isProfile ? "text-[#D51F10] fill-[#D51F10]/10" : "text-gray-600 dark:text-gray-400"}`} />
+          <span className={`text-xs sm:text-sm font-medium ${isProfile ? "text-[#D51F10] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
             Profile
           </span>
           {isProfile && (
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#7e3866] rounded-b-full" />
+            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#D51F10] rounded-b-full" />
           )}
         </Link>
       </div>
