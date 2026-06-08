@@ -158,9 +158,9 @@ export default function LocationPrompt() {
         {view === "prompt" ? (
           <div className="p-10 flex flex-col items-center text-center">
             {/* Circular Icon */}
-            <div className="h-24 w-24 rounded-full bg-[#f8f0f1] flex items-center justify-center mb-8">
+            <div className="h-24 w-24 rounded-full bg-[#7e3866]/10 flex items-center justify-center mb-8">
               <div className="h-14 w-14 rounded-full bg-white shadow-sm flex items-center justify-center">
-                <MapPin className="h-8 w-8 text-[#a03a42]" strokeWidth={2.5} />
+                <MapPin className="h-8 w-8 text-[#7e3866]" strokeWidth={2.5} />
               </div>
             </div>
 
@@ -174,7 +174,7 @@ export default function LocationPrompt() {
             <div className="w-full flex flex-col gap-4">
               <Button
                 onClick={handleAllow}
-                className="w-full h-16 bg-[#a03a42] hover:bg-[#8a3239] text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-[0.98]"
+                className="w-full h-16 bg-[#7e3866] hover:bg-[#55254b] text-white text-lg font-bold rounded-2xl shadow-lg transition-all active:scale-[0.98]"
                 disabled={loading}
               >
                 {loading ? (
@@ -196,8 +196,8 @@ export default function LocationPrompt() {
           <div className="flex flex-col bg-white">
             {/* Header with Icon */}
             <div className="p-8 text-center border-b border-gray-50">
-               <div className="h-20 w-20 rounded-full bg-[#f8f0f1] flex items-center justify-center mx-auto mb-4">
-                  <MapPin className="h-8 w-8 text-[#a03a42]" />
+               <div className="h-20 w-20 rounded-full bg-[#7e3866]/10 flex items-center justify-center mx-auto mb-4">
+                  <MapPin className="h-8 w-8 text-[#7e3866]" />
                </div>
                <h2 className="text-2xl font-bold text-[#1a1c2e] mb-2">Manual Location</h2>
                <p className="text-sm text-[#6b7280]">
@@ -214,11 +214,11 @@ export default function LocationPrompt() {
                       placeholder="Type your address..."
                       value={searchValue}
                       onChange={(e) => setSearchValue(e.target.value)}
-                      className="pl-12 h-14 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#a03a42]/20"
+                      className="pl-12 h-14 bg-gray-50 border-none rounded-2xl focus:ring-2 focus:ring-[#7e3866]/20"
                    />
                    {isSearching && (
                       <div className="absolute right-4 top-1/2 -translate-y-1/2">
-                         <Loader2 className="h-5 w-5 text-[#a03a42] animate-spin" />
+                         <Loader2 className="h-5 w-5 text-[#7e3866] animate-spin" />
                       </div>
                    )}
                 </div>
@@ -271,7 +271,7 @@ export default function LocationPrompt() {
                  </Button>
                  <Button
                     onClick={handleSaveManualLocation}
-                    className="flex-1 h-14 rounded-2xl bg-[#a03a42] hover:bg-[#8a3239] text-white font-bold shadow-md"
+                    className="flex-1 h-14 rounded-2xl bg-[#7e3866] hover:bg-[#55254b] text-white font-bold shadow-md"
                     disabled={!selectedLocation}
                  >
                     Confirm
