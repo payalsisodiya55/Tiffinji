@@ -2789,13 +2789,89 @@ export default function Home() {
               quickThemeColor={quickThemeColor}
               showHeaderContent={false}
               bannerContent={
-                <div className="absolute inset-0 w-full h-full z-0">
-                  <img
-                    alt="Hero Banner"
-                    className="w-full h-full object-cover"
-                    draggable="false"
-                    src="https://res.cloudinary.com/appzeto-master-product/image/upload/v1773691198/food/hero-banners/hrm8ndfoim36q2h09kv7.png"
-                  />
+                <div
+                  className="absolute inset-0 w-full h-full z-0 cursor-pointer select-none"
+                  onTouchStart={handleTouchStart}
+                  onTouchMove={handleTouchMove}
+                  onTouchEnd={handleTouchEnd}
+                  onMouseDown={handleMouseDown}
+                  onMouseMove={handleMouseMove}
+                  onMouseUp={handleMouseUp}
+                  onMouseLeave={handleMouseUp}
+                >
+                  {showBannerSkeleton ? (
+                    <div className="w-full h-full bg-gray-200 animate-pulse" />
+                  ) : heroBannerImages.length > 0 ? (
+                    <>
+                      {heroBannerImages.map((image, index) => (
+                        <div
+                          key={`${index}-${image}`}
+                          className="absolute inset-0 transition-opacity duration-700 ease-in-out"
+                          style={{
+                            opacity: currentBannerIndex === index ? 1 : 0,
+                            zIndex: currentBannerIndex === index ? 2 : 1,
+                          }}
+                        >
+                          <img
+                            src={image}
+                            alt={`Hero Banner ${index + 1}`}
+                            className="w-full h-full object-cover"
+                            draggable="false"
+                            loading={index === currentBannerIndex ? "eager" : "lazy"}
+                          />
+                        </div>
+                      ))}
+                      {/* Dots Indicators */}
+                      {heroBannerImages.length > 1 && (
+                        <div className="absolute bottom-4 left-0 right-0 z-30 flex justify-center gap-1.5 pointer-events-auto">
+                          {heroBannerImages.map((_, dotIndex) => (
+                            <button
+                              key={dotIndex}
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                setCurrentBannerIndex(dotIndex);
+                                resetAutoSlide();
+                              }}
+                              className={`h-1.5 rounded-full transition-all duration-300 ${
+                                currentBannerIndex === dotIndex
+                                  ? "w-4 bg-white shadow-sm"
+                                  : "w-1.5 bg-white/40 hover:bg-white/60"
+                              }`}
+                              aria-label={`Go to slide ${dotIndex + 1}`}
+                            />
+                          ))}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        className="absolute inset-0 z-20 h-full w-full border-0 p-0 bg-transparent text-left"
+                        onClick={() => {
+                          const bannerData = heroBannersData[currentBannerIndex];
+                          const linkedRestaurants = bannerData?.linkedRestaurants || [];
+                          if (linkedRestaurants.length > 0) {
+                            const firstRestaurant = linkedRestaurants[0];
+                            const restaurantSlug =
+                              firstRestaurant.slug ||
+                              firstRestaurant.restaurantId ||
+                              firstRestaurant._id;
+                            if (restaurantSlug) {
+                              navigate(`/user/restaurants/${restaurantSlug}`);
+                            }
+                          }
+                        }}
+                        aria-label={`Open hero banner ${currentBannerIndex + 1}`}
+                      />
+                    </>
+                  ) : (
+                    <img
+                      alt="Hero Banner"
+                      className="w-full h-full object-cover"
+                      draggable="false"
+                      src="https://res.cloudinary.com/appzeto-master-product/image/upload/v1773691198/food/hero-banners/hrm8ndfoim36q2h09kv7.png"
+                    />
+                  )}
                 </div>
               }
             />
