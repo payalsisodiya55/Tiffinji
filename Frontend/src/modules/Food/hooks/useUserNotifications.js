@@ -183,39 +183,33 @@ export const useUserNotifications = () => {
       const title = payload?.title || 'Notification';
       const body = payload?.message || 'New broadcast notification received.';
 
-      // Show native browser notification popup (bottom-right OS notification)
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        try {
+      // Show in-app toast (same as ThindiFood)
+      toast.message(title, {
+        description: body,
+        duration: 8000
+      });
+
+      // ALSO try native browser popup 
+      try {
+        console.log('%c[PUSH] Attempting native notification...', 'color: lime; font-size: 14px;', {
+          permission: typeof Notification !== 'undefined' ? Notification.permission : 'N/A',
+          swSupported: 'serviceWorker' in navigator
+        });
+        
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistration().then(registration => {
-              if (registration) {
-                registration.showNotification(title, {
-                  body,
-                  icon: '/logo.png',
-                  tag: `admin-broadcast-${Date.now()}`,
-                  requireInteraction: true,
-                  vibrate: [200, 100, 200, 100, 300],
-                  data: { targetUrl: payload?.link || '/' }
-                });
-              } else {
-                new Notification(title, { body, icon: '/logo.png' });
-              }
+            navigator.serviceWorker.ready.then(registration => {
+              registration.showNotification(title, { body, icon: '/logo.png' });
+              console.log('%c[PUSH] SW Native notification created!', 'color: lime; font-size: 14px;');
             }).catch(() => {
               new Notification(title, { body, icon: '/logo.png' });
             });
           } else {
             new Notification(title, { body, icon: '/logo.png' });
           }
-        } catch (e) {
-          // Fallback silently
         }
-      } else if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-        // Request permission for future notifications
-        Notification.requestPermission().then(perm => {
-          if (perm === 'granted') {
-            new Notification(title, { body, icon: '/logo.png' });
-          }
-        });
+      } catch (e) {
+        console.error('[PUSH] Native notification FAILED:', e);
       }
 
       dispatchNotificationInboxRefresh();

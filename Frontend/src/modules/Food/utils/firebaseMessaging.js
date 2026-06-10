@@ -602,6 +602,15 @@ function showForegroundNotification(payload = {}) {
       });
     }
   }
+
+  // Fallback: Always show in-app toast just in case OS native popups are blocked by Windows DND
+  if (typeof document !== "undefined" && document.visibilityState === "visible") {
+    if (body) {
+      toast.success(`${title}: ${body}`);
+    } else {
+      toast.success(title);
+    }
+  }
 }
 
 function attachServiceWorkerMessageListener() {
