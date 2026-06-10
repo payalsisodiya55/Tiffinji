@@ -2812,10 +2812,18 @@ export default function Home() {
                             zIndex: currentBannerIndex === index ? 2 : 1,
                           }}
                         >
+                          {/* Blurred background of the banner to fill any aspect ratio gaps seamlessly */}
+                          <img
+                            src={image}
+                            alt=""
+                            className="absolute inset-0 w-full h-full object-cover blur-lg scale-125 opacity-95 select-none pointer-events-none"
+                            draggable="false"
+                          />
+                          {/* Clean contained foreground image preventing side crop */}
                           <img
                             src={image}
                             alt={`Hero Banner ${index + 1}`}
-                            className="w-full h-full object-cover"
+                            className="relative w-full h-full object-contain object-bottom z-10"
                             draggable="false"
                             loading={index === currentBannerIndex ? "eager" : "lazy"}
                           />
@@ -2865,12 +2873,20 @@ export default function Home() {
                       />
                     </>
                   ) : (
-                    <img
-                      alt="Hero Banner"
-                      className="w-full h-full object-cover"
-                      draggable="false"
-                      src="https://res.cloudinary.com/appzeto-master-product/image/upload/v1773691198/food/hero-banners/hrm8ndfoim36q2h09kv7.png"
-                    />
+                    <div className="absolute inset-0 w-full h-full">
+                      <img
+                        alt=""
+                        className="absolute inset-0 w-full h-full object-cover blur-lg scale-125 opacity-95 select-none pointer-events-none"
+                        draggable="false"
+                        src="https://res.cloudinary.com/appzeto-master-product/image/upload/v1773691198/food/hero-banners/hrm8ndfoim36q2h09kv7.png"
+                      />
+                      <img
+                        alt="Hero Banner"
+                        className="relative w-full h-full object-contain object-bottom z-10"
+                        draggable="false"
+                        src="https://res.cloudinary.com/appzeto-master-product/image/upload/v1773691198/food/hero-banners/hrm8ndfoim36q2h09kv7.png"
+                      />
+                    </div>
                   )}
                 </div>
               }
