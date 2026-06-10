@@ -178,14 +178,20 @@ export default function Profile() {
     );
     const hasContact = hasPhone || hasValidEmail;
 
-    // Check profile image - must have URL string
-    const hasImage = !!(
-      userProfile.profileImage &&
-      typeof userProfile.profileImage === "string" &&
-      userProfile.profileImage.trim() !== "" &&
-      userProfile.profileImage !== "null" &&
-      userProfile.profileImage !== "undefined"
-    );
+    // Check profile image - must have URL string or object url
+    const hasImage = (() => {
+      const img = userProfile?.profileImage;
+      if (!img) return false;
+      if (typeof img === "string") {
+        const trimmed = img.trim();
+        return trimmed !== "" && trimmed !== "null" && trimmed !== "undefined";
+      }
+      if (typeof img === "object" && typeof img.url === "string") {
+        const trimmed = img.url.trim();
+        return trimmed !== "" && trimmed !== "null" && trimmed !== "undefined";
+      }
+      return false;
+    })();
 
     // Check date of birth
     const hasDateOfBirth = isDateFilled(userProfile.dateOfBirth);
@@ -478,10 +484,9 @@ export default function Profile() {
                   {userProfile?.profileImage && (
                     <AvatarImage
                       src={
-                        userProfile.profileImage &&
-                          userProfile.profileImage.trim()
-                          ? userProfile.profileImage
-                          : undefined
+                        typeof userProfile.profileImage === "string"
+                          ? userProfile.profileImage.trim() || undefined
+                          : userProfile.profileImage?.url || undefined
                       }
                       alt={displayName}
                     />

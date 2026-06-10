@@ -423,24 +423,32 @@ export default function AdminNavbar({ onMenuClick }) {
                 <div className="p-4 border-b border-neutral-200">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center overflow-hidden border border-neutral-300">
-                      {adminData?.profileImage ? (
-                        <img
-                          src={adminData.profileImage && adminData.profileImage.trim() ? adminData.profileImage : undefined}
-                          alt={adminData.name || "Admin"}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <span className="text-lg font-semibold text-neutral-600">
-                          {adminData?.name
-                            ? adminData.name
-                              .split(" ")
-                              .map((n) => n[0])
-                              .join("")
-                              .toUpperCase()
-                              .substring(0, 2)
-                            : "AD"}
-                        </span>
-                      )}
+                      {(() => {
+                        const imgUrl = typeof adminData?.profileImage === "string"
+                          ? adminData.profileImage.trim()
+                          : adminData?.profileImage?.url;
+                        if (imgUrl) {
+                          return (
+                            <img
+                              src={imgUrl}
+                              alt={adminData?.name || "Admin"}
+                              className="w-full h-full object-cover"
+                            />
+                          );
+                        }
+                        return (
+                          <span className="text-lg font-semibold text-neutral-600">
+                            {adminData?.name
+                              ? adminData.name
+                                .split(" ")
+                                .map((n) => n[0])
+                                .join("")
+                                .toUpperCase()
+                                .substring(0, 2)
+                              : "AD"}
+                          </span>
+                        );
+                      })()}
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-neutral-900">
