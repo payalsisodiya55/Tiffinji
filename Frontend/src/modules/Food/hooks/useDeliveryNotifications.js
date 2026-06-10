@@ -6,6 +6,7 @@ const alertSound = '/alert.mp3';
 const originalSound = '/original.mp3';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
 import { DeliveryNotificationContext } from '../context/DeliveryNotificationContext';
+import { isModuleAuthenticated } from '@food/utils/auth';
 
 const shouldLogDeliverySocket = () => {
   if (typeof window === 'undefined') return import.meta.env.DEV;
@@ -642,6 +643,10 @@ export const useDeliveryNotifications = () => {
 
   // Fetch delivery partner ID
   useEffect(() => {
+    if (!isModuleAuthenticated('delivery')) {
+      return;
+    }
+
     const fallbackId = resolveDeliveryPartnerIdFromClient();
     if (fallbackId) {
       setDeliveryPartnerId(fallbackId);
@@ -678,6 +683,10 @@ export const useDeliveryNotifications = () => {
 
   // Socket connection effect (no backend when API_BASE_URL is empty)
   useEffect(() => {
+    if (!isModuleAuthenticated('delivery')) {
+      setIsConnected(false);
+      return;
+    }
     if (!API_BASE_URL || !String(API_BASE_URL).trim()) {
       setIsConnected(false);
       return;
@@ -945,6 +954,38 @@ export const useDeliveryNotifications = () => {
 
     socketRef.current.on('admin_notification', (payload) => {
       debugLog('Admin broadcast received via socket', payload);
+      
+      const title = payload?.title || 'Notification';
+      const body = payload?.message || 'New broadcast notification received.';
+
+      // Show native browser notification popup
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistration().then(registration => {
+              if (registration) {
+                registration.showNotification(title, {
+                  body,
+                  icon: '/logo.png',
+                  tag: `admin-broadcast-${Date.now()}`,
+                  requireInteraction: true,
+                  vibrate: [200, 100, 200, 100, 300],
+                  data: { targetUrl: payload?.link || '/' }
+                });
+              } else {
+                new Notification(title, { body, icon: '/logo.png' });
+              }
+            }).catch(() => {
+              new Notification(title, { body, icon: '/logo.png' });
+            });
+          } else {
+            new Notification(title, { body, icon: '/logo.png' });
+          }
+        } catch (e) {
+          // Fallback silently
+        }
+      }
+
       setAdminNotification(payload);
       dispatchNotificationInboxRefresh();
     });

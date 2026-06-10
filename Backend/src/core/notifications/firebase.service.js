@@ -393,10 +393,11 @@ export const sendNotificationToOwner = async ({ ownerType, ownerId, payload, pla
 
     const tokens = await listOwnerTokens({ ownerType, ownerId, platform });
     if (!tokens.length) {
+        logger.info(`[FCM] No tokens found for ${ownerType}:${ownerId} (platform=${platform || 'all'}). Skipping push.`);
         return { successCount: 0, failureCount: 0, results: [] };
     }
     try {
-        console.log(`[FCM] Sending to ${ownerType}:${ownerId}. Title: "${enrichedPayload.title || 'Data Only'}"`);
+        logger.info(`[FCM] Sending to ${ownerType}:${ownerId} (platform=${platform || 'all'}). Tokens: ${tokens.length}. Title: "${enrichedPayload.title || 'Data Only'}"`);
         const response = await sendPushNotification(tokens, enrichedPayload);
         const invalidTokens = (response.results || [])
 

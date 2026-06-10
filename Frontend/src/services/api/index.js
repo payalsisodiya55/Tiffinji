@@ -151,6 +151,12 @@ export const notificationAPI = {
 
 /** Admin API - new backend only (GET /auth/me, PATCH /auth/admin/profile, POST /auth/admin/change-password) */
 export const adminAPI = {
+  saveFcmToken: (token, platform = "web") => {
+    if (!token) return Promise.reject(new Error("FCM token is required"));
+    const path =
+      platform === "mobile" ? "/fcm-tokens/mobile/save" : "/fcm-tokens/save";
+    return adminClient.post(path, { token: String(token), platform });
+  },
   getSidebarBadges: () =>
     adminClient.get("/food/admin/sidebar-badges"),
   login: (email, password) => authService.adminLogin(email, password),

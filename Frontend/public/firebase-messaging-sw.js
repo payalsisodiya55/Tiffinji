@@ -4,23 +4,24 @@ importScripts("https://www.gstatic.com/firebasejs/10.13.2/firebase-messaging-com
 
 const sanitize = (value) => String(value || "").trim().replace(/^['"]|['"]$/g, "");
 const PUSH_DEBUG_PREFIX = "[push-sw]";
-const pushDebugLog = () => {};
-const getNotificationKey = (payload) => {
-  const fcmId = payload?.messageId || payload?.data?.messageId || payload?.data?.notificationId;
-  if (fcmId) return String(fcmId);
-
-  const title = (payload?.notification?.title || payload?.data?.title || "").trim();
-  const body = (payload?.notification?.body || payload?.data?.body || "").trim();
-  const orderId = payload?.data?.orderId || "";
-  
-  if (!title && !body && !orderId) return "unknown";
-
-  return [
-    title.toLowerCase(),
-    body.toLowerCase(),
-    orderId
-  ].join("|");
+const pushDebugLog = (prefix, message, data = {}) => {
+  console.log(`${prefix} ${message}`, data);
 };
+const getNotificationKey = (payload) =>
+  payload?.data?.notificationId ||
+  payload?.data?.messageId ||
+  payload?.messageId ||
+  [
+    payload?.notification?.title || payload?.data?.title || "",
+    payload?.notification?.body || payload?.data?.body || "",
+    payload?.data?.orderId || "",
+    payload?.data?.targetUrl || payload?.data?.link || "",
+  ].join("::");
+
+function shouldSuppressPush(payload = {}) {
+  const type = String(payload?.data?.type || "").trim().toLowerCase();
+  return type === "restaurant_approved";
+}
 
 async function notifyOpenClients(payload) {
   pushDebugLog(PUSH_DEBUG_PREFIX, "Broadcasting push to open clients", { payload });
@@ -82,6 +83,7 @@ async function hasVisibleClientForTarget(payload = {}) {
 
 async function loadFirebaseWebConfig() {
   const candidates = [
+    "/firebase-web-config.json",
     "/api/v1/food/public/env",
     "/api/v1/env/public",
     "/api/env/public",
@@ -91,7 +93,7 @@ async function loadFirebaseWebConfig() {
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) continue;
       const json = await response.json();
-      const data = (json && json.data) || {};
+      const data = url.endsWith(".json") ? (json || {}) : ((json && json.data) || {});
       const config = {
         apiKey: sanitize(data.VITE_FIREBASE_API_KEY || data.FIREBASE_API_KEY),
         authDomain: sanitize(data.VITE_FIREBASE_AUTH_DOMAIN || data.FIREBASE_AUTH_DOMAIN),
@@ -103,7 +105,7 @@ async function loadFirebaseWebConfig() {
       };
 
       if (config.apiKey && config.projectId && config.appId && config.messagingSenderId) {
-        pushDebugLog(PUSH_DEBUG_PREFIX, "Loaded Firebase web config");
+        pushDebugLog(PUSH_DEBUG_PREFIX, "Loaded Firebase web config from " + url);
         return config;
       }
     } catch {
@@ -117,6 +119,7 @@ async function loadFirebaseWebConfig() {
 (async () => {
   const config = await loadFirebaseWebConfig();
   if (!config || !config.apiKey || !config.projectId || !config.appId || !config.messagingSenderId) {
+    pushDebugLog(PUSH_DEBUG_PREFIX, "Firebase config not found, service worker will not handle push");
     return;
   }
 
@@ -126,24 +129,24 @@ async function loadFirebaseWebConfig() {
 
   messaging.onBackgroundMessage(async (payload) => {
     pushDebugLog(PUSH_DEBUG_PREFIX, "Received Firebase background message", { payload });
+    if (shouldSuppressPush(payload)) {
+      pushDebugLog(PUSH_DEBUG_PREFIX, "Suppressed background push notification", { payload });
+      return;
+    }
     
     const visibleClient = await hasVisibleClientForTarget(payload);
     
-    // 💡 IMPORTANT: If the payload contains a 'notification' object, the browser/FCM SDK
-    // will often display a system notification automatically in the background.
-    // To prevent double notifications (one from browser, one from our manual call),
-    // we only call showNotification manually if 'notification' is missing (Data-only message)
-    // AND there is no visible window for the user.
-    if (!visibleClient && !payload.notification) {
-      const title = payload?.data?.title || "New Notification";
-      const body = payload?.data?.body || "";
+    if (!visibleClient) {
+      const title = payload?.notification?.title || payload?.data?.title || "New Notification";
+      const body = payload?.notification?.body || payload?.data?.body || "";
       const image =
+        payload?.notification?.image ||
         payload?.data?.image ||
         payload?.data?.imageUrl ||
         undefined;
       const notificationKey = getNotificationKey(payload);
       
-      pushDebugLog(PUSH_DEBUG_PREFIX, "Showing manual service worker notification (Data-only message)", {
+      pushDebugLog(PUSH_DEBUG_PREFIX, "Showing service worker notification", {
         title,
         body,
         image,
@@ -157,7 +160,7 @@ async function loadFirebaseWebConfig() {
         tag: notificationKey,
         renotify: true,
         silent: false,
-        requireInteraction: true,
+        requireInteraction: false,
         vibrate: [200, 100, 200, 100, 300],
         data: payload?.data || {},
       });

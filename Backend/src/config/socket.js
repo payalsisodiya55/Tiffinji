@@ -42,9 +42,13 @@ const roomNames = {
  * @returns {Promise<Server>}
  */
 export const initSocket = async (server) => {
+    const corsOrigin = typeof config.socketCorsOrigin === 'string' && config.socketCorsOrigin.includes(',')
+        ? config.socketCorsOrigin.split(',').map(item => item.trim())
+        : config.socketCorsOrigin;
+
     io = new Server(server, {
         cors: {
-            origin: config.socketCorsOrigin,
+            origin: corsOrigin,
             methods: ['GET', 'POST']
         }
     });

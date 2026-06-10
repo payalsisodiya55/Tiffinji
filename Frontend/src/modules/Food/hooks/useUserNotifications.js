@@ -178,10 +178,46 @@ export const useUserNotifications = () => {
     });
 
     socketRef.current.on('admin_notification', (payload) => {
-      toast.message(payload?.title || 'Notification', {
-        description: payload?.message || 'New broadcast notification received.',
-        duration: 8000
-      });
+      debugLog('📢 Admin notification received:', payload);
+      
+      const title = payload?.title || 'Notification';
+      const body = payload?.message || 'New broadcast notification received.';
+
+      // Show native browser notification popup (bottom-right OS notification)
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistration().then(registration => {
+              if (registration) {
+                registration.showNotification(title, {
+                  body,
+                  icon: '/logo.png',
+                  tag: `admin-broadcast-${Date.now()}`,
+                  requireInteraction: true,
+                  vibrate: [200, 100, 200, 100, 300],
+                  data: { targetUrl: payload?.link || '/' }
+                });
+              } else {
+                new Notification(title, { body, icon: '/logo.png' });
+              }
+            }).catch(() => {
+              new Notification(title, { body, icon: '/logo.png' });
+            });
+          } else {
+            new Notification(title, { body, icon: '/logo.png' });
+          }
+        } catch (e) {
+          // Fallback silently
+        }
+      } else if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+        // Request permission for future notifications
+        Notification.requestPermission().then(perm => {
+          if (perm === 'granted') {
+            new Notification(title, { body, icon: '/logo.png' });
+          }
+        });
+      }
+
       dispatchNotificationInboxRefresh();
     });
 

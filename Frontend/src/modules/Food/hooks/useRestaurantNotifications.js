@@ -5,6 +5,7 @@ import { restaurantAPI } from '@food/api';
 const alertSound = '/zomato_sms.mp3';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
 import { RestaurantNotificationContext } from '../context/RestaurantNotificationContext';
+import { isModuleAuthenticated } from '@food/utils/auth';
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -253,6 +254,9 @@ export const useRestaurantNotifications = () => {
 
   // Get restaurant ID from API
   useEffect(() => {
+    if (!isModuleAuthenticated('restaurant')) {
+      return;
+    }
     const fetchRestaurantId = async () => {
       try {
         const response = await restaurantAPI.getCurrentRestaurant();
@@ -273,7 +277,7 @@ export const useRestaurantNotifications = () => {
   // we still fetch restaurant orders from REST periodically and trigger the same
   // alert flow. This prevents "restaurant didn't receive the order" cases.
   useEffect(() => {
-    if (!restaurantId) return;
+    if (!isModuleAuthenticated('restaurant') || !restaurantId) return;
 
     const ALERT_POLL_MS = 8000;
     let isCancelled = false;
@@ -382,6 +386,10 @@ export const useRestaurantNotifications = () => {
   }, []);
 
   useEffect(() => {
+    if (!isModuleAuthenticated('restaurant')) {
+      setIsConnected(false);
+      return;
+    }
     if (!API_BASE_URL || !String(API_BASE_URL).trim()) {
       setIsConnected(false);
       return;
@@ -701,6 +709,38 @@ export const useRestaurantNotifications = () => {
 
     socketRef.current.on('admin_notification', (payload) => {
       debugLog('?? Admin broadcast received:', payload);
+      
+      const title = payload?.title || 'Notification';
+      const body = payload?.message || 'New broadcast notification received.';
+
+      // Show native browser notification popup
+      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+        try {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistration().then(registration => {
+              if (registration) {
+                registration.showNotification(title, {
+                  body,
+                  icon: '/logo.png',
+                  tag: `admin-broadcast-${Date.now()}`,
+                  requireInteraction: true,
+                  vibrate: [200, 100, 200, 100, 300],
+                  data: { targetUrl: payload?.link || '/' }
+                });
+              } else {
+                new Notification(title, { body, icon: '/logo.png' });
+              }
+            }).catch(() => {
+              new Notification(title, { body, icon: '/logo.png' });
+            });
+          } else {
+            new Notification(title, { body, icon: '/logo.png' });
+          }
+        } catch (e) {
+          // Fallback silently
+        }
+      }
+
       dispatchNotificationInboxRefresh();
     });
 

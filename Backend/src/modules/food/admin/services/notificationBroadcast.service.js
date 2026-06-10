@@ -6,8 +6,9 @@ import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model
 import { BroadcastNotification } from '../../../../core/notifications/models/notificationBroadcast.model.js';
 import { FoodNotification } from '../../../../core/notifications/models/notification.model.js';
 import { createInboxNotifications } from '../../../../core/notifications/notification.service.js';
-import { notifyOwnersSafely } from '../../../../core/notifications/firebase.service.js';
+import { sendNotificationToOwners } from '../../../../core/notifications/firebase.service.js';
 import { getIO, rooms } from '../../../../config/socket.js';
+import { logger } from '../../../../utils/logger.js';
 
 const TARGET_TYPE_MAP = {
     ALL: 'ALL',
@@ -251,27 +252,49 @@ export const createBroadcastNotification = async ({ body = {}, adminId } = {}) =
         )
     });
 
-    await notifyOwnersSafely(
-        resolvedTargets.map((target) => ({
-            ownerType: target.ownerType,
-            ownerId: target.ownerId
-        })),
-        {
-            title,
-            body: message,
-            data: {
-                type: 'admin_broadcast',
-                broadcastId: String(broadcast._id),
-                link
+    // Send FCM push notifications to all resolved targets (both web + mobile tokens)
+    const fcmTargets = resolvedTargets.map((target) => ({
+        ownerType: target.ownerType,
+        ownerId: target.ownerId
+        // NOTE: platform is intentionally omitted so sendNotificationToOwner reads BOTH
+        // fcmTokens (web) and fcmTokenMobile from the database for each owner
+    }));
+
+    const fcmPayload = {
+        title,
+        body: message,
+        data: {
+            type: 'admin_broadcast',
+            broadcastId: String(broadcast._id),
+            ...(link ? { link } : {})
+        }
+    };
+
+    let pushStats = { totalTargets: fcmTargets.length, successCount: 0, failureCount: 0, noTokenCount: 0 };
+    try {
+        logger.info(`[Broadcast] Sending FCM push to ${fcmTargets.length} targets for broadcast ${broadcast._id}`);
+        const fcmResults = await sendNotificationToOwners(fcmTargets, fcmPayload);
+
+        for (const result of (Array.isArray(fcmResults) ? fcmResults : [])) {
+            pushStats.successCount += Number(result?.successCount || 0);
+            pushStats.failureCount += Number(result?.failureCount || 0);
+            if ((result?.successCount || 0) === 0 && (result?.failureCount || 0) === 0) {
+                pushStats.noTokenCount += 1;
             }
         }
-    );
+
+        logger.info(`[Broadcast] FCM push results for broadcast ${broadcast._id}: success=${pushStats.successCount}, failure=${pushStats.failureCount}, noTokens=${pushStats.noTokenCount}`);
+    } catch (fcmError) {
+        logger.error(`[Broadcast] FCM push failed entirely for broadcast ${broadcast._id}: ${fcmError?.message || fcmError}`);
+        pushStats.failureCount = fcmTargets.length;
+    }
 
     emitRealtimeNotifications(resolvedTargets, broadcast);
 
     return {
         broadcast,
-        targetPreview: resolvedTargets.slice(0, 10)
+        targetPreview: resolvedTargets.slice(0, 10),
+        pushStats
     };
 };
 

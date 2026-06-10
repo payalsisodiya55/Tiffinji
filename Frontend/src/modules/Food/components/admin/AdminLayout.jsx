@@ -27,6 +27,19 @@ export default function AdminLayout() {
     }
   }, [])
 
+  // Initialize Admin FCM Web Push Notifications
+  useEffect(() => {
+    import("@food/utils/firebaseMessaging")
+      .then(({ registerWebPushForCurrentModule }) => {
+        registerWebPushForCurrentModule().catch((err) =>
+          console.error("Admin FCM registration failed:", err)
+        );
+      })
+      .catch((err) => {
+        console.error("Failed to load firebaseMessaging:", err);
+      });
+  }, []);
+
   const handleCollapseChange = (collapsed) => {
     setIsSidebarCollapsed(collapsed)
   }

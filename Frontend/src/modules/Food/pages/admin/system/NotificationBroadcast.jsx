@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { BellRing, Loader2, Search, Send, Trash2 } from "lucide-react";
 import { adminAPI } from "@food/api";
+import { toast } from "sonner";
 
 const TARGET_OPTIONS = [
   { value: "ALL", label: "All" },
@@ -151,12 +152,22 @@ export default function NotificationBroadcast() {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!form.title.trim() || !form.message.trim()) return;
-    if (form.targetType === "CUSTOM" && selectedRecipients.length === 0) return;
+    if (!form.title.trim()) {
+      toast.error("Notification title is required.");
+      return;
+    }
+    if (!form.message.trim()) {
+      toast.error("Notification message is required.");
+      return;
+    }
+    if (form.targetType === "CUSTOM" && selectedRecipients.length === 0) {
+      toast.error("Please select at least one recipient.");
+      return;
+    }
 
     try {
       setSubmitting(true);
-      await adminAPI.createBroadcastNotification({
+      const response = await adminAPI.createBroadcastNotification({
         title: form.title.trim(),
         message: form.message.trim(),
         targetType: form.targetType,
@@ -174,11 +185,25 @@ export default function NotificationBroadcast() {
               }))
             : [],
       });
+
+      const stats = response?.data?.data?.pushStats;
+      if (stats) {
+        const parts = [`Push: ${stats.successCount} delivered`];
+        if (stats.failureCount > 0) parts.push(`${stats.failureCount} failed`);
+        if (stats.noTokenCount > 0) parts.push(`${stats.noTokenCount} no FCM token`);
+        toast.success(`Broadcast sent! ${parts.join(", ")}`);
+      } else {
+        toast.success("Broadcast notification sent successfully!");
+      }
+
       setForm({ title: "", message: "", targetType: "ALL" });
       setSelectedRecipients([]);
       setSearch("");
       window.dispatchEvent(new Event("adminBroadcastUpdated"));
       await loadHistory();
+    } catch (error) {
+      console.error("Failed to send broadcast:", error);
+      toast.error(error?.response?.data?.message || error?.message || "Failed to send broadcast notification.");
     } finally {
       setSubmitting(false);
     }
@@ -188,9 +213,13 @@ export default function NotificationBroadcast() {
     if (!id) return;
     try {
       await adminAPI.deleteBroadcastNotification(id);
+      toast.success("Broadcast notification deleted successfully.");
       window.dispatchEvent(new Event("adminBroadcastUpdated"));
       await loadHistory();
-    } catch {}
+    } catch (error) {
+      console.error("Failed to delete broadcast:", error);
+      toast.error(error?.response?.data?.message || error?.message || "Failed to delete broadcast notification.");
+    }
   };
 
   return (

@@ -27,8 +27,12 @@ let pushSoundContext = null;
 const PUSH_DEBUG_PREFIX = "[push-debug]";
 const notificationDedupWindowMs = 8000;
 
-const pushDebugLog = (prefix, message, data = {}) => {};
-const pushDebugWarn = (prefix, message, data = {}) => {};
+const pushDebugLog = (prefix, message, data = {}) => {
+  console.log(`${prefix} ${message}`, data);
+};
+const pushDebugWarn = (prefix, message, data = {}) => {
+  console.warn(`${prefix} ${message}`, data);
+};
 
 function normalizeModuleFromPath(pathname = window.location.pathname) {
   if (pathname.includes("/restaurant") && !pathname.includes("/restaurants")) return "restaurant";
@@ -39,6 +43,11 @@ function normalizeModuleFromPath(pathname = window.location.pathname) {
 
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function shouldSuppressForegroundPush(payload = {}) {
+  const type = String(payload?.data?.type || "").trim().toLowerCase();
+  return type === "restaurant_approved";
 }
 
 function getPushSoundSources(moduleName = normalizeModuleFromPath()) {
@@ -469,6 +478,11 @@ async function saveTokenByModule(moduleName, token, platform = "web") {
   }
   if (moduleName === "user") {
     await userAPI.saveFcmToken(token, { platform });
+    return;
+  }
+  if (moduleName === "admin") {
+    await adminAPI.saveFcmToken(token, platform);
+    return;
   }
 }
 
@@ -500,15 +514,17 @@ async function registerNativeWebViewFcmToken(moduleName) {
   }
 }
 
-// options.fromSwRelay = true means the service worker already showed the system
-// notification; we should only show the in-app toast here to avoid duplicates.
-function showForegroundNotification(payload = {}, options = {}) {
+function showForegroundNotification(payload = {}) {
   if (!isRecord(payload)) {
     pushDebugWarn(PUSH_DEBUG_PREFIX, "Ignoring malformed foreground notification payload", { payload });
     return;
   }
+  if (shouldSuppressForegroundPush(payload)) {
+    pushDebugLog(PUSH_DEBUG_PREFIX, "Suppressed foreground push notification", { payload });
+    return;
+  }
   const notificationKey = getNotificationKey(payload);
-  pushDebugLog(PUSH_DEBUG_PREFIX, "showForegroundNotification received", { notificationKey, fromSwRelay: options.fromSwRelay, payload });
+  pushDebugLog(PUSH_DEBUG_PREFIX, "showForegroundNotification received", { notificationKey, payload });
   if (wasRecentlyHandled(notificationKey)) {
     return;
   }
@@ -533,23 +549,16 @@ function showForegroundNotification(payload = {}, options = {}) {
 
   playPushSound(payload);
 
-  // Only show a system notification from the PAGE if this is NOT a SW relay.
-  // When it IS a SW relay the service worker already showed the notification —
-  // creating another one here would produce a duplicate.
-  const isTabVisible = typeof document !== "undefined" && document.visibilityState === "visible";
-
-  // Only show a system notification from the PAGE if:
-  // 1. This is NOT a relay from the service worker (the SW already handles background alerts).
-  // 2. The tab is currently HIDDEN (if visible, the user sees the toast instead).
-  // 3. We are NOT in a mobile WebView (where native notifications are preferred).
-  if (!options.fromSwRelay && !isTabVisible && !isFlutterWebView() && typeof Notification !== "undefined" && Notification.permission === "granted") {
+  // Force system notification even when the tab is in focus
+  if (typeof Notification !== "undefined" && Notification.permission === "granted") {
     try {
-      pushDebugLog(PUSH_DEBUG_PREFIX, "Showing browser notification from page (tab is hidden)", {
+      pushDebugLog(PUSH_DEBUG_PREFIX, "Showing browser notification from page", {
         title,
         body,
         image,
         notificationKey,
       });
+      // Use service worker to show native system notification to ensure it bypasses focus checks
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistration().then(registration => {
           if (registration) {
@@ -593,47 +602,6 @@ function showForegroundNotification(payload = {}, options = {}) {
       });
     }
   }
-
-  // Show in-app toast if tab is visible.
-  if (typeof document !== "undefined" && document.visibilityState === "visible") {
-    // Cross-tab deduplication using BroadcastChannel and LocalStorage
-    const notificationId = payload?.data?.broadcastId || payload?.data?.orderId || payload?.data?.id || (title + body).replace(/\s+/g, '');
-    const channelName = `notification_dedupe_${notificationId}`;
-    const storageKey = `handled_notify_${notificationId}`;
-
-    if (localStorage.getItem(storageKey)) {
-      return;
-    }
-
-    localStorage.setItem(storageKey, "true");
-    setTimeout(() => localStorage.removeItem(storageKey), 5000);
-
-    const channel = new BroadcastChannel(channelName);
-    channel.postMessage({ type: "HANDLED" });
-    channel.close();
-
-    const isNewOrder = 
-      title.toLowerCase().includes("order") || 
-      body.toLowerCase().includes("order") || 
-      payload?.data?.orderId;
-
-    if (body) {
-      toast(title, {
-        description: body,
-        duration: isNewOrder ? 15000 : 6000,
-        important: isNewOrder,
-        action: payload?.data?.targetUrl ? {
-          label: 'View',
-          onClick: () => window.location.href = payload.data.targetUrl
-        } : undefined
-      });
-    } else {
-      toast(title, {
-        duration: isNewOrder ? 15000 : 6000,
-        important: isNewOrder
-      });
-    }
-  }
 }
 
 function attachServiceWorkerMessageListener() {
@@ -654,8 +622,7 @@ function attachServiceWorkerMessageListener() {
         return;
       }
       pushDebugLog(PUSH_DEBUG_PREFIX, "Received service worker message in page", { payload: data.payload });
-      // fromSwRelay: true — SW already showed the system notification; only show toast.
-      scheduleForegroundNotification(data.payload, { fromSwRelay: true });
+      scheduleForegroundNotification(data.payload);
     });
   }
 
@@ -684,10 +651,10 @@ function attachServiceWorkerMessageListener() {
   serviceWorkerMessageListenerAttached = true;
 }
 
-function scheduleForegroundNotification(payload, options = {}) {
+function scheduleForegroundNotification(payload) {
   // Keep message handlers fast to avoid Chrome [Violation] warnings.
   // Defer heavier work (toast, audio) to idle time / next tick.
-  const run = () => showForegroundNotification(payload, options);
+  const run = () => showForegroundNotification(payload);
   try {
     if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
       window.requestIdleCallback(run, { timeout: 1000 });
@@ -707,10 +674,6 @@ export function initPushNotificationClient() {
     moduleName,
     soundEnabled: isPushSoundEnabled(),
   });
-
-  if (moduleName === "admin") {
-    return;
-  }
 
   if (isPushSoundEnabled()) {
     pushSoundUnlocked = true;
@@ -741,7 +704,6 @@ async function attachForegroundListener(firebaseAppInstance) {
 
 export async function registerWebPushForCurrentModule(pathname = window.location.pathname) {
   const moduleName = normalizeModuleFromPath(pathname);
-  if (moduleName === "admin") return;
   initPushNotificationClient();
 
   const accessToken = localStorage.getItem(`${moduleName}_accessToken`);

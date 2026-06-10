@@ -107,6 +107,18 @@ export default function UserLayout() {
     // Reset scroll to top whenever location changes (pathname, search, or hash)
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [location.pathname, location.search, location.hash])
+  useEffect(() => {
+    // Proactively request notification permission for native browser popups
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
+      // Small delay to avoid overwhelming the user on first load
+      const timer = setTimeout(() => {
+        Notification.requestPermission().then(perm => {
+          console.log('[UserLayout] Notification permission:', perm);
+        });
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+  }, []);
 
   useUserNotifications()
 
