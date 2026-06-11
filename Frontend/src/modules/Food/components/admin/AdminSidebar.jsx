@@ -357,6 +357,10 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
       return currentPath === targetPath
     }
 
+    if (targetPath === "/admin/food/franchise") {
+      return currentPath === "/admin/food/franchise" || (currentPath.startsWith("/admin/food/franchise/") && !currentPath.startsWith("/admin/food/franchise/settings"))
+    }
+
     // For subItems, check if this is the most specific match
     if (allPaths.length > 0) {
       // Sort paths by length (longest first) to find most specific match

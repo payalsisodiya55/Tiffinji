@@ -434,6 +434,12 @@ export const adminAPI = {
     });
   },
 
+  /** Franchise Settings */
+  getFranchiseSettings: () =>
+    adminClient.get("/food/admin/franchise/settings"),
+  updateFranchiseSettings: (payload) =>
+    adminClient.patch("/food/admin/franchise/settings", payload),
+
   /** Feedback Experience (admin) */
   getFeedbackExperiences: (params = {}) =>
     adminClient.get(API_ENDPOINTS.ADMIN.FEEDBACK_EXPERIENCE, { params }),

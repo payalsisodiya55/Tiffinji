@@ -75,12 +75,13 @@ export default function DesktopNavbar({ showLogo = true }) {
     const isDining = location.pathname === "/food/user/dining" || location.pathname === "/food/dining" || location.pathname.startsWith("/food/user/dining") || location.pathname.startsWith("/food/dining")
     const isUnder250 = location.pathname === "/food/user/under-250" || location.pathname === "/food/under-250" || location.pathname.startsWith("/food/user/under-250") || location.pathname.startsWith("/food/under-250")
     const isProfile = location.pathname.startsWith("/food/user/profile") || location.pathname.startsWith("/food/profile")
-    const isDelivery = !isDining && !isUnder250 && !isProfile && (
+    const isFranchise = location.pathname === "/franchise" || location.pathname === "/food/user/franchise" || location.pathname.startsWith("/food/user/franchise") || location.pathname.startsWith("/franchise")
+    const isDelivery = !isDining && !isUnder250 && !isProfile && !isFranchise && (
         location.pathname === "/" ||
         location.pathname === "/food/user" ||
         location.pathname === "/food" ||
         location.pathname === "/food/" ||
-        (location.pathname.startsWith("/food/user") && !location.pathname.includes("/dining") && !location.pathname.includes("/under-250") && !location.pathname.includes("/profile"))
+        (location.pathname.startsWith("/food/user") && !location.pathname.includes("/dining") && !location.pathname.includes("/under-250") && !location.pathname.includes("/profile") && !location.pathname.includes("/franchise"))
     )
 
     // Load business settings logo
@@ -356,6 +357,26 @@ export default function DesktopNavbar({ showLogo = true }) {
                             >
                                 <span className="text-sm font-bold tracking-wide uppercase">Dining</span>
                                 {isDining && (
+                                    <motion.div
+                                        layoutId="navIndicator"
+                                        className="absolute -bottom-3 left-0 right-0 h-0.5 bg-[#D51F10]"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        transition={{ duration: 0.3 }}
+                                    />
+                                )}
+                            </Link>
+
+                            {/* Franchise Tab */}
+                            <Link
+                                to="/food/user/franchise"
+                                className={`flex flex-col items-center gap-1 px-2 py-1 transition-colors relative group ${isFranchise
+                                    ? "text-[#D51F10]"
+                                    : "text-gray-600 dark:text-gray-400 hover:text-[#D51F10]"
+                                    }`}
+                            >
+                                <span className="text-sm font-bold tracking-wide uppercase">Franchise</span>
+                                {isFranchise && (
                                     <motion.div
                                         layoutId="navIndicator"
                                         className="absolute -bottom-3 left-0 right-0 h-0.5 bg-[#D51F10]"

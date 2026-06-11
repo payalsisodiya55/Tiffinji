@@ -127,6 +127,11 @@ const AdminLogin = lazy(() => import("@food/pages/admin/auth/AdminLogin"));
 const AdminSignup = lazy(() => import("@food/pages/admin/auth/AdminSignup"));
 const AdminForgotPassword = lazy(() => import("@food/pages/admin/auth/AdminForgotPassword"));
 
+// Franchise Management
+const FranchiseLeads = lazy(() => import("@food/pages/admin/franchise/FranchiseLeads"));
+const FranchiseLeadDetail = lazy(() => import("@food/pages/admin/franchise/FranchiseLeadDetail"));
+const FranchiseSettings = lazy(() => import("@food/pages/admin/franchise/FranchiseSettings"));
+
 export default function AdminRouter() {
   return (
     <Suspense fallback={<Loader />}>
@@ -291,6 +296,11 @@ export default function AdminRouter() {
             <Route path="dining-management" element={<DiningManagement />} />
             <Route path="dining-list" element={<DiningList />} />
             <Route path="dining-requests" element={<DiningRequests />} />
+            
+            {/* FRANCHISE MANAGEMENT */}
+            <Route path="franchise" element={<FranchiseLeads />} />
+            <Route path="franchise/:id" element={<FranchiseLeadDetail />} />
+            <Route path="franchise/settings" element={<FranchiseSettings />} />
           </Route>
 
           {/* TAXI ADMIN - Placeholder for future implementation */}

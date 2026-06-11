@@ -212,6 +212,14 @@ export const adminSidebarMenu = [
   },
   {
     type: "section",
+    label: "FRANCHISE MANAGEMENT",
+    items: [
+      { type: "link", label: "Franchise Leads", path: "/admin/food/franchise", icon: "Users" },
+      { type: "link", label: "Franchise Settings", path: "/admin/food/franchise/settings", icon: "Settings" },
+    ],
+  },
+  {
+    type: "section",
     label: "SYSTEM SETTINGS",
     items: [
       { type: "link", label: "Broadcast Notification", path: "/admin/food/broadcast-notification", icon: "Bell" },

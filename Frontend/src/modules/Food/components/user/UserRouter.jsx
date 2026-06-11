@@ -92,6 +92,9 @@ const Wallet = lazy(() => import("@food/pages/user/Wallet"))
 // Complaints
 const SubmitComplaint = lazy(() => import("@food/pages/user/complaints/SubmitComplaint"))
 
+// Franchise
+const FranchisePage = lazy(() => import("@food/pages/user/franchise/FranchisePage"))
+
 export default function UserRouter() {
   return (
     <Suspense fallback={<Loader />}>
@@ -178,7 +181,8 @@ export default function UserRouter() {
           <Route path="collections" element={<Collections />} />
           <Route path="collections/:id" element={<CollectionDetail />} />
 
-
+          {/* Franchise */}
+          <Route path="franchise" element={<FranchisePage />} />
 
           {/* Profile - Protected (require user auth) */}
           <Route

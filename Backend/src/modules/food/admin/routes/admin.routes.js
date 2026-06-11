@@ -211,4 +211,8 @@ router.put('/pages-social-media/:key', upsertAdminPageController);
 router.get('/sidebar-badges', adminController.getSidebarBadges);
 router.get('/notifications/fssai-expired', adminController.getExpiredFssaiNotifications);
 
+// ----- Franchise Management -----
+import franchiseAdminRoutes from '../../franchise/routes/franchise.admin.routes.js';
+router.use('/franchise', franchiseAdminRoutes);
+
 export default router;
