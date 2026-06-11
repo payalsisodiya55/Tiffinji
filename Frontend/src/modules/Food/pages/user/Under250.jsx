@@ -1170,7 +1170,7 @@ export default function Under250() {
                                     <Button
                                       variant={"ghost"}
                                       size="sm"
-                                      className="bg-[#7e3866] text-white hover:bg-[#55254b] h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base font-bold shadow-md transition-all active:scale-95"
+                                      className="bg-[#D51F10] text-white hover:bg-[#9C120A] h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base font-bold shadow-md transition-all active:scale-95"
                                     >
                                       View cart
                                     </Button>
@@ -1182,7 +1182,7 @@ export default function Under250() {
                                     disabled={shouldShowGrayscale}
                                     className={`h-7 md:h-8 lg:h-9 px-3 md:px-4 lg:px-5 text-xs md:text-sm lg:text-base font-bold shadow-md transition-all active:scale-95 ${shouldShowGrayscale
                                       ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 border-gray-300 dark:border-gray-700 cursor-not-allowed opacity-50'
-                                      : 'bg-[#7e3866] text-white hover:bg-[#55254b]'
+                                      : 'bg-[#D51F10] text-white hover:bg-[#9C120A]'
                                       }`}
                                     onClick={(e) => {
                                       e.stopPropagation()
@@ -1500,7 +1500,7 @@ export default function Under250() {
                   <Button
                     className={`flex-1 h-[44px] md:h-[50px] lg:h-[56px] rounded-lg md:rounded-xl font-semibold flex items-center justify-center gap-2 text-sm md:text-base lg:text-lg ${(shouldShowGrayscale || !selectedItem.isOpen)
                       ? 'bg-gray-300 dark:bg-gray-700 text-gray-500 dark:text-gray-600 cursor-not-allowed opacity-50'
-                      : 'bg-[#7e3866] hover:bg-[#55254b] dark:bg-[#7e3866] dark:hover:bg-[#55254b] text-white'
+                      : 'bg-[#D51F10] hover:bg-[#9C120A] dark:bg-[#D51F10] dark:hover:bg-[#9C120A] text-white'
                       }`}
                     onClick={(e) => {
                       if (!shouldShowGrayscale && selectedItem.isOpen) {
