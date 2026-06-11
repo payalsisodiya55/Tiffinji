@@ -2835,13 +2835,13 @@ export default function Cart() {
               onClick={() => setShowPaymentSheet(true)}
             >
               <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-lg bg-[#7e386610] dark:bg-[#7e386620] flex items-center justify-center flex-shrink-0">
+                <div className="w-9 h-9 rounded-lg bg-[#D51F10]/10 dark:bg-[#D51F10]/20 flex items-center justify-center flex-shrink-0">
                    {selectedPaymentMethod === "wallet" ? (
-                    <Wallet className="h-5 w-5 text-[#7e3866]" />
+                    <Wallet className="h-5 w-5 text-[#D51F10]" />
                   ) : selectedPaymentMethod === "razorpay" ? (
-                    <Zap className="h-5 w-5 text-[#7e3866]" />
+                    <Zap className="h-5 w-5 text-[#D51F10]" />
                   ) : (
-                    <Banknote className="h-5 w-5 text-[#7e3866]" />
+                    <Banknote className="h-5 w-5 text-[#D51F10]" />
                   )}
                 </div>
                 <div className="leading-tight">
@@ -2861,7 +2861,7 @@ export default function Cart() {
                 </div>
               </div>
 
-               <div className="flex items-center gap-0.5 text-[#7e3866] font-bold text-[11px] uppercase tracking-widest bg-[#7e386605] dark:bg-[#7e386610] px-2.5 py-1 rounded-lg">
+               <div className="flex items-center gap-0.5 text-[#D51F10] font-bold text-[11px] uppercase tracking-widest bg-[#D51F10]/5 dark:bg-[#D51F10]/10 px-2.5 py-1 rounded-lg">
                 CHANGE <ChevronRight className="h-3.5 w-3.5" />
               </div>
             </div>
@@ -2870,7 +2870,7 @@ export default function Cart() {
             <button
               onClick={handlePlaceOrder}
               disabled={isPlacingOrder || (selectedPaymentMethod === "wallet" && walletBalance < total)}
-              className="w-full bg-gradient-to-r from-[#7e3866] to-[#55254b] hover:from-[#55254b] hover:to-[#3c0f3d] text-white px-6 h-12 md:h-14 rounded-2xl font-bold shadow-lg shadow-[#7e3866]/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]"
+              className="w-full bg-[#D51F10] hover:bg-[#9C120A] text-white px-6 h-12 md:h-14 rounded-2xl font-bold shadow-lg shadow-[#D51F10]/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]"
             >
               {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
                 <div className="text-left flex flex-col justify-center border-r-[1.5px] border-white/20 pr-4">
