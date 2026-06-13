@@ -23,9 +23,9 @@ const countryCodes = [
 export default function RestaurantSignup() {
   const navigate = useNavigate()
   const [formData, setFormData] = useState({
-    phone: "",
+    phone: sessionStorage.getItem("restaurantSignupPhone") || "",
     countryCode: "+91",
-    name: "",
+    name: sessionStorage.getItem("restaurantSignupName") || "",
   })
   const [errors, setErrors] = useState({
     phone: "",
@@ -66,11 +66,13 @@ export default function RestaurantSignup() {
       [name]: value,
     })
 
-    // Real-time validation
+    // Real-time validation & persistence
     if (name === "phone") {
       setErrors({ ...errors, phone: validatePhone(value) })
+      sessionStorage.setItem("restaurantSignupPhone", value)
     } else if (name === "name") {
       setErrors({ ...errors, name: validateName(value) })
+      sessionStorage.setItem("restaurantSignupName", value)
     }
   }
 

@@ -30,9 +30,9 @@ export default function DeliverySignup() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const [formData, setFormData] = useState({
-    phone: "",
+    phone: sessionStorage.getItem("deliverySignupPhone") || "",
     countryCode: "+91",
-    name: "",
+    name: sessionStorage.getItem("deliverySignupName") || "",
   })
   const [errors, setErrors] = useState({
     phone: "",
@@ -112,11 +112,13 @@ export default function DeliverySignup() {
       [name]: value,
     })
 
-    // Real-time validation
+    // Real-time validation & persistence
     if (name === "phone") {
       setErrors({ ...errors, phone: validatePhone(value) })
+      sessionStorage.setItem("deliverySignupPhone", value)
     } else if (name === "name") {
       setErrors({ ...errors, name: validateName(value) })
+      sessionStorage.setItem("deliverySignupName", value)
     }
   }
 

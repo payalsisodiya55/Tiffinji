@@ -16,7 +16,7 @@ export default function SignIn() {
   const [searchParams] = useSearchParams()
 
   const [formData, setFormData] = useState({
-    phone: "",
+    phone: sessionStorage.getItem("userLoginPhone") || "",
     countryCode: "+91", // required; default +91 for India
   })
 
@@ -25,6 +25,14 @@ export default function SignIn() {
   const submittingRef = useRef(false)
 
   useEffect(() => {
+    const storedPhone = sessionStorage.getItem("userLoginPhone")
+    if (storedPhone) {
+      setFormData((prev) => ({
+        ...prev,
+        phone: storedPhone,
+      }))
+      return
+    }
     const stored = sessionStorage.getItem("userAuthData")
     if (!stored) return
 
@@ -56,6 +64,7 @@ export default function SignIn() {
     if (name === "phone") {
       value = value.replace(/\D/g, "").slice(0, 10)
       setError(validatePhone(value))
+      sessionStorage.setItem("userLoginPhone", value)
     }
 
     setFormData((prev) => ({ ...prev, [name]: value }))

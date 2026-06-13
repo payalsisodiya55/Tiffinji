@@ -13,6 +13,8 @@ const DEFAULT_COUNTRY_CODE = "+91"
 export default function DeliverySignIn() {
   const navigate = useNavigate()
   const [phone, setPhone] = useState(() => {
+    const storedPhone = sessionStorage.getItem("deliveryLoginPhone")
+    if (storedPhone) return storedPhone
     const stored = sessionStorage.getItem("deliveryAuthData")
     if (stored) {
       try {
@@ -140,7 +142,11 @@ export default function DeliverySignIn() {
                     required
                     autoFocus
                     value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
+                    onChange={(e) => {
+                      const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                      setPhone(val);
+                      sessionStorage.setItem("deliveryLoginPhone", val);
+                    }}
                     maxLength={10}
                     className="block w-full pl-16 pr-6 py-4 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white border-2 border-transparent focus:border-[#7e3866]/50 rounded-2xl outline-none transition-all placeholder:text-gray-300 font-bold text-lg shadow-sm"
                     placeholder="00000 00000"
