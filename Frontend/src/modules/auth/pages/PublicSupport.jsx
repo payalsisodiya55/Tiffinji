@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 import { motion } from "framer-motion"
-import { Link } from "react-router-dom"
+import { Link, useNavigate } from "react-router-dom"
 import {
   ArrowLeft,
   MessageCircle,
@@ -54,6 +54,7 @@ const supportOptions = [
 ]
 
 export default function PublicSupport() {
+  const navigate = useNavigate()
   const [step, setStep] = useState("options")
   const [selectedTopic, setSelectedTopic] = useState(null)
   const [formData, setFormData] = useState({
@@ -108,11 +109,20 @@ export default function PublicSupport() {
       <div className="max-w-4xl mx-auto px-6 py-12">
         {/* Header */}
         <div className="flex items-center gap-4 mb-12">
-          <Link to={-1}>
-            <Button variant="ghost" size="icon" className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800">
-              <ArrowLeft className="h-6 w-6" />
-            </Button>
-          </Link>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="rounded-full hover:bg-gray-100 dark:hover:bg-gray-800"
+            onClick={() => {
+              if (step !== "options") {
+                setStep("options")
+              } else {
+                navigate(-1)
+              }
+            }}
+          >
+            <ArrowLeft className="h-6 w-6" />
+          </Button>
           <div>
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Support Center</h1>
             <p className="text-gray-500 dark:text-gray-400">How can we help you today?</p>
