@@ -540,6 +540,16 @@ export default function ItemDetailsPage() {
       return
     }
 
+    if (!preparationTime) {
+      toast.error("Please select the preparation timing")
+      return
+    }
+
+    if (itemDescription.trim() && itemDescription.trim().length < minDescriptionLength) {
+      toast.error(`Item description must be at least ${minDescriptionLength} characters long`)
+      return
+    }
+
     try {
       setUploadingImages(true)
 
@@ -768,10 +778,25 @@ export default function ItemDetailsPage() {
     setVariants((prev) => prev.filter((variant) => variant.localId !== localId))
   }
 
-  const handleDelete = () => {
-    // Delete logic here
-    debugLog("Deleting item:", id)
-    goBack()
+  const handleDelete = async () => {
+    if (isNewItem || !id) return
+
+    if (!window.confirm("Are you sure you want to delete this item?")) {
+      return
+    }
+
+    try {
+      setUploadingImages(true)
+      await restaurantAPI.deleteFood(id)
+      toast.success("Item deleted successfully")
+      window.dispatchEvent(new CustomEvent('foodsChanged'))
+      goBack()
+    } catch (error) {
+      debugError("Error deleting item:", error)
+      toast.error(error.response?.data?.message || error.message || "Failed to delete the item")
+    } finally {
+      setUploadingImages(false)
+    }
   }
 
   return (
@@ -799,7 +824,7 @@ export default function ItemDetailsPage() {
 
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto" style={{ paddingBottom: `${96 + keyboardInset}px` }}>
+      <div className="flex-1 overflow-y-auto" style={{ paddingBottom: "24px" }}>
         {!isNewItem && currentApprovalStatus === "rejected" && currentRejectionReason ? (
           <div className="px-4 pt-4">
             <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
@@ -988,15 +1013,19 @@ export default function ItemDetailsPage() {
                 maxLength={maxDescriptionLength}
                 rows={4}
                 placeholder="Eg: Yummy veg paneer burger with a soft patty, veggies, cheese, and special sauce"
-                className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
+                className={`w-full px-4 py-3 pr-12 border rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 resize-none transition-colors ${
+                  descriptionLength > 0 && descriptionLength < minDescriptionLength
+                    ? "border-red-300 focus:ring-red-500 focus:border-transparent"
+                    : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
+                }`}
               />
               <button className="absolute right-3 top-3 p-1 rounded-full hover:bg-gray-100">
                 <EditIcon className="w-4 h-4 text-gray-500" />
               </button>
             </div>
             <div className="flex items-center justify-between mt-1">
-              <span className={`text-xs ${descriptionLength < minDescriptionLength ? "text-red-500" : "text-gray-500"}`}>
-                {descriptionLength < minDescriptionLength ? "Min 5 characters required" : ""}
+              <span className={`text-xs ${descriptionLength > 0 && descriptionLength < minDescriptionLength ? "text-red-500" : "text-gray-500"}`}>
+                {descriptionLength > 0 && descriptionLength < minDescriptionLength ? "Min 5 characters required" : ""}
               </span>
               <span className="text-xs text-gray-500">
                 {descriptionLength} / {maxDescriptionLength}
@@ -1195,6 +1224,35 @@ export default function ItemDetailsPage() {
             </div>
           </div>
 
+          {/* Bottom Buttons - flow naturally so they don't cover inputs above keyboard */}
+          <div className="flex gap-3 pt-6 border-t border-gray-200">
+            {!isNewItem && (
+              <button
+                onClick={handleDelete}
+                disabled={uploadingImages}
+                className="flex-1 py-3 px-4 border border-black rounded-lg text-sm font-semibold text-black bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Delete
+              </button>
+            )}
+            <button
+              onClick={handleSave}
+              disabled={uploadingImages}
+              className={`${isNewItem ? 'w-full' : 'flex-1'} py-3 px-4 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${!uploadingImages
+                ? "bg-black text-white hover:bg-black"
+                : "bg-gray-300 text-gray-500 cursor-not-allowed"
+                }`}
+            >
+              {uploadingImages ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Uploading...</span>
+                </>
+              ) : (
+                "Save"
+              )}
+            </button>
+          </div>
 
         </div>
       </div>
@@ -1343,39 +1401,7 @@ export default function ItemDetailsPage() {
       </AnimatePresence> */}
 
 
-      {/* Bottom Sticky Buttons */}
-      <div
-        className="fixed left-0 right-0 bg-white border-t border-gray-200 z-40"
-        style={{ bottom: `${keyboardInset}px` }}
-      >
-        <div className={`flex gap-3 px-4 py-4 ${isNewItem ? 'justify-end' : ''}`}>
-          {!isNewItem && (
-            <button
-              onClick={handleDelete}
-              className="flex-1 py-3 px-4 border border-black rounded-lg text-sm font-semibold text-black bg-white hover:bg-gray-50 transition-colors"
-            >
-              Delete
-            </button>
-          )}
-          <button
-            onClick={handleSave}
-            disabled={uploadingImages}
-            className={`${isNewItem ? 'w-full' : 'flex-1'} py-3 px-4 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${!uploadingImages
-              ? "bg-black text-white hover:bg-black"
-              : "bg-gray-300 text-gray-500 cursor-not-allowed"
-              }`}
-          >
-            {uploadingImages ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Uploading...</span>
-              </>
-            ) : (
-              "Save"
-            )}
-          </button>
-        </div>
-      </div>
+      {/* Bottom Sticky Buttons removed to flow naturally inside scrollable content */}
       {/* Photo Picker */}
       <ImageSourcePicker
         isOpen={isPhotoPickerOpen}

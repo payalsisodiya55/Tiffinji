@@ -474,3 +474,11 @@ export async function bulkCreateFood(restaurantId, items = []) {
 
     return results;
 }
+
+export async function deleteRestaurantFood(restaurantId, foodId) {
+    if (!foodId || !mongoose.Types.ObjectId.isValid(String(foodId))) {
+        throw new ValidationError('Invalid food id');
+    }
+    const deleted = await FoodItem.findOneAndDelete({ _id: foodId, restaurantId }).lean();
+    return deleted ? { id: foodId } : null;
+}
