@@ -243,10 +243,18 @@ export default function RestaurantOTP() {
             <h1 className="text-4xl font-black text-[#7e3866] font-['Outfit'] tracking-tight mb-3">
               Verify Account
             </h1>
-            <p className="text-gray-500 dark:text-gray-400 font-medium">
+            <div className="text-gray-500 dark:text-gray-400 font-medium">
               We've sent a 4-digit code to <br />
               <span className="text-[#7e3866] font-bold">{contactInfo}</span>
-            </p>
+              <br />
+              <button
+                type="button"
+                onClick={() => navigate("/food/restaurant/login")}
+                className="text-xs text-[#7e3866] hover:text-[#6a2f56] font-semibold underline mt-1"
+              >
+                Edit
+              </button>
+            </div>
           </div>
 
           {/* OTP Input Card */}

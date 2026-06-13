@@ -150,7 +150,7 @@ export default function ProfessionalSearch() {
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-zinc-950">
       {/* Header */}
-      <div className="sticky top-0 z-50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-zinc-800 px-3 py-2 sm:px-4 sm:py-3">
+      <div className="sticky top-0 z-50 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl border-b border-gray-100 dark:border-zinc-800 px-3 pt-5 pb-3 sm:px-4 sm:pt-6 sm:pb-3">
         <div className="max-w-4xl mx-auto flex items-center gap-2 sm:gap-3">
           <button 
             onClick={() => navigate(-1)} 

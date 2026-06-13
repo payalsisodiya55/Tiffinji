@@ -501,9 +501,18 @@ export default function DeliveryOTP() {
                 : "We have sent a verification code to"}
             </p>
             {!showNameInput && (
-              <p className="text-base text-black font-medium">
-                {getPhoneNumber()}
-              </p>
+              <div className="space-y-1">
+                <p className="text-base text-black font-medium">
+                  {getPhoneNumber()}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => navigate("/food/delivery/login")}
+                  className="text-xs text-green-600 hover:text-green-800 font-semibold underline block mx-auto"
+                >
+                  Edit number
+                </button>
+              </div>
             )}
           </div>
 
