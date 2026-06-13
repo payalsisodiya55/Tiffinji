@@ -27,6 +27,7 @@ export default function BottomNavOrders() {
   const navigate = useNavigate()
   const { pathname } = useLocation()
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false)
+  const [isInputFocused, setIsInputFocused] = useState(false)
 
   // Hide bottom nav when keyboard is open (standard mobile UX)
   useEffect(() => {
@@ -53,6 +54,31 @@ export default function BottomNavOrders() {
     }
   }, [])
 
+  // Detect active inputs/textareas to also hide nav
+  useEffect(() => {
+    const handleFocusChange = () => {
+      const activeEl = document.activeElement
+      const isInput = activeEl && (
+        activeEl.tagName === "INPUT" || 
+        activeEl.tagName === "TEXTAREA" || 
+        activeEl.getAttribute("contenteditable") === "true"
+      )
+      setIsInputFocused(!!isInput)
+    }
+
+    document.addEventListener("focusin", handleFocusChange)
+    document.addEventListener("focusout", handleFocusChange)
+    window.addEventListener("blur", handleFocusChange)
+    window.addEventListener("focus", handleFocusChange)
+
+    return () => {
+      document.removeEventListener("focusin", handleFocusChange)
+      document.removeEventListener("focusout", handleFocusChange)
+      window.removeEventListener("blur", handleFocusChange)
+      window.removeEventListener("focus", handleFocusChange)
+    }
+  }, [])
+
 
   const basePath = pathname.includes("/food/restaurant")
     ? "/food/restaurant"
@@ -66,9 +92,7 @@ export default function BottomNavOrders() {
   const tabs = useMemo(() => getOrdersTabs(basePath), [basePath])
 
   const isInternalPage = pathname.includes("/create-offers")
-  if (isInternalPage || isKeyboardVisible) {
-    return null
-  }
+  const shouldHide = isInternalPage || isKeyboardVisible || isInputFocused
 
   const activeTab = useMemo(() => {
     const match = findActiveTab(tabs, pathname)
@@ -82,7 +106,9 @@ export default function BottomNavOrders() {
   }
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-60 px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))]">
+    <div className={`fixed bottom-0 left-0 right-0 z-60 px-2 pb-[max(0.4rem,env(safe-area-inset-bottom))] transition-all duration-300 transform ${
+      shouldHide ? "opacity-0 pointer-events-none translate-y-10" : "opacity-100 translate-y-0"
+    }`}>
       <div className="mx-auto flex w-full max-w-md items-end gap-2">
         <div className="flex-1 min-w-0">
           <div className="relative overflow-visible rounded-[30px] bg-[#7e3866] py-2 pl-3 pr-2 shadow-[0_16px_40px_rgba(126,56,102,0.35)]">

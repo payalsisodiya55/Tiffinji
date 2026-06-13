@@ -2132,16 +2132,7 @@ export default function Inventory() {
                 ) : null}
               </div>
 
-              <button
-                onClick={() => setFilterOpen(true)}
-                className="relative flex h-12 items-center justify-center gap-2 rounded-[20px] border border-[#e7d5e0] bg-white px-4 text-sm font-semibold text-[#55254b] transition-colors hover:border-[#d5bdd0] hover:bg-[#f9f0f7]"
-              >
-                <SlidersHorizontal className="w-4 h-4 text-[#7e3866]" />
-                <span>Filters</span>
-                {selectedFilter !== "all" && (
-                  <span className="absolute right-1.5 top-1.5 h-2.5 w-2.5 rounded-full bg-[#7e3866] ring-2 ring-white" />
-                )}
-              </button>
+
 
               {activeTab === "add-ons" && (
                 <button
@@ -2602,90 +2593,7 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* Filter Popup */}
-      <AnimatePresence>
-        {filterOpen && (
-          <>
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              className="fixed inset-0 bg-black/50 z-50"
-              onClick={() => setFilterOpen(false)}
-            />
-            <motion.div
-              initial={{ y: "100%" }}
-              animate={{ y: 0 }}
-              exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="p-6">
-                <div className="flex items-start justify-between gap-4 mb-6">
-                  <div>
-                    <h2 className="text-lg font-bold text-gray-900">Filters</h2>
-                    <p className="text-sm text-gray-500 mt-1">
-                      {activeTab === "add-ons"
-                        ? "Refine the add-ons list by availability or approval status."
-                        : "Refine your inventory by stock state, recommendation, or food type."}
-                    </p>
-                  </div>
-                  {selectedFilter !== "all" ? (
-                    <span className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-                      Active
-                    </span>
-                  ) : null}
-                </div>
 
-                <div className="space-y-4 mb-6">
-                  {activeFilterOptions.map((option) => {
-                    const count = activeTab === "add-ons"
-                      ? (addonFilterCounts[option.value] || 0)
-                      : (menuFilterCounts[option.value] || 0)
-
-                    return (
-                      <label key={option.value} className="flex items-center justify-between gap-3 cursor-pointer rounded-xl border border-gray-200 px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="radio"
-                            name="filter"
-                            checked={selectedFilter === option.value}
-                            onChange={() => setSelectedFilter(option.value)}
-                            style={{ accentColor: "#7e3866" }}
-                            className="w-5 h-5 border-gray-300"
-                          />
-                          <span className="text-base text-gray-900">{option.label}</span>
-                        </div>
-                        <span className="min-w-[28px] h-7 rounded-full bg-gray-100 flex items-center justify-center text-xs font-medium text-gray-700">
-                          {count}
-                        </span>
-                      </label>
-                    )
-                  })}
-                </div>
-
-                <div className="flex gap-3">
-                  {selectedFilter !== "all" && (
-                    <button
-                      onClick={handleFilterClear}
-                      className="flex-1 border border-gray-300 text-gray-900 py-3 rounded-lg font-medium hover:bg-gray-50 transition-colors"
-                    >
-                      Clear
-                    </button>
-                  )}
-                  <button
-                    onClick={handleFilterApply}
-                    className={`${selectedFilter !== "all" ? 'flex-1' : 'w-full'} bg-[#7e3866] text-white py-3 rounded-lg font-medium hover:bg-[#55254b] transition-colors`}
-                  >
-                    Apply
-                  </button>
-                </div>
-              </div>
-            </motion.div>
-          </>
-        )}
-      </AnimatePresence>
 
       {/* Toggle Popup */}
       <AnimatePresence>

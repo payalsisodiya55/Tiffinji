@@ -535,6 +535,11 @@ export default function ItemDetailsPage() {
   }
 
   const handleSave = async () => {
+    if (images.length === 0) {
+      toast.error("Please add at least one item image")
+      return
+    }
+
     if (!itemName.trim()) {
       toast.error("Please enter an item name")
       return
@@ -547,6 +552,31 @@ export default function ItemDetailsPage() {
 
     if (itemDescription.trim() && itemDescription.trim().length < minDescriptionLength) {
       toast.error(`Item description must be at least ${minDescriptionLength} characters long`)
+      return
+    }
+
+    const testVariants = variants
+      .map((variant) => ({
+        persistedId: String(variant.persistedId || "").trim(),
+        name: String(variant.name || "").trim(),
+        price: Number(variant.price),
+      }))
+      .filter((variant) => variant.name || variant.persistedId || variant.price)
+
+    if (testVariants.some((variant) => !variant.name)) {
+      toast.error("Each variant must have a name")
+      return
+    }
+
+    if (testVariants.some((variant) => !Number.isFinite(variant.price) || variant.price <= 0)) {
+      toast.error("Each variant price must be greater than 0")
+      return
+    }
+
+    const hasVariants = testVariants.length > 0
+    const parsedBasePrice = Number(basePrice)
+    if (!hasVariants && (!basePrice || !basePrice.trim() || !Number.isFinite(parsedBasePrice) || parsedBasePrice <= 0)) {
+      toast.error("Please enter a valid base price greater than 0")
       return
     }
 
@@ -654,22 +684,10 @@ export default function ItemDetailsPage() {
         }))
         .filter((variant) => variant.name || variant.persistedId || variant.price)
 
-      if (normalizedVariants.some((variant) => !variant.name)) {
-        toast.error("Each variant must have a name")
-        setUploadingImages(false)
-        return
-      }
-
-      if (normalizedVariants.some((variant) => !Number.isFinite(variant.price) || variant.price <= 0)) {
-        toast.error("Each variant price must be greater than 0")
-        setUploadingImages(false)
-        return
-      }
-
       const hasVariants = normalizedVariants.length > 0
       const parsedBasePrice = Number(basePrice)
-      if (!hasVariants && (!Number.isFinite(parsedBasePrice) || parsedBasePrice < 0)) {
-        toast.error("Please enter a valid base price")
+      if (!hasVariants && (!basePrice || !basePrice.trim() || !Number.isFinite(parsedBasePrice) || parsedBasePrice <= 0)) {
+        toast.error("Please enter a valid base price greater than 0")
         setUploadingImages(false)
         return
       }
@@ -838,6 +856,11 @@ export default function ItemDetailsPage() {
         ) : null}
 
         {/* Image Carousel */}
+        <div className="px-4 pt-4 bg-white">
+          <label className="block text-sm font-medium text-gray-900 mb-2">
+            Item image <span className="text-red-500">*</span>
+          </label>
+        </div>
         <div className="relative bg-white">
           {images.length > 0 ? (
             <div className="relative w-full h-80 overflow-hidden bg-gray-100">
@@ -962,7 +985,7 @@ export default function ItemDetailsPage() {
           {/* Category Selector */}
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Category
+              Category <span className="text-red-500">*</span>
             </label>
             <button
               onClick={() => setIsCategoryPopupOpen(true)}
@@ -978,7 +1001,7 @@ export default function ItemDetailsPage() {
           {/* Item Name */}
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Item name
+              Item name <span className="text-red-500">*</span>
             </label>
             <div className="relative">
               <input
@@ -1061,7 +1084,7 @@ export default function ItemDetailsPage() {
           {/* Item Price */}
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Item price
+              Item price <span className="text-red-500">*</span>
             </label>
             <div className="space-y-3">
               {variants.length === 0 ? (
@@ -1172,7 +1195,7 @@ export default function ItemDetailsPage() {
 
               {/* Preparation Time */}
               <div className="relative">
-                <label className="block text-xs text-gray-600 mb-1">Preparation Time</label>
+                <label className="block text-xs text-gray-600 mb-1">Preparation Time <span className="text-red-500">*</span></label>
                 <div className="relative">
                   <select
                     value={preparationTime}
