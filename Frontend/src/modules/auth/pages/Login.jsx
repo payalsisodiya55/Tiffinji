@@ -445,12 +445,14 @@ export default function UnifiedOTPFastLogin() {
           </div>
 
           {/* Footer Info */}
-          <div className="mt-8 text-center">
-            <p className="text-[11px] text-gray-400 font-medium leading-relaxed max-w-[320px] mx-auto">
-              By continuing, you agree to our <br />
-              <Link to="/food/user/profile/terms" className="text-gray-900 dark:text-white font-bold hover:text-[#7e3866] transition-colors">Terms of Service</Link> & <Link to="/food/user/profile/privacy" className="text-gray-900 dark:text-white font-bold hover:text-[#7e3866] transition-colors">Privacy Policy</Link>
-            </p>
-          </div>
+          {step === 1 && (
+            <div className="mt-8 text-center">
+              <p className="text-[11px] text-gray-400 font-medium leading-relaxed max-w-[320px] mx-auto">
+                By continuing, you agree to our <br />
+                <Link to="/food/user/profile/terms" className="text-gray-900 dark:text-white font-bold hover:text-[#7e3866] transition-colors">Terms of Service</Link> & <Link to="/food/user/profile/privacy" className="text-gray-900 dark:text-white font-bold hover:text-[#7e3866] transition-colors">Privacy Policy</Link>
+              </p>
+            </div>
+          )}
 
           <div className="mt-12 flex justify-center items-center gap-6 opacity-30 grayscale hover:opacity-60 transition-opacity">
             <div className="flex items-center gap-1.5">
@@ -495,7 +497,8 @@ export default function UnifiedOTPFastLogin() {
                 <Input
                   id="name"
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+                  onChange={(e) => setNewName(e.target.value.replace(/[^a-zA-Z\s]/g, "").slice(0, 50))}
+                  maxLength={50}
                   placeholder="Enter your name"
                   className="pl-4 h-14 bg-gray-50 dark:bg-gray-800 border-gray-100 dark:border-gray-700 rounded-2xl focus:ring-2 focus:ring-[#7e3866] transition-all group-hover:border-[#7e3866]/30"
                   autoFocus
