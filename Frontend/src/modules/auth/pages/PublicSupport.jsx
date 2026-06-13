@@ -88,7 +88,13 @@ export default function PublicSupport() {
 
   const handleTopicSelect = (topic) => {
     setSelectedTopic(topic)
-    setFormData(prev => ({ ...prev, subject: topic.title }))
+    setFormData({
+      name: "",
+      email: "",
+      phone: "",
+      subject: topic.title,
+      message: ""
+    })
     setStep("form")
   }
 
@@ -181,8 +187,9 @@ export default function PublicSupport() {
                     <Input
                       required
                       placeholder="John Doe"
+                      maxLength={50}
                       value={formData.name}
-                      onChange={e => setFormData({ ...formData, name: e.target.value })}
+                      onChange={e => setFormData({ ...formData, name: e.target.value.replace(/[^a-zA-Z\s]/g, "").slice(0, 50) })}
                       className="bg-white dark:bg-[#0a0a0a]"
                     />
                   </div>
@@ -191,9 +198,10 @@ export default function PublicSupport() {
                     <Input
                       required
                       type="tel"
-                      placeholder="+91 1234567890"
+                      placeholder="Enter 10-digit number"
+                      maxLength={10}
                       value={formData.phone}
-                      onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                      onChange={e => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
                       className="bg-white dark:bg-[#0a0a0a]"
                     />
                   </div>
@@ -205,7 +213,7 @@ export default function PublicSupport() {
                     type="email"
                     placeholder="john@example.com"
                     value={formData.email}
-                    onChange={e => setFormData({ ...formData, email: e.target.value })}
+                    onChange={e => setFormData({ ...formData, email: e.target.value.toLowerCase() })}
                     className="bg-white dark:bg-[#0a0a0a]"
                   />
                 </div>
@@ -215,10 +223,14 @@ export default function PublicSupport() {
                     required
                     rows={5}
                     placeholder="Tell us more about the issue..."
+                    maxLength={500}
                     value={formData.message}
-                    onChange={e => setFormData({ ...formData, message: e.target.value })}
+                    onChange={e => setFormData({ ...formData, message: e.target.value.slice(0, 500) })}
                     className="bg-white dark:bg-[#0a0a0a]"
                   />
+                  <div className="flex justify-end text-xs text-gray-400 dark:text-gray-500 font-medium mt-1">
+                    {(formData.message || "").length}/500
+                  </div>
                 </div>
 
                 <div className="pt-4 flex gap-4">
