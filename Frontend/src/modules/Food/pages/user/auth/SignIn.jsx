@@ -53,7 +53,7 @@ export default function SignIn() {
   const validatePhone = (phone) => {
     if (!phone.trim()) return "Phone number is required"
     const cleanPhone = phone.replace(/\D/g, "")
-    if (!/^\d{10}$/.test(cleanPhone)) return "Phone number must be exactly 10 digits"
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) return "Please enter a valid 10-digit Indian mobile number"
     return ""
   }
 
@@ -83,8 +83,8 @@ export default function SignIn() {
     try {
       const countryCode = formData.countryCode?.trim() || "+91"
       const phoneDigits = String(formData.phone ?? "").replace(/\D/g, "").slice(0, 10)
-      if (phoneDigits.length !== 10) {
-        setError("Phone number must be exactly 10 digits")
+      if (phoneDigits.length !== 10 || !/^[6-9]/.test(phoneDigits)) {
+        setError("Please enter a valid 10-digit Indian mobile number")
         setIsLoading(false)
         submittingRef.current = false
         return

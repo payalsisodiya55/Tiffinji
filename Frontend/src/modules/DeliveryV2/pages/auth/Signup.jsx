@@ -75,9 +75,8 @@ export default function DeliverySignup() {
       return "Phone number is required"
     }
     const cleanPhone = phone.replace(/[\s\-\(\)]/g, "")
-    const phoneRegex = /^\d{10}$/
-    if (!phoneRegex.test(cleanPhone)) {
-      return "Phone number must be exactly 10 digits"
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      return "Please enter a valid 10-digit Indian mobile number"
     }
     return ""
   }

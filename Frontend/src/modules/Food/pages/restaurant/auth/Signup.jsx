@@ -39,9 +39,8 @@ export default function RestaurantSignup() {
       return "Phone number is required"
     }
     const cleanPhone = phone.replace(/[\s\-\(\)]/g, "")
-    const phoneRegex = /^\d{7,15}$/
-    if (!phoneRegex.test(cleanPhone)) {
-      return "Phone number must be 7-15 digits"
+    if (!/^[6-9]\d{9}$/.test(cleanPhone)) {
+      return "Please enter a valid 10-digit Indian mobile number"
     }
     return ""
   }
@@ -60,7 +59,10 @@ export default function RestaurantSignup() {
   }
 
   const handleChange = (e) => {
-    const { name, value } = e.target
+    let { name, value } = e.target
+    if (name === "phone") {
+      value = value.replace(/\D/g, "").slice(0, 10)
+    }
     setFormData({
       ...formData,
       [name]: value,

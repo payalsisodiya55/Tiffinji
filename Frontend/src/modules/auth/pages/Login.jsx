@@ -34,15 +34,15 @@ export default function UnifiedOTPFastLogin() {
   const submitting = useRef(false)
 
   const normalizedPhone = () => {
-    const digits = String(phoneNumber).replace(/\D/g, "").slice(-15)
-    return digits.length >= 8 ? digits : ""
+    const digits = String(phoneNumber).replace(/\D/g, "")
+    return digits
   }
 
   const handleSendOTP = async (e) => {
     e.preventDefault()
     const phone = normalizedPhone()
-    if (phone.length < 10) {
-      toast.error("Please enter a valid 10-digit phone number")
+    if (phone.length !== 10 || !/^[6-9]/.test(phone)) {
+      toast.error("Please enter a valid 10-digit Indian mobile number")
       return
     }
     if (submitting.current) return
@@ -69,8 +69,8 @@ export default function UnifiedOTPFastLogin() {
 
   const handleResendOTP = async () => {
     const phone = normalizedPhone()
-    if (phone.length < 10) {
-      toast.error("Please enter a valid phone number")
+    if (phone.length !== 10 || !/^[6-9]/.test(phone)) {
+      toast.error("Please enter a valid 10-digit Indian mobile number")
       return
     }
     if (resendTimer > 0 || submitting.current) return
