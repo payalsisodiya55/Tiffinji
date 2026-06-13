@@ -22,6 +22,7 @@ import {
   Users,
   MessageSquare,
   FileText,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import BottomNavOrders from "@food/components/restaurant/BottomNavOrders";

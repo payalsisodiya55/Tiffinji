@@ -976,6 +976,42 @@ export async function listOrdersRestaurant(restaurantId, query) {
       { "payment.status": { $in: ["paid", "authorized", "captured", "settled", "refunded"] } },
     ],
   };
+
+  if (query.search && String(query.search).trim()) {
+    const term = String(query.search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const searchRegex = new RegExp(term, 'i');
+
+    const matchedUsers = await FoodUser.find({
+      $or: [
+        { name: searchRegex },
+        { phone: searchRegex },
+        { email: searchRegex }
+      ]
+    }).select('_id').lean();
+
+    const matchedUserIds = matchedUsers.map(u => u._id);
+
+    const orClauses = [
+      { order_id: searchRegex },
+      { orderId: searchRegex },
+      { customerName: searchRegex },
+      { customerPhone: searchRegex },
+      { "items.name": searchRegex }
+    ];
+
+    if (matchedUserIds.length > 0) {
+      orClauses.push({ userId: { $in: matchedUserIds } });
+    }
+
+    const originalOr = filter.$or;
+    delete filter.$or;
+
+    filter.$and = [
+      { $or: originalOr },
+      { $or: orClauses }
+    ];
+  }
+
   const [docs, total] = await Promise.all([
     FoodOrder.find(filter)
       .populate("userId", "name phone email profileImage")
