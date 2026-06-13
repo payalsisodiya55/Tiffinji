@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { UtensilsCrossed, ChevronRight, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { createPortal } from "react-dom";
 
 const CookingAnimation = memo(() => (
   <div className="relative w-12 h-12 flex items-center justify-center rounded-xl bg-orange-50 border border-orange-100 overflow-visible shadow-[0_4px_15px_rgba(235,89,14,0.15)] shrink-0">
@@ -27,7 +28,7 @@ const CookingAnimation = memo(() => (
     </motion.div>
     {/* Flame below */}
     <motion.div animate={{ opacity: [0.4, 0.8, 0.4], scaleX: [0.8, 1.2, 0.8] }} transition={{ duration: 0.6, repeat: Infinity, ease: "easeInOut" }} className="absolute bottom-0 w-full flex justify-center z-0">
-      <div className="w-4 h-1 bg-[#7e3866] blur-[2px] rounded-full" />
+      <div className="w-4 h-1 bg-[#D51F10] blur-[2px] rounded-full" />
     </motion.div>
   </div>
 ));
@@ -324,24 +325,15 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
 
   const [dismissedKey, setDismissedKey] = useState(null);
 
-  if (!activeOrder) {
-    return null;
-  }
+  const currentOrderKey = activeOrder ? getOrderKey(activeOrder) : null;
+  const isDismissed = dismissedKey === currentOrderKey;
+  
+  const restaurantName = activeOrder?.restaurant || activeOrder?.restaurantName || "Restaurant";
+  const orderStatus = activeOrder ? getOrderStatus(activeOrder) : "preparing";
+  const orderPhase = activeOrder ? getOrderPhase(activeOrder) : "";
 
-  const currentOrderKey = activeOrder.id || activeOrder._id || activeOrder.orderId;
-  if (dismissedKey === currentOrderKey) {
-    return null;
-  }
-
-  const orderStatus = getOrderStatus(activeOrder) || "preparing";
-  const orderPhase = getOrderPhase(activeOrder);
-  if (TERMINAL_STATUSES.has(orderStatus) || orderPhase === "cancelled" || orderPhase === "canceled") {
-    return null;
-  }
-
-  const restaurantName =
-    activeOrder.restaurant || activeOrder.restaurantName || "Restaurant";
   const statusText = (() => {
+    if (!activeOrder) return "";
     const s = String(orderStatus);
     const p = String(orderPhase);
 
@@ -357,59 +349,70 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
     return "Preparing your order";
   })();
 
-  return (
+  const card = (
     <AnimatePresence>
-      <motion.div
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        exit={{ y: 100, opacity: 0 }}
-        transition={{ type: "spring", damping: 25, stiffness: 200 }}
-        className={`fixed ${hasBottomNav ? "bottom-20" : "bottom-6"} left-4 right-4 z-[9999]`}
-      >
-        <div 
-          onClick={() =>
-            navigate(
-              `/food/user/orders/${activeOrder.id || activeOrder._id || activeOrder.orderId}`,
-            )
-          }
-          className="relative bg-white/95 backdrop-blur-xl rounded-[20px] p-4 shadow-[0_8px_30px_rgba(235,89,14,0.15)] border border-orange-100/60 overflow-visible cursor-pointer group"
+      {activeOrder && !isDismissed && !TERMINAL_STATUSES.has(orderStatus) && orderPhase !== "completed" && orderPhase !== "delivered" && (
+        <motion.div
+          initial={{ y: 100, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 100, opacity: 0 }}
+          transition={{ type: "spring", damping: 25, stiffness: 200 }}
+          className={`fixed ${hasBottomNav ? "bottom-24" : "bottom-6"} left-4 right-4 z-[9999]`}
         >
-          {/* Subtle gradient background mesh */}
-          <div className="absolute inset-0 bg-gradient-to-r from-orange-50/50 via-white/40 to-white/80 opacity-60 pointer-events-none rounded-[20px]" />
-          
-          <button 
-             onClick={(e) => { e.stopPropagation(); setDismissedKey(currentOrderKey); }}
-             className="absolute top-2 right-2 p-1.5 rounded-full bg-orange-50/80 text-orange-400 hover:text-#55254b hover:bg-orange-100/80 transition-colors z-20 shadow-sm"
+          <div 
+            onClick={() =>
+              navigate(
+                `/food/user/orders/${activeOrder.id || activeOrder._id || activeOrder.orderId}`,
+              )
+            }
+            className="relative bg-white/95 backdrop-blur-xl rounded-[20px] p-4 shadow-[0_8px_30px_rgba(235,89,14,0.15)] border border-orange-100/60 overflow-visible cursor-pointer group"
           >
-            <X className="w-3.5 h-3.5 pointer-events-none" />
-          </button>
+            {/* Subtle gradient background mesh */}
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-50/50 via-white/40 to-white/80 opacity-60 pointer-events-none rounded-[20px]" />
+            
+            <button 
+               onClick={(e) => { e.stopPropagation(); setDismissedKey(currentOrderKey); }}
+               className="absolute top-2 right-2 p-1.5 rounded-full bg-orange-50/80 text-orange-400 hover:text-[#55254b] hover:bg-orange-100/80 transition-colors z-20 shadow-sm"
+            >
+              <X className="w-3.5 h-3.5 pointer-events-none" />
+            </button>
 
-          <div className="flex items-center gap-4 relative z-10 w-full">
-            <CookingAnimation />
+            <div className="flex items-center gap-4 relative z-10 w-full">
+              <CookingAnimation />
 
-            <div className="flex-1 min-w-0 pr-4">
-              <p className="text-gray-900 font-bold text-base md:text-lg truncate tracking-tight">{restaurantName}</p>
-              <div className="flex items-center gap-1.5 mt-0.5">
-                <p className="text-gray-500 font-medium text-xs md:text-sm truncate">{statusText}</p>
-                <ChevronRight className="w-3.5 h-3.5 text-[#7e3866] shrink-0 group-hover:translate-x-1 transition-transform" />
+              <div className="flex-1 min-w-0 pr-4">
+                <p className="text-gray-900 font-bold text-base md:text-lg truncate tracking-tight">{restaurantName}</p>
+                <div className="flex items-center gap-1.5 mt-0.5">
+                  <p className="text-gray-500 font-medium text-xs md:text-sm truncate">{statusText}</p>
+                  <ChevronRight className="w-3.5 h-3.5 text-[#D51F10] shrink-0 group-hover:translate-x-1 transition-transform" />
+                </div>
+              </div>
+
+              <div 
+                style={{
+                  background: "linear-gradient(135deg, #D51F10, #E04236)",
+                  boxShadow: "0 10px 15px -3px rgba(213, 31, 16, 0.3), 0 4px 6px -4px rgba(213, 31, 16, 0.3)"
+                }}
+                className="rounded-xl px-4 py-2 shrink-0 flex flex-col items-center justify-center border border-white/20"
+              >
+                <p className="text-orange-50 text-[10px] font-bold uppercase tracking-wider opacity-95 leading-tight mb-[2px]">
+                  arriving in
+                </p>
+                <p className="text-white text-base md:text-[17px] font-black leading-tight drop-shadow-sm">
+                  {timeRemaining !== null
+                    ? `${Math.max(1, timeRemaining)} min`
+                    : "--"}
+                </p>
               </div>
             </div>
-
-            <div className="bg-gradient-to-br from-[#7e3866] to-[#D94E0A] shadow-lg shadow-[#7e3866]/20 rounded-xl px-4 py-2 shrink-0 flex flex-col items-center justify-center border border-orange-200">
-              <p className="text-orange-50 text-[10px] font-bold uppercase tracking-wider opacity-95 leading-tight mb-[2px]">
-                arriving in
-              </p>
-              <p className="text-white text-base md:text-[17px] font-black leading-tight drop-shadow-sm">
-                {timeRemaining !== null
-                  ? `${Math.max(1, timeRemaining)} min`
-                  : "--"}
-              </p>
-            </div>
           </div>
-        </div>
-      </motion.div>
+        </motion.div>
+      )}
     </AnimatePresence>
   );
+
+  if (typeof document === "undefined") return null;
+  return createPortal(card, document.body);
 }
 
 const OrderTrackingCard = memo(OrderTrackingCardInner);

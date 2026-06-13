@@ -9,6 +9,90 @@ const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
 
+// IndexedDB helpers for persistent file storage during delivery signup
+const DELIVERY_FILES_DB = "DeliverySignupFiles"
+const FILES_STORE = "files"
+
+const openDeliveryFilesDB = () => {
+  return new Promise((resolve, reject) => {
+    try {
+      const request = indexedDB.open(DELIVERY_FILES_DB, 1)
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result
+        if (!db.objectStoreNames.contains(FILES_STORE)) {
+          db.createObjectStore(FILES_STORE)
+        }
+      }
+      request.onsuccess = (e) => resolve(e.target.result)
+      request.onerror = (e) => reject(e.target.error)
+    } catch (err) {
+      reject(err)
+    }
+  })
+}
+
+const saveFileToDB = async (key, file) => {
+  if (!file) return
+  try {
+    const db = await openDeliveryFilesDB()
+    const tx = db.transaction(FILES_STORE, "readwrite")
+    tx.objectStore(FILES_STORE).put(file, key)
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve(true)
+      tx.onerror = () => reject(tx.error || new Error("IndexedDB write failed"))
+      tx.onabort = () => reject(tx.error || new Error("IndexedDB write aborted"))
+    })
+  } catch (err) {
+    debugError("IndexedDB save failed:", err)
+  }
+}
+
+const getFileFromDB = async (key) => {
+  try {
+    const db = await openDeliveryFilesDB()
+    const tx = db.transaction(FILES_STORE, "readonly")
+    const request = tx.objectStore(FILES_STORE).get(key)
+    return new Promise((resolve) => {
+      request.onsuccess = () => resolve(request.result)
+      request.onerror = () => resolve(null)
+    })
+  } catch (err) {
+    debugError("IndexedDB load failed:", err)
+    return null
+  }
+}
+
+const deleteFileFromDB = async (key) => {
+  try {
+    const db = await openDeliveryFilesDB()
+    const tx = db.transaction(FILES_STORE, "readwrite")
+    tx.objectStore(FILES_STORE).delete(key)
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve(true)
+      tx.onerror = () => reject(tx.error || new Error("IndexedDB delete failed"))
+      tx.onabort = () => reject(tx.error || new Error("IndexedDB delete aborted"))
+    })
+  } catch (err) {
+    debugError("IndexedDB delete failed:", err)
+  }
+}
+
+const clearAllFilesFromDB = async () => {
+  try {
+    const db = await openDeliveryFilesDB()
+    const tx = db.transaction(FILES_STORE, "readwrite")
+    tx.objectStore(FILES_STORE).clear()
+    await new Promise((resolve, reject) => {
+      tx.oncomplete = () => resolve(true)
+      tx.onerror = () => reject(tx.error || new Error("IndexedDB clear failed"))
+      tx.onabort = () => reject(tx.error || new Error("IndexedDB clear aborted"))
+    })
+  } catch (err) {
+    debugError("IndexedDB clear failed:", err)
+  }
+}
+
+
 const createEmptyUploadedDocs = () => ({
   profilePhoto: null,
   aadharPhoto: null,
@@ -84,6 +168,7 @@ export default function SignupStep2() {
     panPhoto: null,
     drivingLicensePhoto: null
   })
+  const createdUrlsRef = useRef([])
   const [documents, setDocuments] = useState({
     profilePhoto: null,
     aadharPhoto: null,
@@ -109,6 +194,29 @@ export default function SignupStep2() {
     window.scrollTo({ top: 0, left: 0, behavior: "auto" })
     document.documentElement.scrollTop = 0
     document.body.scrollTop = 0
+
+    // Load persisted files from IndexedDB
+    const loadPersistedFiles = async () => {
+      const docTypes = ["profilePhoto", "aadharPhoto", "panPhoto", "drivingLicensePhoto"]
+      const loadedDocs = {}
+      for (const type of docTypes) {
+        const file = await getFileFromDB(type)
+        if (file) {
+          loadedDocs[type] = file
+        }
+      }
+      if (Object.keys(loadedDocs).length > 0) {
+        setDocuments((prev) => ({ ...prev, ...loadedDocs }))
+        setUploadedDocs((prev) => {
+          const updated = { ...prev }
+          Object.keys(loadedDocs).forEach((type) => {
+            updated[type] = { file: true }
+          })
+          return updated
+        })
+      }
+    }
+    loadPersistedFiles()
   }, [])
 
   // Save uploaded docs to session storage whenever they change
@@ -118,16 +226,15 @@ export default function SignupStep2() {
 
   useEffect(() => {
     return () => {
-      Object.values(documents).forEach((file) => {
-        if (file instanceof File) {
-          const previewUrl = file.previewUrl || file._previewUrl
-          if (previewUrl) {
-            URL.revokeObjectURL(previewUrl)
-          }
+      createdUrlsRef.current.forEach((url) => {
+        try {
+          URL.revokeObjectURL(url)
+        } catch (e) {
+          debugError("Error revoking URL:", e)
         }
       })
     }
-  }, [documents])
+  }, [])
 
   const getPreviewSrc = (docType) => {
     const uploaded = uploadedDocs[docType]
@@ -135,9 +242,11 @@ export default function SignupStep2() {
     if (uploaded?.url) return uploaded.url
 
     const localFile = documents[docType]
-    if (localFile instanceof File) {
+    if (localFile instanceof File || localFile instanceof Blob || (localFile && typeof localFile === "object" && localFile.size)) {
       if (!localFile._previewUrl) {
-        localFile._previewUrl = URL.createObjectURL(localFile)
+        const url = URL.createObjectURL(localFile)
+        localFile._previewUrl = url
+        createdUrlsRef.current.push(url)
       }
       return localFile._previewUrl
     }
@@ -162,6 +271,7 @@ export default function SignupStep2() {
 
     setDocuments((prev) => ({ ...prev, [docType]: file }))
     setUploadedDocs((prev) => ({ ...prev, [docType]: { file: true } }))
+    await saveFileToDB(docType, file)
     toast.success(`${docType.replace(/([A-Z])/g, " $1").trim()} selected`)
   }
 
@@ -176,7 +286,7 @@ export default function SignupStep2() {
     fileInputRefs.current[docType]?.click()
   }
 
-  const handleRemove = (docType) => {
+  const handleRemove = async (docType) => {
     setDocuments(prev => ({
       ...prev,
       [docType]: null
@@ -185,6 +295,7 @@ export default function SignupStep2() {
       ...prev,
       [docType]: null
     }))
+    await deleteFileFromDB(docType)
   }
 
   const handleSubmit = async (e) => {
@@ -278,6 +389,7 @@ export default function SignupStep2() {
       if (response?.data?.success) {
         sessionStorage.removeItem("deliverySignupDetails")
         sessionStorage.removeItem("deliverySignupDocs")
+        await clearAllFilesFromDB()
         if (isCompleteProfile) {
           sessionStorage.removeItem("deliveryNeedsRegistration")
           toast.success("Registration successful. Please login with OTP.")
