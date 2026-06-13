@@ -391,7 +391,7 @@ export default function SignupStep2() {
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
-      <div className="bg-white px-4 py-3 flex items-center gap-4 border-b border-gray-200">
+      <div className="fixed top-0 left-0 right-0 z-20 bg-white px-4 py-3 flex items-center gap-4 border-b border-gray-200 shadow-sm">
         <button
           onClick={goBack}
           className="p-2 hover:bg-gray-100 rounded-full transition-colors"
@@ -402,7 +402,7 @@ export default function SignupStep2() {
       </div>
 
       {/* Content */}
-      <div className="px-4 py-6">
+      <div className="px-4 pt-20 pb-6">
         <div className="mb-6">
           <h2 className="text-xl font-bold text-gray-900 mb-2">Document Verification</h2>
           <p className="text-sm text-gray-600">Please upload clear photos of your documents</p>
