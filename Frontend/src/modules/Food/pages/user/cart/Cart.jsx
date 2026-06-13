@@ -2870,7 +2870,7 @@ export default function Cart() {
             <button
               onClick={handlePlaceOrder}
               disabled={isPlacingOrder || (selectedPaymentMethod === "wallet" && walletBalance < total)}
-              className="w-full bg-gradient-to-r from-[#7e3866] to-[#55254b] hover:from-[#55254b] hover:to-[#3c0f3d] text-white px-6 h-12 md:h-14 rounded-2xl font-bold shadow-lg shadow-[#7e3866]/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]"
+              className="w-full bg-gradient-to-r from-[#D51F10] to-[#9C120A] hover:from-[#9C120A] hover:to-[#1E0301] text-white px-6 h-12 md:h-14 rounded-2xl font-bold shadow-lg shadow-[#D51F10]/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]"
             >
               {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
                 <div className="text-left flex flex-col justify-center border-r-[1.5px] border-white/20 pr-4">
