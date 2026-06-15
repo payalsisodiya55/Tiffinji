@@ -206,7 +206,7 @@ export default function FranchisePage() {
   ]
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0a0a0a] overflow-x-hidden">
+    <div className="min-h-screen bg-white dark:bg-[#0a0a0a]">
       {/* ─── Navbar ─── */}
       <nav className="sticky top-0 z-50 bg-white/95 dark:bg-[#0a0a0a]/95 backdrop-blur-md border-b border-gray-100 dark:border-gray-900/80 shadow-sm transition-all duration-300">
         
@@ -315,6 +315,7 @@ export default function FranchisePage() {
         </AnimatePresence>
       </nav>
 
+      <div className="overflow-x-hidden">
       {/* ─── Hero ─── */}
       <section className="relative h-[calc(100vh-64px)] lg:h-[calc(100vh-80px)] min-h-[550px] md:min-h-[600px] flex items-center justify-center overflow-hidden bg-black">
         {s.heroBgImageUrl && (
@@ -892,6 +893,7 @@ export default function FranchisePage() {
           </button>
         </div>
       </section>
+      </div>
     </div>
   )
 }

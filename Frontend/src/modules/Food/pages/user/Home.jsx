@@ -2747,9 +2747,9 @@ export default function Home() {
           {/* Main Header - Mobile Only */}
           <div
             ref={stickyHeaderRef}
-            className={`md:hidden overflow-x-clip z-[80] ${
+            className={`md:hidden z-[80] ${
               hasScrolledPastBanner 
-                ? "sticky top-0 bg-white dark:bg-[#1a1a1a] shadow-sm" 
+                ? "fixed top-0 left-0 right-0 bg-white dark:bg-[#1a1a1a] shadow-sm" 
                 : "relative bg-transparent"
             }`}
           >
@@ -2769,6 +2769,9 @@ export default function Home() {
               hasScrolledPastBanner={hasScrolledPastBanner}
             />
           </div>
+          {hasScrolledPastBanner && (
+            <div style={{ height: mobileHeaderHeight }} />
+          )}
 
           <div
             ref={headerBannerShellRef}

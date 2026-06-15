@@ -129,34 +129,34 @@ export default function HomeHeader({
 
   const headerTextColor = useSolidHeader
     ? (isDark ? "#ffffff" : "#111827")
-    : (isPinkBannerMode ? "#000000" : theme.text);
+    : (isPinkBannerMode ? (isDark ? "#ffffff" : "#000000") : theme.text);
 
   const subtitleClassName = useSolidHeader
     ? "max-w-[190px] truncate text-[11px] font-medium text-gray-600 dark:text-gray-400"
     : (isPinkBannerMode 
-        ? "max-w-[190px] truncate text-[9px] font-bold text-black/80" 
+        ? "max-w-[190px] truncate text-[9px] font-bold text-black/80 dark:text-white/80" 
         : "max-w-[190px] truncate text-[11px] font-medium text-white/75");
 
   const actionButtonClassName = useSolidHeader
     ? "relative h-[38px] w-[38px] rounded-full bg-white dark:bg-[#2a2a2a] border border-gray-200 dark:border-gray-800 flex items-center justify-center shadow-[0_4px_12px_rgba(15,23,42,0.08)]"
     : (isPinkBannerMode
-        ? "relative h-8 w-8 rounded-full bg-white border border-gray-200 flex items-center justify-center shadow-sm active:scale-90 transition-all"
+        ? "relative h-8 w-8 rounded-full bg-white dark:bg-[#2a2a2a] border border-gray-200 dark:border-gray-800 flex items-center justify-center shadow-sm active:scale-90 transition-all"
         : "relative h-[38px] w-[38px] rounded-full bg-black/18 border border-white/18 flex items-center justify-center shadow-[0_4px_12px_rgba(0,0,0,0.12)] backdrop-blur-[6px]");
 
   const actionIconClassName = useSolidHeader
     ? "h-[18px] w-[18px] text-gray-800 dark:text-white"
-    : (isPinkBannerMode ? "h-4 w-4 text-gray-700" : "h-[18px] w-[18px] text-white");
+    : (isPinkBannerMode ? "h-4 w-4 text-gray-700 dark:text-gray-200" : "h-[18px] w-[18px] text-white");
 
   const cartButtonClassName = useSolidHeader
     ? "relative flex h-[38px] w-[38px] items-center justify-center rounded-full border border-gray-200 dark:border-gray-800 bg-white dark:bg-[#2a2a2a] shadow-[0_4px_12px_rgba(15,23,42,0.08)]"
     : (isPinkBannerMode
-        ? "relative flex h-8 w-8 items-center justify-center rounded-full bg-white border border-gray-200 shadow-sm active:scale-90 transition-all"
+        ? "relative flex h-8 w-8 items-center justify-center rounded-full bg-white dark:bg-[#2a2a2a] border border-gray-200 dark:border-gray-800 shadow-sm active:scale-90 transition-all"
         : "relative flex h-[38px] w-[38px] items-center justify-center rounded-full border border-white/18 bg-black/18 shadow-[0_4px_12px_rgba(0,0,0,0.12)] backdrop-blur-[6px]");
 
   const searchBoxClassName = useSolidHeader
     ? "flex-1 rounded-[12px] h-[46px] flex items-center px-3 cursor-pointer relative overflow-hidden bg-[#F3F4F6] dark:bg-[#2a2a2a] border border-gray-200 dark:border-gray-800 shadow-[0_4px_12px_rgba(15,23,42,0.06)]"
     : (isPinkBannerMode
-        ? "relative bg-white rounded-2xl flex items-center px-4 py-3 shadow-lg border border-black/5 cursor-pointer active:scale-[0.98] transition-all duration-300 flex-1 h-[46px]"
+        ? "relative bg-white dark:bg-[#1a1a1a] rounded-2xl flex items-center px-4 py-3 shadow-lg border border-black/5 dark:border-gray-800 cursor-pointer active:scale-[0.98] transition-all duration-300 flex-1 h-[46px]"
         : "flex-1 rounded-[12px] h-[46px] flex items-center px-3 cursor-pointer relative overflow-hidden bg-white dark:bg-[#1a1a1a] shadow-[0_6px_18px_rgba(15,23,42,0.10)]");
   const locationTitle =
     savedAddressText || location?.area || location?.city || "Select Location";
@@ -294,10 +294,10 @@ export default function HomeHeader({
                   )}
                    <div className="flex min-w-0 max-w-[190px] flex-col">
                      <div className="flex items-center gap-[3px]">
-                       <span className={isPinkBannerMode ? "truncate text-[13px] font-black text-black" : "truncate text-[16px] font-extrabold tracking-[-0.3px]"}>
+                       <span className={isPinkBannerMode ? "truncate text-[13px] font-black text-black dark:text-white" : "truncate text-[16px] font-extrabold tracking-[-0.3px]"}>
                          {locationTitle}
                        </span>
-                       <ChevronDown className={isPinkBannerMode ? "h-3 w-3 text-black shrink-0" : "h-[14px] w-[14px] shrink-0 opacity-80"} strokeWidth={isPinkBannerMode ? 2 : 3} />
+                       <ChevronDown className={isPinkBannerMode ? "h-3 w-3 text-black dark:text-white shrink-0" : "h-[14px] w-[14px] shrink-0 opacity-80"} strokeWidth={isPinkBannerMode ? 2 : 3} />
                      </div>
                      <span className={subtitleClassName}>
                        {locationSubtitle}
@@ -439,7 +439,7 @@ export default function HomeHeader({
                   animate={{ y: 0, opacity: 1 }}
                   exit={{ y: -12, opacity: 0 }}
                   transition={{ duration: 0.3 }}
-                  className={isPinkBannerMode ? "absolute inset-0 whitespace-nowrap leading-[20px] text-sm font-bold text-gray-600 truncate flex items-center" : "absolute inset-0 whitespace-nowrap leading-[22px] text-[12.5px] font-medium text-gray-400"}
+                  className={isPinkBannerMode ? "absolute inset-0 whitespace-nowrap leading-[20px] text-sm font-bold text-gray-600 dark:text-gray-300 truncate flex items-center" : "absolute inset-0 whitespace-nowrap leading-[22px] text-[12.5px] font-medium text-gray-400"}
                 >
                   {placeholders?.[placeholderIndex] || "Search for food..."}
                 </motion.span>
@@ -458,7 +458,7 @@ export default function HomeHeader({
               onClick={() => onVegModeChange?.(!vegMode)}
               className="flex flex-col items-center gap-1 cursor-pointer select-none"
             >
-              <span className={isPinkBannerMode ? "text-[7px] font-black text-black uppercase tracking-tighter leading-none" : "text-[10px] font-black tracking-[0.4px] text-[#22C55E] mb-1 leading-none"}>Veg Mode</span>
+              <span className={isPinkBannerMode ? "text-[7px] font-black text-black dark:text-white uppercase tracking-tighter leading-none" : "text-[10px] font-black tracking-[0.4px] text-[#22C55E] mb-1 leading-none"}>Veg Mode</span>
               <div className={isPinkBannerMode ? "scale-[0.78]" : "scale-[0.82]"}>
                 <Switch
                   checked={vegMode}

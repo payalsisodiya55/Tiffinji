@@ -2,7 +2,7 @@ import { Link } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { MapPin, ShoppingCart, Trophy } from "lucide-react"
 import { Button } from "@food/components/ui/button"
-import { Avatar, AvatarFallback } from "@food/components/ui/avatar"
+import { Avatar, AvatarFallback, AvatarImage } from "@food/components/ui/avatar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,6 +12,7 @@ import {
 import { useLocation } from "@food/hooks/useLocation"
 import { useCart } from "@food/context/CartContext"
 import { useLocationSelector } from "./UserLayout"
+import { useProfile } from "@food/context/ProfileContext"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
@@ -22,6 +23,7 @@ export default function Navbar() {
   const { location, loading } = useLocation()
   const { getCartCount } = useCart()
   const { openLocationSelector } = useLocationSelector()
+  const { userProfile } = useProfile()
   const cartCount = getCartCount()
   const [logoUrl, setLogoUrl] = useState(null)
   const [companyName, setCompanyName] = useState(null)
@@ -172,8 +174,15 @@ export default function Navbar() {
               <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 sm:h-11 sm:w-11 md:h-12 md:w-12 hover:bg-gray-100">
                   <Avatar className="h-8 w-8">
+                    {userProfile?.profileImage && (
+                      <AvatarImage
+                        src={typeof userProfile.profileImage === "string" ? userProfile.profileImage : userProfile.profileImage.url}
+                        alt={userProfile.name || "User"}
+                        className="object-cover"
+                      />
+                    )}
                     <AvatarFallback className="bg-primary text-white text-xs">
-                      A
+                      {userProfile?.name?.charAt(0)?.toUpperCase() || "U"}
                     </AvatarFallback>
                   </Avatar>
                 </Button>
