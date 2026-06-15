@@ -203,7 +203,9 @@ export default function EditProfile() {
     let normalizedValue = value
     let errorMessage = ""
 
-    if (field === "mobile") {
+    if (field === "name") {
+      normalizedValue = String(value || "").replace(/[^a-zA-Z\s]/g, "")
+    } else if (field === "mobile") {
       normalizedValue = String(value || "").replace(/\D/g, "").slice(0, 10)
       errorMessage = validateMobile(normalizedValue)
     } else if (field === "email") {
