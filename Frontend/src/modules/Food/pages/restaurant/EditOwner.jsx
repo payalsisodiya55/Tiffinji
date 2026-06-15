@@ -855,7 +855,7 @@ export default function EditOwner() {
                 <Input
                   type="text"
                   value={loading ? "Loading..." : formData.panNumber}
-                  onChange={(e) => handleInputChange("panNumber", e.target.value.toUpperCase())}
+                  onChange={(e) => handleInputChange("panNumber", e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 10))}
                   placeholder="ABCDE1234F"
                   className="w-full pr-10 focus-visible:border-black focus-visible:ring-0"
                   disabled={loading || saving}
@@ -871,7 +871,7 @@ export default function EditOwner() {
                 <Input
                   type="text"
                   value={loading ? "Loading..." : formData.nameOnPan}
-                  onChange={(e) => handleInputChange("nameOnPan", e.target.value)}
+                  onChange={(e) => handleInputChange("nameOnPan", e.target.value.replace(/[^a-zA-Z\s]/g, ""))}
                   placeholder="Enter name as per PAN"
                   className="w-full pr-10 focus-visible:border-black focus-visible:ring-0"
                   disabled={loading || saving}
@@ -920,7 +920,7 @@ export default function EditOwner() {
                 <Input
                   type="text"
                   value={loading ? "Loading..." : formData.ifscCode}
-                  onChange={(e) => handleInputChange("ifscCode", e.target.value.toUpperCase())}
+                  onChange={(e) => handleInputChange("ifscCode", e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 11))}
                   placeholder="SBIN0001234"
                   className="w-full pr-10 focus-visible:border-black focus-visible:ring-0"
                   disabled={loading || saving}
