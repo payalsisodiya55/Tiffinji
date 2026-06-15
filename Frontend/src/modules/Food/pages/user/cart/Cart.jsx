@@ -333,7 +333,7 @@ export default function Cart() {
     if (normalized === "other") return "Other"
     return label || "Saved address"
   }
-  const sanitizeRecipientPhone = (value) => String(value || "").replace(/[^\d+]/g, "").slice(0, 14)
+  const sanitizeRecipientPhone = (value) => String(value || "").replace(/[^\d]/g, "").slice(0, 10)
   const savedAddress = getDefaultAddress()
   const selectedAddress = addresses.find((addr) => getAddressId(addr) && getAddressId(addr) === selectedAddressId)
 
@@ -2670,7 +2670,7 @@ export default function Cart() {
                         onChange={(e) =>
                           setRecipientDetails((prev) => ({
                             ...prev,
-                            name: e.target.value,
+                            name: e.target.value.replace(/[^A-Za-z\s]/g, ""),
                           }))
                         }
                         placeholder="Enter recipient name"
@@ -2695,7 +2695,7 @@ export default function Cart() {
                       />
                     </div>
                     <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                      Agar aap kisi aur ke liye order kar rahe ho, to yahan uska naam aur phone save kar do.
+                      If you are ordering for someone else, save their name and phone number here.
                     </p>
                   </div>
                 )}
