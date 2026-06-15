@@ -2167,7 +2167,7 @@ export default function OrderTracking() {
                     }) : 'N/A'}
                   </p>
                 </div>
-                <div className="h-8 w-px bg-gray-100" />
+                <div className="h-8 w-px bg-gray-100 dark:bg-gray-800" />
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wider">Status</p>
                   <span className="text-sm font-bold text-green-600 uppercase">
@@ -2179,11 +2179,11 @@ export default function OrderTracking() {
 
             {/* Delivery Instructions Section */}
             {order?.note && (
-              <div className="bg-orange-50/50 rounded-xl p-4 border border-orange-100 flex gap-3">
-                <MessageSquare className="w-5 h-5 text-[#7e3866] shrink-0 mt-0.5" />
+              <div className="bg-orange-50/50 dark:bg-orange-950/20 rounded-xl p-4 border border-orange-100 dark:border-orange-900/30 flex gap-3">
+                <MessageSquare className="w-5 h-5 text-[#7e3866] dark:text-[#a14b84] shrink-0 mt-0.5" />
                 <div>
-                  <p className="text-xs text-#55254b font-bold uppercase tracking-wider mb-1">Delivery Instructions</p>
-                  <p className="text-sm text-gray-800 leading-relaxed font-medium capitalize">
+                  <p className="text-xs text-[#7e3866] dark:text-[#a14b84] font-bold uppercase tracking-wider mb-1">Delivery Instructions</p>
+                  <p className="text-sm text-gray-800 dark:text-gray-200 leading-relaxed font-medium capitalize">
                     {order.note}
                   </p>
                 </div>
@@ -2192,7 +2192,7 @@ export default function OrderTracking() {
 
             {/* Items Section */}
             <div>
-              <p className="text-sm font-medium text-gray-500 uppercase tracking-wider mb-3">Order Items</p>
+              <p className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Order Items</p>
               <div className="space-y-4">
                 {order?.items?.map((item, index) => (
                   <div key={index} className="flex items-start justify-between gap-4">
@@ -2201,54 +2201,54 @@ export default function OrderTracking() {
                         <div className="w-2.5 h-2.5 rounded-full bg-green-600" />
                       </div>
                       <div className="flex-1">
-                        <p className="font-semibold text-gray-900 leading-tight">{item.name}</p>
+                        <p className="font-semibold text-gray-900 dark:text-gray-100 leading-tight">{item.name}</p>
                         {item.variantName ? (
-                          <p className="text-sm text-gray-500 mt-0.5">{item.variantName}</p>
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{item.variantName}</p>
                         ) : null}
-                        <p className="text-sm text-gray-500 mt-0.5">Quantity: {item.quantity}</p>
+                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Quantity: {item.quantity}</p>
                       </div>
                     </div>
-                    <p className="font-semibold text-gray-900">₹{((item?.price || 0) * (item?.quantity || 0)).toFixed(2)}</p>
+                    <p className="font-semibold text-gray-900 dark:text-gray-100">₹{((item?.price || 0) * (item?.quantity || 0)).toFixed(2)}</p>
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Bill Summary */}
-            <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-              <p className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-1">Bill Summary</p>
+            <div className="bg-gray-50 dark:bg-gray-800/40 rounded-xl p-4 space-y-3">
+              <p className="text-sm font-bold text-gray-900 dark:text-gray-100 uppercase tracking-wider mb-1">Bill Summary</p>
               
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">Item Total</span>
-                <span className="text-gray-900 font-medium">₹{Number(order?.subtotal || 0).toFixed(2)}</span>
+                <span className="text-gray-600 dark:text-gray-400">Item Total</span>
+                <span className="text-gray-900 dark:text-gray-200 font-medium">₹{Number(order?.subtotal || 0).toFixed(2)}</span>
               </div>
 
               {Number(order?.packagingFee) > 0 && (
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">Packaging Charges</span>
-                  <span className="text-gray-900 font-medium">₹{Number(order.packagingFee).toFixed(2)}</span>
+                  <span className="text-gray-600 dark:text-gray-400">Packaging Charges</span>
+                  <span className="text-gray-900 dark:text-gray-200 font-medium">₹{Number(order.packagingFee).toFixed(2)}</span>
                 </div>
               )}
 
               {Number(order?.platformFee) > 0 && (
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-600">Platform Fee</span>
-                  <span className="text-gray-900 font-medium">₹{Number(order.platformFee).toFixed(2)}</span>
+                  <span className="text-gray-600 dark:text-gray-400">Platform Fee</span>
+                  <span className="text-gray-900 dark:text-gray-200 font-medium">₹{Number(order.platformFee).toFixed(2)}</span>
                 </div>
               )}
 
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">Delivery Fee</span>
-                <span className="text-gray-900 font-medium">₹{Number(order?.deliveryFee || 0).toFixed(2)}</span>
+                <span className="text-gray-600 dark:text-gray-400">Delivery Fee</span>
+                <span className="text-gray-900 dark:text-gray-200 font-medium">₹{Number(order?.deliveryFee || 0).toFixed(2)}</span>
               </div>
 
               <div className="flex justify-between items-center text-sm">
-                <span className="text-gray-600">GST</span>
-                <span className="text-gray-900 font-medium">₹{Number(order?.gst || 0).toFixed(2)}</span>
+                <span className="text-gray-600 dark:text-gray-400">GST</span>
+                <span className="text-gray-900 dark:text-gray-200 font-medium">₹{Number(order?.gst || 0).toFixed(2)}</span>
               </div>
 
               {Number(order?.discount) > 0 && (
-                <div className="flex justify-between items-center text-sm text-green-600 font-medium">
+                <div className="flex justify-between items-center text-sm text-green-600 dark:text-green-400 font-medium">
                   <span>Discount Applied</span>
                   <span>-₹{Number(order.discount).toFixed(2)}</span>
                 </div>
@@ -2263,21 +2263,21 @@ export default function OrderTracking() {
             {/* Payment Method */}
             {order?.paymentMethod && (
               <div className="flex items-center justify-between px-1">
-                <div className="flex items-center gap-2 text-gray-600">
+                <div className="flex items-center gap-2 text-gray-600 dark:text-gray-400">
                   <Shield className="w-4 h-4" />
                   <span className="text-sm font-medium">Payment Method</span>
                 </div>
-                <span className="text-sm font-bold text-gray-900 uppercase tracking-wide">
+                <span className="text-sm font-bold text-gray-900 dark:text-gray-200 uppercase tracking-wide">
                   {order.paymentMethod}
                 </span>
               </div>
             )}
           </div>
 
-          <div className="p-6 border-t border-gray-100">
+          <div className="p-6 border-t border-gray-100 dark:border-gray-800">
             <Button
               onClick={() => setShowOrderDetails(false)}
-              className="w-full bg-gray-900 text-white font-bold h-12 rounded-xl"
+              className="w-full bg-gray-900 dark:bg-gray-800 text-white hover:bg-gray-800 dark:hover:bg-gray-700 font-bold h-12 rounded-xl"
             >
               Okay
             </Button>

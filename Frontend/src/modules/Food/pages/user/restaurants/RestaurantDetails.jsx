@@ -2530,7 +2530,7 @@ function RestaurantDetailsContent() {
           </button>
 
           {/* Filter/Category Buttons */}
-          <div className="border-y border-gray-200 py-3 -mx-4 px-4">
+          <div className="border-y border-gray-200 dark:border-gray-800 py-3 -mx-4 px-4">
             <div className="flex flex-col gap-3">
               {/* Row 1: Filters (scrollable independently) */}
               <div className="overflow-x-auto scrollbar-hide pt-2 pb-2.5 border-b border-gray-100 dark:border-gray-900">

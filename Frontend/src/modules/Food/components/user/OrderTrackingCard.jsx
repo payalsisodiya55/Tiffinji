@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { createPortal } from "react-dom";
 
 const CookingAnimation = memo(() => (
-  <div className="relative w-12 h-12 flex items-center justify-center rounded-xl bg-orange-50 border border-orange-100 overflow-visible shadow-[0_4px_15px_rgba(235,89,14,0.15)] shrink-0">
+  <div className="relative w-12 h-12 flex items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30 overflow-visible shadow-[0_4px_15px_rgba(235,89,14,0.15)] dark:shadow-[0_4px_15px_rgba(0,0,0,0.2)] shrink-0">
     <div className="absolute -top-3 flex gap-1.5">
       <motion.div animate={{ opacity: [0, 0.8, 0], y: [0, -8, -12], scale: [0.8, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0, ease: "easeOut" }} className="w-1.5 h-3 bg-orange-400/60 rounded-full blur-[1px]" />
       <motion.div animate={{ opacity: [0, 0.8, 0], y: [0, -10, -15], scale: [0.8, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.5, ease: "easeOut" }} className="w-1.5 h-3 bg-orange-400/60 rounded-full blur-[1px]" />
@@ -365,14 +365,14 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
                 `/food/user/orders/${activeOrder.id || activeOrder._id || activeOrder.orderId}`,
               )
             }
-            className="relative bg-white/95 backdrop-blur-xl rounded-[20px] p-4 shadow-[0_8px_30px_rgba(235,89,14,0.15)] border border-orange-100/60 overflow-visible cursor-pointer group"
+            className="relative bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur-xl rounded-[20px] p-4 shadow-[0_8px_30px_rgba(235,89,14,0.15)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)] border border-orange-100/60 dark:border-zinc-800/80 overflow-visible cursor-pointer group"
           >
             {/* Subtle gradient background mesh */}
-            <div className="absolute inset-0 bg-gradient-to-r from-orange-50/50 via-white/40 to-white/80 opacity-60 pointer-events-none rounded-[20px]" />
+            <div className="absolute inset-0 bg-gradient-to-r from-orange-50/50 via-white/40 to-white/80 dark:from-zinc-900/30 dark:via-zinc-900/10 dark:to-zinc-900/40 opacity-60 pointer-events-none rounded-[20px]" />
             
             <button 
                onClick={(e) => { e.stopPropagation(); setDismissedKey(currentOrderKey); }}
-               className="absolute top-2 right-2 p-1.5 rounded-full bg-orange-50/80 text-orange-400 hover:text-[#55254b] hover:bg-orange-100/80 transition-colors z-20 shadow-sm"
+               className="absolute top-2 right-2 p-1.5 rounded-full bg-orange-50/80 dark:bg-zinc-800 text-orange-400 dark:text-zinc-500 hover:text-[#55254b] dark:hover:text-zinc-300 hover:bg-orange-100/80 dark:hover:bg-zinc-700 transition-colors z-20 shadow-sm"
             >
               <X className="w-3.5 h-3.5 pointer-events-none" />
             </button>
@@ -381,9 +381,9 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
               <CookingAnimation />
 
               <div className="flex-1 min-w-0 pr-4">
-                <p className="text-gray-900 font-bold text-base md:text-lg truncate tracking-tight">{restaurantName}</p>
+                <p className="text-gray-900 dark:text-white font-bold text-base md:text-lg truncate tracking-tight">{restaurantName}</p>
                 <div className="flex items-center gap-1.5 mt-0.5">
-                  <p className="text-gray-500 font-medium text-xs md:text-sm truncate">{statusText}</p>
+                  <p className="text-gray-500 dark:text-gray-400 font-medium text-xs md:text-sm truncate">{statusText}</p>
                   <ChevronRight className="w-3.5 h-3.5 text-[#D51F10] shrink-0 group-hover:translate-x-1 transition-transform" />
                 </div>
               </div>
