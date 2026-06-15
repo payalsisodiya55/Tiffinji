@@ -20,7 +20,9 @@ import {
   CircleSlash,
   Loader2,
   Clock,
-  Calendar
+  Calendar,
+  Mail,
+  Copy
 } from "lucide-react"
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import { Card, CardContent } from "@food/components/ui/card"
@@ -509,6 +511,7 @@ export default function OrderTracking() {
   const [isUpdatingInstructions, setIsUpdatingInstructions] = useState(false)
   const [resolvedLookupId, setResolvedLookupId] = useState("")
   const [timerNow, setTimerNow] = useState(Date.now())
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false)
   
   // Rating states
   const [showRatingModal, setShowRatingModal] = useState(false)
@@ -1282,23 +1285,7 @@ export default function OrderTracking() {
   };
 
   const handleShare = async () => {
-    try {
-      if (navigator.share) {
-        await navigator.share({
-          title: `Track my order from ${order?.restaurant || companyName}`,
-          text: `Hey! Track my order from ${order?.restaurant || companyName} with ID #${order?.orderId || order?.id}.`,
-          url: window.location.href,
-        });
-      } else {
-        await navigator.clipboard.writeText(window.location.href);
-        toast.success("Tracking link copied to clipboard!");
-      }
-    } catch (error) {
-      if (error.name !== 'AbortError') {
-        debugError('Error sharing:', error);
-        toast.error("Failed to share link");
-      }
-    }
+    setIsShareModalOpen(true);
   };
 
   const handleRefresh = async () => {
@@ -2423,6 +2410,96 @@ export default function OrderTracking() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Share Options Modal */}
+      <AnimatePresence>
+        {isShareModalOpen && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-black/40 z-[90] backdrop-blur-sm"
+              onClick={() => setIsShareModalOpen(false)}
+            />
+            <motion.div
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
+              transition={{ type: "spring", damping: 25, stiffness: 200 }}
+              className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1a1a1a] rounded-t-[32px] shadow-2xl z-[90] p-6 pb-8"
+            >
+              <div className="flex justify-center mb-4">
+                <div className="h-1 w-10 rounded-full bg-gray-300 dark:bg-gray-700" />
+              </div>
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-xl font-bold text-gray-900 dark:text-white">Share Tracking Link</h3>
+                <button onClick={() => setIsShareModalOpen(false)} className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+                  <X className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+                </button>
+              </div>
+
+              <div className="grid grid-cols-4 gap-4 mb-6">
+                {/* WhatsApp */}
+                <a
+                  href={`https://api.whatsapp.com/send?text=${encodeURIComponent(`Track my order from ${order?.restaurant || 'Tiffinji'}: ${window.location.href}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-2 text-center group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center text-green-600 dark:text-green-400 group-hover:scale-110 transition-transform">
+                    <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+                      <path d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946C.06 5.348 5.397.01 12.008.01c3.202.001 6.212 1.246 8.477 3.514 2.266 2.268 3.507 5.28 3.505 8.484-.004 6.657-5.34 11.997-11.953 11.997-2.005-.001-3.973-.5-5.739-1.453L0 24zm6.59-4.846c1.6.95 3.188 1.449 4.825 1.451 5.436 0 9.86-4.42 9.863-9.864.001-2.637-1.03-5.116-2.905-6.993-1.876-1.878-4.36-2.907-6.999-2.907-5.439 0-9.86 4.417-9.864 9.861-.001 1.716.452 3.39 1.312 4.866l-.993 3.626 3.754-.984zm11.387-5.464c-.301-.15-1.782-.879-2.056-.979-.275-.1-.475-.15-.675.15-.2.3-.775.979-.95 1.179-.175.2-.35.225-.65.075-1.025-.514-1.795-1.066-2.525-1.725-.625-.563-1.025-1.233-1.15-1.45-.125-.217-.013-.334.113-.459.112-.112.25-.29.375-.434.125-.145.167-.25.25-.417.083-.167.042-.317-.021-.467-.062-.15-.563-1.358-.771-1.859-.203-.488-.412-.417-.567-.425l-.484-.009c-.167 0-.438.062-.667.312-.229.25-.875.855-.875 2.083 0 1.229.896 2.417.996 2.55 1.025 1.358 2.287 2.48 3.633 3.033.95.39 1.708.487 2.316.398.679-.1 1.783-.729 2.033-1.396.25-.667.25-1.238.175-1.358-.075-.12-.275-.22-.575-.37z"/>
+                    </svg>
+                  </div>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">WhatsApp</span>
+                </a>
+
+                {/* Telegram */}
+                <a
+                  href={`https://t.me/share/url?url=${encodeURIComponent(window.location.href)}&text=${encodeURIComponent(`Track my order from ${order?.restaurant || 'Tiffinji'}`)}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-col items-center gap-2 text-center group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-500 dark:text-blue-300 group-hover:scale-110 transition-transform">
+                    <svg className="w-6 h-6 fill-current" viewBox="0 0 24 24">
+                      <path d="M11.944 0C5.337 0 0 5.337 0 11.944 0 18.553 5.337 24 11.944 24 18.553 24 24 18.553 24 11.944 24 5.337 18.553 0 11.944 0zm5.834 8.016l-1.954 9.222c-.145.651-.532.812-1.077.505l-2.978-2.194-1.438 1.384c-.159.159-.292.292-.599.292l.213-3.03 5.518-4.98c.24-.213-.053-.332-.372-.12l-6.82 4.292-2.937-.919c-.639-.2-1.127-.585.045-1.045l11.47-4.42c.532-.2 1.024.145.834.919z"/>
+                    </svg>
+                  </div>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Telegram</span>
+                </a>
+
+                {/* Email */}
+                <a
+                  href={`mailto:?subject=${encodeURIComponent(`Track my order from ${order?.restaurant || 'Tiffinji'}`)}&body=${encodeURIComponent(`Hey, you can track my order here: ${window.location.href}`)}`}
+                  className="flex flex-col items-center gap-2 text-center group"
+                >
+                  <div className="w-12 h-12 rounded-full bg-purple-100 dark:bg-purple-900/30 flex items-center justify-center text-purple-600 dark:text-purple-400 group-hover:scale-110 transition-transform">
+                    <Mail className="w-6 h-6" />
+                  </div>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Email</span>
+                </a>
+
+                {/* Copy Link */}
+                <button
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(window.location.href);
+                    toast.success("Tracking link copied!");
+                    setIsShareModalOpen(false);
+                  }}
+                  className="flex flex-col items-center gap-2 text-center group cursor-pointer"
+                >
+                  <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-600 dark:text-gray-400 group-hover:scale-110 transition-transform">
+                    <Copy className="w-5 h-5" />
+                  </div>
+                  <span className="text-xs font-semibold text-gray-700 dark:text-gray-300">Copy Link</span>
+                </button>
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
