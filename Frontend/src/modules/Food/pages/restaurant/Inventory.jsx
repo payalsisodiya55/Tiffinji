@@ -2508,13 +2508,22 @@ export default function Inventory() {
                                   </h4>
                                   
                                   <div className="flex flex-wrap items-center gap-1.5 mb-2.5">
-                                    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider shadow-sm transition-all ${
-                                      item.isVeg
-                                        ? "bg-white text-green-600 border border-green-100"
-                                        : "bg-white text-red-600 border border-red-100"
-                                    }`}>
-                                      <div className={`h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0 rounded-[2px] border flex items-center justify-center ${item.isVeg ? 'border-green-600' : 'border-red-600'}`}>
-                                        <div className={`h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full ${item.isVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                                    <span 
+                                      className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 sm:px-2.5 sm:py-1 text-[9px] sm:text-[10px] font-black uppercase tracking-wider shadow-sm transition-all bg-white"
+                                      style={{
+                                        color: item.isVeg ? '#16a34a' : '#dc2626',
+                                        borderColor: item.isVeg ? '#bbf7d0' : '#fecaca',
+                                        borderWidth: '1px'
+                                      }}
+                                    >
+                                      <div 
+                                        className="h-2.5 w-2.5 sm:h-3 sm:w-3 shrink-0 rounded-[2px] border flex items-center justify-center"
+                                        style={{ borderColor: item.isVeg ? '#16a34a' : '#dc2626' }}
+                                      >
+                                        <div 
+                                          className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full" 
+                                          style={{ backgroundColor: item.isVeg ? '#16a34a' : '#dc2626' }}
+                                        />
                                       </div>
                                       {item.isVeg ? "Veg" : "Non-veg"}
                                     </span>
