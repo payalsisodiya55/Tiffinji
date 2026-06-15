@@ -1,4 +1,4 @@
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useLocation } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { ArrowLeft, Lock, Loader2 } from "lucide-react"
 import { motion } from "framer-motion"
@@ -10,6 +10,7 @@ import { API_ENDPOINTS } from "@food/api/config"
 
 export default function Privacy() {
   const navigate = useNavigate()
+  const location = useLocation()
   const goBack = useAppBackNavigation()
   const [loading, setLoading] = useState(true)
   const [privacyData, setPrivacyData] = useState({
@@ -35,11 +36,21 @@ export default function Privacy() {
     }
   }
 
+  const hasFoodPrefix = window.location.pathname.startsWith("/food")
+  const getPrefixedPath = (path) => {
+    return hasFoodPrefix ? `/food${path}` : path
+  }
+
   const handleBack = () => {
-    if (window.history.length > 2) {
+    if (location.state?.returnTo) {
+      navigate(location.state.returnTo, { 
+        state: location.state?.originalState,
+        replace: true 
+      })
+    } else if (window.history.state && window.history.state.idx > 0) {
       goBack()
     } else {
-      navigate('/food/user')
+      navigate(getPrefixedPath('/user/profile/about'))
     }
   }
 
@@ -47,7 +58,7 @@ export default function Privacy() {
     return (
       <div className="min-h-screen bg-white dark:bg-[#0a0a0a] flex items-center justify-center p-6">
         <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-10 w-10 animate-spin text-[#CB202D]" />
+          <Loader2 className="h-10 w-10 animate-spin text-[#D51F10]" />
           <p className="text-gray-500 font-bold uppercase tracking-widest text-xs">Loading...</p>
         </div>
       </div>
@@ -88,7 +99,7 @@ export default function Privacy() {
                 prose-headings:font-black prose-headings:text-gray-900 dark:prose-headings:text-white
                 prose-p:text-gray-600 dark:prose-p:text-gray-400 prose-p:leading-relaxed
                 prose-strong:text-gray-900 dark:prose-strong:text-white
-                prose-a:text-[#CB202D] dark:prose-a:text-[#7e3866]
+                prose-a:text-[#D51F10] dark:prose-a:text-[#D51F10]
                 prose-li:text-gray-600 dark:prose-li:text-gray-400"
               dangerouslySetInnerHTML={{ __html: privacyData.content }}
             />

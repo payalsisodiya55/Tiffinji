@@ -10,6 +10,7 @@ import api from "@food/api"
 import { API_ENDPOINTS } from "@food/api/config"
 import { useCompanyName } from "@food/hooks/useCompanyName"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
+import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
@@ -38,6 +39,7 @@ export default function About() {
     features: [],
     stats: []
   })
+  const goBack = useAppBackNavigation()
 
   useEffect(() => {
     fetchAboutData()
@@ -80,6 +82,11 @@ export default function About() {
     }
   }
 
+  const hasFoodPrefix = window.location.pathname.startsWith("/food")
+  const getPrefixedPath = (path) => {
+    return hasFoodPrefix ? `/food${path}` : path
+  }
+
   if (loading) {
     return (
       <AnimatedPage className="min-h-screen bg-gradient-to-b from-gray-50 to-white dark:from-[#0a0a0a] dark:to-[#1a1a1a]">
@@ -98,11 +105,9 @@ export default function About() {
       <div className="max-w-4xl mx-auto px-4 md:px-6 lg:px-8 py-6 md:py-8">
         {/* Header */}
         <div className="flex items-center gap-3 md:gap-4 mb-6 md:mb-8">
-          <Link to="/user/profile">
-            <Button variant="ghost" size="icon" className="h-9 w-9 md:h-10 md:w-10 p-0 hover:bg-gray-100 dark:hover:bg-gray-800">
-              <ArrowLeft className="h-5 w-5 md:h-6 md:w-6 text-gray-900 dark:text-white" />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" onClick={goBack} className="h-9 w-9 md:h-10 md:w-10 p-0 hover:bg-gray-100 dark:hover:bg-gray-800">
+            <ArrowLeft className="h-5 w-5 md:h-6 md:w-6 text-gray-900 dark:text-white" />
+          </Button>
           <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold text-gray-900 dark:text-white">About</h1>
         </div>
 
@@ -121,7 +126,7 @@ export default function About() {
                 className="flex justify-center mb-6"
               >
                 <div className="relative">
-                  <div className="absolute inset-0 bg-[#7e3866] rounded-full blur-2xl opacity-30 animate-pulse" />
+                  <div className="absolute inset-0 bg-[#D51F10] rounded-full blur-2xl opacity-30 animate-pulse" />
                   <div className="relative bg-white dark:bg-gray-800 rounded-full p-4 md:p-6 shadow-xl">
                     <img
                       src={logoUrl || quickSpicyLogo}
@@ -225,14 +230,14 @@ export default function About() {
               </h3>
               <div className="space-y-3">
                 <Link
-                  to="/user/profile/terms"
+                  to={getPrefixedPath("/user/profile/terms")}
                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
                 >
                   <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-2 group-hover:bg-gray-200 dark:group-hover:bg-gray-700 transition-colors">
                     <FileText className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                   </div>
                   <div className="flex-1">
-                    <div className="text-base font-medium text-gray-900 dark:text-white group-hover:text-[#7e3866] dark:group-hover:text-[#7e3866] transition-colors">
+                    <div className="text-base font-medium text-gray-900 dark:text-white group-hover:text-[#D51F10] dark:group-hover:text-[#D51F10] transition-colors">
                       Terms and Conditions
                     </div>
                     <div className="text-sm text-gray-500 dark:text-gray-500">
@@ -243,14 +248,14 @@ export default function About() {
                 </Link>
 
                 <Link
-                  to="/user/profile/privacy"
+                  to={getPrefixedPath("/user/profile/privacy")}
                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
                 >
                   <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-2 group-hover:bg-gray-200 dark:group-hover:bg-gray-700 transition-colors">
                     <Lock className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                   </div>
                   <div className="flex-1">
-                    <div className="text-base font-medium text-gray-900 dark:text-white group-hover:text-[#7e3866] dark:group-hover:text-[#7e3866] transition-colors">
+                    <div className="text-base font-medium text-gray-900 dark:text-white group-hover:text-[#D51F10] dark:group-hover:text-[#D51F10] transition-colors">
                       Privacy Policy
                     </div>
                     <div className="text-sm text-gray-500 dark:text-gray-500">
@@ -261,14 +266,14 @@ export default function About() {
                 </Link>
 
                 <Link
-                  to="/user/profile/refund"
+                  to={getPrefixedPath("/user/profile/refund")}
                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
                 >
                   <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-2 group-hover:bg-gray-200 dark:group-hover:bg-gray-700 transition-colors">
                     <Receipt className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                   </div>
                   <div className="flex-1">
-                    <div className="text-base font-medium text-gray-900 dark:text-white group-hover:text-[#7e3866] dark:group-hover:text-[#7e3866] transition-colors">
+                    <div className="text-base font-medium text-gray-900 dark:text-white group-hover:text-[#D51F10] dark:group-hover:text-[#D51F10] transition-colors">
                       Refund Policy
                     </div>
                     <div className="text-sm text-gray-500 dark:text-gray-500">
@@ -279,14 +284,14 @@ export default function About() {
                 </Link>
 
                 <Link
-                  to="/user/profile/shipping"
+                  to={getPrefixedPath("/user/profile/shipping")}
                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
                 >
                   <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-2 group-hover:bg-gray-200 dark:group-hover:bg-gray-700 transition-colors">
                     <Truck className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                   </div>
                   <div className="flex-1">
-                    <div className="text-base font-medium text-gray-900 dark:text-white group-hover:text-[#7e3866] dark:group-hover:text-[#7e3866] transition-colors">
+                    <div className="text-base font-medium text-gray-900 dark:text-white group-hover:text-[#D51F10] dark:group-hover:text-[#D51F10] transition-colors">
                       Shipping Policy
                     </div>
                     <div className="text-sm text-gray-500 dark:text-gray-500">
@@ -297,14 +302,14 @@ export default function About() {
                 </Link>
 
                 <Link
-                  to="/user/profile/cancellation"
+                  to={getPrefixedPath("/user/profile/cancellation")}
                   className="flex items-center gap-3 p-3 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors group"
                 >
                   <div className="bg-gray-100 dark:bg-gray-800 rounded-lg p-2 group-hover:bg-gray-200 dark:group-hover:bg-gray-700 transition-colors">
                     <XCircle className="h-5 w-5 text-gray-600 dark:text-gray-400" />
                   </div>
                   <div className="flex-1">
-                    <div className="text-base font-medium text-gray-900 dark:text-white group-hover:text-[#7e3866] dark:group-hover:text-[#7e3866] transition-colors">
+                    <div className="text-base font-medium text-gray-900 dark:text-white group-hover:text-[#D51F10] dark:group-hover:text-[#D51F10] transition-colors">
                       Cancellation Policy
                     </div>
                     <div className="text-sm text-gray-500 dark:text-gray-500">

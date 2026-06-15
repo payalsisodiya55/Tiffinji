@@ -8,8 +8,10 @@ import { Card, CardContent } from "@food/components/ui/card"
 import { orderAPI, restaurantAPI, supportAPI, authAPI } from "@food/api"
 import { toast } from "sonner"
 import { ArrowLeft, Building2, HelpCircle, ShoppingBag, ChevronRight } from "lucide-react"
+import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 
 export default function Support() {
+  const goBack = useAppBackNavigation()
   const [step, setStep] = useState("pick")
   const [type, setType] = useState("")
   const [orders, setOrders] = useState([])
@@ -208,11 +210,9 @@ export default function Support() {
     <AnimatedPage className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a]">
       <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-6 md:py-8 pb-20">
         <div className="mb-4">
-          <Link to="/user/profile">
-            <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
-              <ArrowLeft className="h-5 w-5 text-black dark:text-white" />
-            </Button>
-          </Link>
+          <Button variant="ghost" size="icon" onClick={goBack} className="h-8 w-8 p-0">
+            <ArrowLeft className="h-5 w-5 text-black dark:text-white" />
+          </Button>
         </div>
 
         <Card className="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 mb-3">
