@@ -24,15 +24,18 @@ export default function PhoneNumbersPage() {
 
   // Country codes
   const countryCodes = [
-    { code: "+91", country: "India", flag: "🇮🇳" },
-    { code: "+1", country: "USA", flag: "🇺🇸" },
-    { code: "+44", country: "UK", flag: "🇬🇧" },
-    { code: "+971", country: "UAE", flag: "🇦🇪" },
-    { code: "+65", country: "Singapore", flag: "🇸🇬" },
-    { code: "+86", country: "China", flag: "🇨🇳" },
-    { code: "+81", country: "Japan", flag: "🇯🇵" },
-    { code: "+61", country: "Australia", flag: "🇦🇺" },
+    { code: "+91", country: "India", flag: "🇮🇳", maxLength: 10 },
+    { code: "+1", country: "USA", flag: "🇺🇸", maxLength: 10 },
+    { code: "+44", country: "UK", flag: "🇬🇧", maxLength: 10 },
+    { code: "+971", country: "UAE", flag: "🇦🇪", maxLength: 9 },
+    { code: "+65", country: "Singapore", flag: "🇸🇬", maxLength: 8 },
+    { code: "+86", country: "China", flag: "🇨🇳", maxLength: 11 },
+    { code: "+81", country: "Japan", flag: "🇯🇵", maxLength: 10 },
+    { code: "+61", country: "Australia", flag: "🇦🇺", maxLength: 9 },
   ]
+
+  const activeCountryConfig = countryCodes.find(c => c.code === countryCode) || { maxLength: 10, country: "India" }
+  const currentMaxLength = activeCountryConfig.maxLength
 
   const handleEditClick = (type) => {
     const currentNumber = phoneData[type]
@@ -278,10 +281,19 @@ export default function PhoneNumbersPage() {
                     <input
                       type="tel"
                       value={phoneNumber}
-                      onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
-                      placeholder="Enter phone number"
+                      onChange={(e) => {
+                        const val = e.target.value.replace(/\D/g, '')
+                        if (val.length <= currentMaxLength) {
+                          setPhoneNumber(val)
+                        }
+                      }}
+                      placeholder={`Enter ${currentMaxLength}-digit phone number`}
+                      maxLength={currentMaxLength}
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
+                    <p className="text-[11px] text-gray-500 mt-1">
+                      Expected length: {currentMaxLength} digits for {activeCountryConfig.country}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -294,9 +306,9 @@ export default function PhoneNumbersPage() {
                 </button>
                 <button
                   onClick={handleSaveEdit}
-                  disabled={!phoneNumber.trim()}
+                  disabled={phoneNumber.trim().length !== currentMaxLength}
                   className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-colors ${
-                    phoneNumber.trim()
+                    phoneNumber.trim().length === currentMaxLength
                       ? "bg-black text-white hover:bg-gray-800"
                       : "bg-gray-300 text-gray-500 cursor-not-allowed"
                   }`}

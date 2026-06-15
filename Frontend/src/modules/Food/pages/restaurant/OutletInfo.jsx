@@ -389,7 +389,7 @@ export default function OutletInfo() {
             <button
               onClick={() => handleImageClick('cover', menuImageInputRef, "Add Cover Image", true)}
               disabled={uploadingImage}
-              className="absolute bottom-4 right-4 bg-white/20 backdrop-blur-md hover:bg-white/30 px-4 py-2 rounded-2xl flex items-center gap-2 text-xs font-bold text-white transition-all shadow-lg border border-white/20 active:scale-95 disabled:opacity-50"
+              className="absolute bottom-4 right-4 bg-white/20 backdrop-blur-md hover:bg-white/30 px-4 py-2 rounded-2xl flex items-center gap-2 text-xs font-bold text-white transition-all shadow-lg border border-white/20 active:scale-95 disabled:opacity-50 z-20"
             >
               <Plus className="w-4 h-4" />
               <span>{uploadingImage && imageType === 'menu' ? `Uploading...` : 'Add Photo'}</span>
@@ -405,14 +405,14 @@ export default function OutletInfo() {
           </div>
 
           {/* Profile Overlap */}
-          <div className="flex items-end gap-4 -mt-10 relative z-10 px-2">
-            <div className="relative group">
+          <div className="flex items-end gap-4 relative z-10 px-2 mt-2">
+            <div className="relative group -mt-12 z-20">
               <div className="w-24 h-24 rounded-[2rem] bg-white p-1.5 shadow-2xl ring-1 ring-black/5">
                 <img src={thumbnailImage} alt="Restaurant thumbnail" className="w-full h-full rounded-[1.6rem] object-cover" />
                 <button
                   onClick={() => handleImageClick('profile', profileImageInputRef, "Update Profile Photo")}
                   disabled={uploadingImage}
-                  className="absolute -bottom-1 -right-1 bg-[#7e3866] p-2 rounded-xl text-white shadow-lg shadow-[#7e3866]/30 hover:scale-105 transition-all border-2 border-white active:scale-90"
+                  className="absolute -bottom-1 -right-1 bg-[#7e3866] p-2 rounded-xl text-white shadow-lg shadow-[#7e3866]/30 hover:scale-105 transition-all border-2 border-white active:scale-90 z-20"
                 >
                   <Pencil className="w-3.5 h-3.5" />
                 </button>
@@ -426,7 +426,7 @@ export default function OutletInfo() {
               />
             </div>
 
-            <div className="pb-1 mb-2">
+            <div className="pb-1 mb-2 relative z-10">
               <h2 className="text-xl font-black text-gray-900 leading-tight">
                 {loading ? "Loading..." : (restaurantName || "My Restaurant")}
               </h2>
@@ -476,7 +476,7 @@ export default function OutletInfo() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.1 }}
               className="group bg-gradient-to-br from-indigo-50/40 to-indigo-50/80 rounded-[1.5rem] p-5 border border-indigo-100/50 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden relative"
-              onClick={() => navigate("/food/restaurant/edit-cuisines")}
+              onClick={() => navigate("/food/restaurant/edit-cuisines", { state: { backTo: "/food/restaurant/outlet-info" } })}
             >
               <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-100 transition-opacity">
                 <div className="bg-[#7e3866] p-1.5 rounded-lg">
@@ -498,7 +498,7 @@ export default function OutletInfo() {
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.2 }}
               className="group bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-[1.5rem] p-5 border border-gray-200/50 shadow-sm hover:shadow-md transition-all cursor-pointer overflow-hidden relative"
-              onClick={() => navigate("/food/restaurant/edit-address")}
+              onClick={() => navigate("/food/restaurant/edit-address", { state: { backTo: "/food/restaurant/outlet-info" } })}
             >
               <div className="absolute top-0 right-0 p-2 opacity-20 group-hover:opacity-100 transition-opacity">
                 <div className="bg-[#7e3866] p-1.5 rounded-lg">
@@ -527,19 +527,19 @@ export default function OutletInfo() {
                 <ActionButton 
                   icon={Clock} 
                   label="Working Hours" 
-                  onClick={() => navigate("/food/restaurant/outlet-timings")} 
+                  onClick={() => navigate("/food/restaurant/outlet-timings", { state: { backTo: "/food/restaurant/outlet-info" } })} 
                   color="plum"
                 />
                 <ActionButton 
                   icon={Phone} 
                   label="Contact Info" 
-                  onClick={() => navigate("/food/restaurant/phone")} 
+                  onClick={() => navigate("/food/restaurant/phone", { state: { backTo: "/food/restaurant/outlet-info" } })} 
                   color="plum"
                 />
                 <ActionButton 
                   icon={CreditCard} 
                   label="Bank & Payments" 
-                  onClick={() => navigate("/food/restaurant/hub-finance")} 
+                  onClick={() => navigate("/food/restaurant/update-bank-details", { state: { backTo: "/food/restaurant/outlet-info" } })} 
                   color="plum"
                 />
              </div>
