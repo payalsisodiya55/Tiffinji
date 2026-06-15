@@ -7,11 +7,13 @@ import { Button } from "@food/components/ui/button"
 import api from "@food/api"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { API_ENDPOINTS } from "@food/api/config"
+import { useCompanyName } from "@food/hooks/useCompanyName"
 
 export default function Shipping() {
   const navigate = useNavigate()
   const location = useLocation()
   const goBack = useAppBackNavigation()
+  const companyName = useCompanyName()
   const [loading, setLoading] = useState(true)
   const [shippingData, setShippingData] = useState({
     title: 'Shipping Policy',
@@ -82,7 +84,7 @@ export default function Shipping() {
              <h1 className="text-xl md:text-2xl font-black text-gray-900 dark:text-white tracking-tight leading-none">
                {shippingData.title || "Shipping Policy"}
              </h1>
-             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Foodelo Ecosystem</p>
+             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">{companyName} Ecosystem</p>
           </div>
         </div>
       </div>
