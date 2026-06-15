@@ -22,6 +22,7 @@ export default function OrderInvoice() {
   const [loading, setLoading] = useState(!order)
   const [error, setError] = useState(null)
   const invoiceRef = useRef(null)
+  const addrObj = order?.deliveryAddress || order?.address || {}
 
   useEffect(() => {
     if (order) return
@@ -191,15 +192,18 @@ export default function OrderInvoice() {
       doc.setFont('helvetica', 'bold')
       doc.text("Bill To:", 120, 45)
       doc.setFont('helvetica', 'normal')
-      const addressLines = doc.splitTextToSize(order.address?.street || "", 70)
+      const streetStr = addrObj.street || ""
+      const cityStateZipStr = [addrObj.city, addrObj.state, addrObj.zipCode || addrObj.pincode].filter(Boolean).join(", ")
+      const fullAddressStr = [streetStr, addrObj.additionalDetails, cityStateZipStr].filter(Boolean).join("\n")
+      const addressLines = doc.splitTextToSize(fullAddressStr || "", 70)
       doc.text(addressLines, 120, 52)
       
       // Items Table
       const tableData = order.items.map(item => [
         item.name + (item.variantName ? ` (${item.variantName})` : ""),
         item.quantity.toString(),
-        `₹${item.price.toFixed(2)}`,
-        `₹${(item.price * item.quantity).toFixed(2)}`
+        `Rs. ${item.price.toFixed(2)}`,
+        `Rs. ${(item.price * item.quantity).toFixed(2)}`
       ])
       
       autoTable(doc, {
@@ -213,14 +217,14 @@ export default function OrderInvoice() {
       
       // Summary
       doc.setFont('helvetica', 'bold')
-      doc.text(`Subtotal: ₹${order.subtotal.toFixed(2)}`, 190, finalY + 10, { align: 'right' })
-      doc.text(`Delivery Fee: ₹${order.deliveryFee.toFixed(2)}`, 190, finalY + 16, { align: 'right' })
-      doc.text(`Tax: ₹${order.tax.toFixed(2)}`, 190, finalY + 22, { align: 'right' })
+      doc.text(`Subtotal: Rs. ${order.subtotal.toFixed(2)}`, 190, finalY + 10, { align: 'right' })
+      doc.text(`Delivery Fee: Rs. ${order.deliveryFee.toFixed(2)}`, 190, finalY + 16, { align: 'right' })
+      doc.text(`Tax: Rs. ${order.tax.toFixed(2)}`, 190, finalY + 22, { align: 'right' })
       if (order.discount > 0) {
-        doc.text(`Discount: -₹${order.discount.toFixed(2)}`, 190, finalY + 28, { align: 'right' })
+        doc.text(`Discount: -Rs. ${order.discount.toFixed(2)}`, 190, finalY + 28, { align: 'right' })
       }
       doc.setFontSize(14)
-      doc.text(`Total: ₹${order.total.toFixed(2)}`, 190, finalY + 38, { align: 'right' })
+      doc.text(`Total: Rs. ${order.total.toFixed(2)}`, 190, finalY + 38, { align: 'right' })
       
       // Use robust download utility
       const pdfBlob = doc.output('blob');
@@ -298,12 +302,12 @@ export default function OrderInvoice() {
               <div className="invoice-details grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6 md:gap-8 mt-4 sm:mt-6">
                 <div>
                   <h3 className="font-bold mb-2 text-sm sm:text-base dark:text-gray-100">Bill To:</h3>
-                  <p className="text-xs sm:text-sm dark:text-gray-300">{order.address?.street}</p>
-                  {order.address?.additionalDetails && (
-                    <p className="text-xs sm:text-sm dark:text-gray-300">{order.address.additionalDetails}</p>
+                  <p className="text-xs sm:text-sm dark:text-gray-300">{addrObj.street}</p>
+                  {addrObj.additionalDetails && (
+                    <p className="text-xs sm:text-sm dark:text-gray-300">{addrObj.additionalDetails}</p>
                   )}
                   <p className="text-xs sm:text-sm dark:text-gray-300">
-                    {order.address?.city}, {order.address?.state} {order.address?.zipCode}
+                    {addrObj.city}, {addrObj.state} {addrObj.zipCode || addrObj.pincode}
                   </p>
                 </div>
                 <div className="text-left sm:text-right">
