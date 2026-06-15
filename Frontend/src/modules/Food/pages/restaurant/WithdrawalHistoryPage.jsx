@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Wallet } from "lucide-react"
 import BottomNavOrders from "@food/components/restaurant/BottomNavOrders"
 import { restaurantAPI } from "@food/api"
+import useRestaurantBackNavigation from "@food/hooks/useRestaurantBackNavigation"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -10,6 +11,7 @@ const debugError = (...args) => {}
 
 export default function WithdrawalHistoryPage() {
   const navigate = useNavigate()
+  const goBack = useRestaurantBackNavigation()
   const [withdrawalHistoryTab, setWithdrawalHistoryTab] = useState('pending')
   const [withdrawalRequests, setWithdrawalRequests] = useState([])
   const [loadingWithdrawalRequests, setLoadingWithdrawalRequests] = useState(false)
@@ -51,7 +53,7 @@ export default function WithdrawalHistoryPage() {
       <div className="sticky bg-white top-0 z-40 px-4 py-3 border-b border-gray-200">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => navigate("/restaurant/hub-finance")}
+            onClick={goBack}
             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             aria-label="Go back"
           >

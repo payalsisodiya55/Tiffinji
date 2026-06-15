@@ -208,7 +208,7 @@ export default function UpdateBankDetails() {
               <input
                 type="text"
                 value={form.accountHolderName}
-                onChange={(e) => setForm((p) => ({ ...p, accountHolderName: e.target.value }))}
+                onChange={(e) => setForm((p) => ({ ...p, accountHolderName: e.target.value.replace(/[^a-zA-Z\s]/g, "") }))}
                 className={inputClass("accountHolderName")}
                 placeholder="Enter account holder name"
               />

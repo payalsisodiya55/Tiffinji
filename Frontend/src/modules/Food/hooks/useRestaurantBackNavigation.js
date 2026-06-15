@@ -116,6 +116,14 @@ const resolveRestaurantBackPath = ({ pathname, state }) => {
     return explicitBackPath || "/food/restaurant/hub-finance"
   }
 
+  if (normalizedPath === "/hub-finance") {
+    return explicitBackPath || "/food/restaurant/explore"
+  }
+
+  if (normalizedPath === "/withdrawal-history") {
+    return explicitBackPath || "/food/restaurant/hub-finance"
+  }
+
   if (/^\/hub-menu\/item\/[^/]+$/.test(normalizedPath)) {
     return explicitBackPath || "/food/restaurant/explore"
   }
