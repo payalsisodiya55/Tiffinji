@@ -866,7 +866,9 @@ export default function FranchisePage() {
 
               {s.contactEmail && (
                 <motion.a 
-                  href={`mailto:${s.contactEmail}`}
+                  href={`https://mail.google.com/mail/?view=cm&fs=1&to=${s.contactEmail}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
                   variants={fadeUp}
                   whileHover={{ y: -4, boxShadow: "0 12px 30px rgba(0,0,0,0.05)" }}
                   className="bg-white dark:bg-[#111111] border border-gray-100 dark:border-gray-800 rounded-2xl p-6 text-center flex flex-col items-center group transition-all"
