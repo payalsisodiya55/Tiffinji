@@ -124,12 +124,12 @@ export default function TableBooking() {
   const [restaurant, setRestaurant] = useState(location.state?.restaurant || null)
   const [loading, setLoading] = useState(!location.state?.restaurant)
   const [outletTimings, setOutletTimings] = useState({})
-  const [selectedGuests, setSelectedGuests] = useState(location.state?.guestCount || 2)
+  const [selectedGuests, setSelectedGuests] = useState(location.state?.guestCount || location.state?.guests || 2)
   const [selectedDate, setSelectedDate] = useState(() => {
-    const initial = location.state?.selectedDate ? new Date(location.state.selectedDate) : new Date()
+    const initial = location.state?.selectedDate || location.state?.date ? new Date(location.state.selectedDate || location.state.date) : new Date()
     return Number.isNaN(initial.getTime()) ? new Date() : initial
   })
-  const [selectedSlot, setSelectedSlot] = useState(location.state?.selectedTime || null)
+  const [selectedSlot, setSelectedSlot] = useState(location.state?.selectedTime || location.state?.timeSlot || null)
   const [selectedMealPeriod, setSelectedMealPeriod] = useState("lunch")
   const [currentBookings, setCurrentBookings] = useState([])
   const [currentTime, setCurrentTime] = useState(new Date())
@@ -306,6 +306,7 @@ export default function TableBooking() {
       date: selectedDate,
       timeSlot: selectedSlot,
       discount: selectedSlot,
+      backTo: `/food/user/dining/book/${restaurant?.slug || slug || restaurant?.restaurant?.slug}`
     }
 
     try {

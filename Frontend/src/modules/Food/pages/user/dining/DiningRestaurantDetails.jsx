@@ -284,6 +284,7 @@ export default function DiningRestaurantDetails() {
       state: {
         guestCount: selectedGuests,
         restaurant,
+        backTo: location.pathname,
       },
     })
   }

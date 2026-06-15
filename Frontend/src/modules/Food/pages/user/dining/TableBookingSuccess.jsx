@@ -6,6 +6,22 @@ import { motion } from "framer-motion"
 import confetti from "canvas-confetti"
 import { useEffect } from "react"
 
+const getRestaurantImage = (restaurant) => {
+    if (!restaurant) return ""
+    if (typeof restaurant.image === 'string' && restaurant.image) return restaurant.image
+    if (restaurant.profileImage) {
+        if (typeof restaurant.profileImage === 'string') return restaurant.profileImage
+        if (restaurant.profileImage.url) return restaurant.profileImage.url
+    }
+    if (Array.isArray(restaurant.coverImages) && restaurant.coverImages.length > 0) {
+        const first = restaurant.coverImages[0]
+        if (typeof first === 'string') return first
+        if (first?.url) return first.url
+    }
+    if (typeof restaurant.logo === 'string' && restaurant.logo) return restaurant.logo
+    return ""
+}
+
 export default function TableBookingSuccess() {
     const location = useLocation()
     const navigate = useNavigate()
@@ -103,7 +119,7 @@ export default function TableBookingSuccess() {
                     <div className="flex items-center gap-4 text-left">
                         <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex-shrink-0 p-1">
                             <img
-                                src={booking.restaurant?.image || booking.restaurant?.profileImage?.url || ""}
+                                src={getRestaurantImage(booking.restaurant)}
                                 className="w-full h-full object-cover rounded-xl"
                                 alt="restaurant"
                                 onError={(e) => {
@@ -180,7 +196,7 @@ export default function TableBookingSuccess() {
                 </Button>
             </motion.div>
 
-            <p className="fixed bottom-10 text-[10px] font-bold text-slate-300 uppercase tracking-widest px-10 text-center">
+            <p className="mt-8 text-[10px] font-bold text-slate-300 uppercase tracking-widest px-10 text-center">
                 Show this ticket at the restaurant for a smooth entry
             </p>
         </AnimatedPage>

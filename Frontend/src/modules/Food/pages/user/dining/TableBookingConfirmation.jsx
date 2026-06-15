@@ -99,7 +99,7 @@ export default function TableBookingConfirmation() {
                     sessionStorage.removeItem(BOOKING_DRAFT_KEY)
                 } catch {}
                 // Navigate to success page with booking details
-                navigate("/food/user/dining/book-success", { state: { booking: response.data.data } })
+                navigate("/food/user/dining/book-success", { state: { booking: { ...response.data.data, restaurant } } })
             }
         } catch (error) {
             debugError("Booking error:", error)
@@ -213,7 +213,8 @@ export default function TableBookingConfirmation() {
                                         date, 
                                         timeSlot, 
                                         discount,
-                                        isModifying: true 
+                                        isModifying: true,
+                                        backTo: location.pathname
                                     } 
                                 });
                             }}
