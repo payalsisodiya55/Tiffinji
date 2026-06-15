@@ -45,6 +45,8 @@ const firstText = (...values) => {
 
 const formatMoney = (value) => `₹${Number(value || 0).toFixed(2)}`
 const formatDiscount = (value) => `-₹${Math.abs(Number(value || 0)).toFixed(2)}`
+const formatPdfMoney = (value) => `Rs. ${Number(value || 0).toFixed(2)}`
+const formatPdfDiscount = (value) => `-Rs. ${Math.abs(Number(value || 0)).toFixed(2)}`
 
 
 export default function OrderDetails() {
@@ -219,13 +221,21 @@ export default function OrderDetails() {
               location: fullAddress,
               distance: order.deliveryDistance ? `${order.deliveryDistance} km` : ''
             },
-            items: order.items?.map(item => ({
-              name: item.name,
-              quantity: item.quantity,
-              price: item.price,
-              image: item.image,
-              type: item.isVeg || item.foodType === 'Veg' ? 'Veg' : 'Non-Veg'
-            })) || [],
+            items: order.items?.map(item => {
+              const isVeg = item.isVeg === true || 
+                            String(item.isVeg).toLowerCase() === 'true' ||
+                            String(item.isVeg).toLowerCase() === 'veg' ||
+                            String(item.foodType).toLowerCase() === 'veg' ||
+                            String(item.category).toLowerCase() === 'veg' ||
+                            String(item.type).toLowerCase() === 'veg';
+              return {
+                name: item.name,
+                quantity: item.quantity,
+                price: item.price,
+                image: item.image,
+                type: isVeg ? 'Veg' : 'Non-Veg'
+              };
+            }) || [],
             billing: {
               itemSubtotal,
               taxes,
@@ -425,7 +435,7 @@ export default function OrderDetails() {
       `${item.quantity}x`,
       item.name,
       item.type || "-",
-      formatMoney(item.price)
+      formatPdfMoney(item.price)
     ])
 
     // Use autoTable with the doc instance
@@ -462,26 +472,26 @@ export default function OrderDetails() {
     doc.setFontSize(10)
     doc.setFont("helvetica", "normal")
     const billRows = [
-      ["Item Subtotal:", formatMoney(orderData.billing.itemSubtotal)],
-      ["Taxes:", formatMoney(orderData.billing.taxes)],
+      ["Item Subtotal:", formatPdfMoney(orderData.billing.itemSubtotal)],
+      ["Taxes:", formatPdfMoney(orderData.billing.taxes)],
     ]
     if (Number(orderData.billing.packagingFee) > 0) {
-      billRows.push(["Packaging Fee:", formatMoney(orderData.billing.packagingFee)])
+      billRows.push(["Packaging Fee:", formatPdfMoney(orderData.billing.packagingFee)])
     }
     if (Number(orderData.billing.deliveryFee) > 0) {
-      billRows.push(["Delivery Fee:", formatMoney(orderData.billing.deliveryFee)])
+      billRows.push(["Delivery Fee:", formatPdfMoney(orderData.billing.deliveryFee)])
     }
     if (Number(orderData.billing.platformFee) > 0) {
-      billRows.push(["Platform Fee:", formatMoney(orderData.billing.platformFee)])
+      billRows.push(["Platform Fee:", formatPdfMoney(orderData.billing.platformFee)])
     }
     if (Number(orderData.billing.discount) > 0) {
-      billRows.push(["Discount:", formatDiscount(orderData.billing.discount)])
+      billRows.push(["Discount:", formatPdfDiscount(orderData.billing.discount)])
     }
     if (Number(orderData.billing.couponDiscount) > 0) {
-      billRows.push(["Coupon Discount:", formatDiscount(orderData.billing.couponDiscount)])
+      billRows.push(["Coupon Discount:", formatPdfDiscount(orderData.billing.couponDiscount)])
     }
     if (Number(orderData.billing.referralDiscount) > 0) {
-      billRows.push(["Referral Discount:", formatDiscount(orderData.billing.referralDiscount)])
+      billRows.push(["Referral Discount:", formatPdfDiscount(orderData.billing.referralDiscount)])
     }
     billRows.forEach(([label, value]) => {
       doc.text(label, 15, yPosition)
@@ -498,13 +508,13 @@ export default function OrderDetails() {
     doc.setFont("helvetica", "bold")
     doc.setFontSize(11)
     doc.text("Total Bill:", leftMargin, yPosition)
-    doc.text(formatMoney(orderData.billing.total), pageWidth - rightMargin, yPosition, { align: "right" })
+    doc.text(formatPdfMoney(orderData.billing.total), pageWidth - rightMargin, yPosition, { align: "right" })
     yPosition += 6
     if (Number(orderData.billing.paidAmount) > 0) {
       doc.setFont("helvetica", "normal")
       doc.setFontSize(10)
       doc.text("Amount Paid:", leftMargin, yPosition)
-      doc.text(formatMoney(orderData.billing.paidAmount), pageWidth - rightMargin, yPosition, { align: "right" })
+      doc.text(formatPdfMoney(orderData.billing.paidAmount), pageWidth - rightMargin, yPosition, { align: "right" })
       yPosition += 6
     }
 
@@ -862,7 +872,7 @@ export default function OrderDetails() {
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                       <div className={`w-3 h-3 rounded-full border ${String(item.type).toLowerCase().includes("non") ? "border-red-600" : "border-green-600"} flex items-center justify-center p-[1px]`}>
+                       <div className={`w-3.5 h-3.5 border ${String(item.type).toLowerCase().includes("non") ? "border-red-600" : "border-green-600"} flex items-center justify-center p-[2px] rounded-[2px]`}>
                         <div className={`w-1.5 h-1.5 rounded-full ${String(item.type).toLowerCase().includes("non") ? "bg-red-600" : "bg-green-600"}`}></div>
                       </div>
                       <p className="text-sm font-semibold text-gray-900">
