@@ -27,7 +27,7 @@ export default function AdminLogin() {
     setLoading(true)
 
     try {
-      const response = await adminAPI.login(email.trim(), password)
+      const response = await adminAPI.login(email.trim().toLowerCase(), password)
       const data = response?.data?.data || response?.data || {}
 
       const accessToken = data.accessToken
@@ -124,7 +124,7 @@ export default function AdminLogin() {
                       required
                       autoFocus
                       value={email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) => setEmail(e.target.value.toLowerCase())}
                       className="block w-full pl-12 pr-6 py-4 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white border-2 border-transparent focus:border-[#7e3866]/50 rounded-2xl outline-none transition-all placeholder:text-gray-300 font-bold"
                       placeholder="admin@foodelo.com"
                     />
@@ -141,8 +141,9 @@ export default function AdminLogin() {
                     <input
                       type={showPassword ? "text" : "password"}
                       required
+                      maxLength={32}
                       value={password}
-                      onChange={(e) => setPassword(e.target.value)}
+                      onChange={(e) => setPassword(e.target.value.slice(0, 32))}
                       className="block w-full pl-12 pr-12 py-4 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white border-2 border-transparent focus:border-[#7e3866]/50 rounded-2xl outline-none transition-all placeholder:text-gray-300 font-bold"
                       placeholder="••••••••"
                     />

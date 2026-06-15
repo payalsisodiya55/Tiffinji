@@ -36,7 +36,7 @@ export default function RestaurantSignIn() {
 
     try {
       // Login with restaurant auth endpoint
-      const response = await restaurantAPI.login(email, password)
+      const response = await restaurantAPI.login(email.trim().toLowerCase(), password)
       const data = response?.data?.data || response?.data
       
       if (data.accessToken && data.restaurant) {
@@ -162,7 +162,7 @@ export default function RestaurantSignIn() {
                   type="email"
                   placeholder="test.restaurant@gmail.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => setEmail(e.target.value.toLowerCase())}
                   className="h-11 pl-9 border-gray-300 rounded-md shadow-sm focus-visible:ring-primary-orange focus-visible:ring-2 transition-colors placeholder:text-gray-400"
                   required
                 />
@@ -182,8 +182,9 @@ export default function RestaurantSignIn() {
                   id="password"
                   type={showPassword ? "text" : "password"}
                   placeholder="Enter your password"
+                  maxLength={32}
                   value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  onChange={(e) => setPassword(e.target.value.slice(0, 32))}
                   className="h-11 pl-9 pr-10 border-gray-300 rounded-md shadow-sm focus-visible:ring-primary-orange focus-visible:ring-2 transition-colors placeholder:text-gray-400"
                   required
                 />
