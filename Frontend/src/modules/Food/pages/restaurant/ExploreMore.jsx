@@ -980,7 +980,7 @@ export default function ExploreMore() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/50 z-[60]"
+              className="fixed inset-0 bg-black/50 z-[80]"
               onClick={() => {
                 if (!isLoggingOut) setLogoutConfirmOpen(false)
               }}
@@ -991,7 +991,7 @@ export default function ExploreMore() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 24 }}
               transition={{ duration: 0.22 }}
-              className="fixed inset-x-4 bottom-28 z-[61] mx-auto w-auto max-w-md rounded-3xl bg-white p-5 shadow-2xl"
+              className="fixed inset-x-4 bottom-28 z-[81] mx-auto w-auto max-w-md rounded-3xl bg-white p-5 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-center">
@@ -1034,7 +1034,7 @@ export default function ExploreMore() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/50 z-[60]"
+              className="fixed inset-0 bg-black/50 z-[80]"
               onClick={() => {
                 if (!isDeletingAccount) setDeleteAccountConfirmOpen(false)
               }}
@@ -1045,7 +1045,7 @@ export default function ExploreMore() {
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: 24 }}
               transition={{ duration: 0.22 }}
-              className="fixed inset-x-4 bottom-28 z-[61] mx-auto w-auto max-w-md rounded-3xl bg-white p-5 shadow-2xl"
+              className="fixed inset-x-4 bottom-28 z-[81] mx-auto w-auto max-w-md rounded-3xl bg-white p-5 shadow-2xl"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="text-center">
@@ -1213,7 +1213,7 @@ export default function ExploreMore() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/50 z-50"
+              className="fixed inset-0 bg-black/50 z-[70]"
               onClick={() => setProfileOpen(false)}
             />
 
@@ -1227,7 +1227,7 @@ export default function ExploreMore() {
                 damping: 30,
                 stiffness: 300
               }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] shadow-[0_-15px_50px_-12px_rgba(0,0,0,0.3)] z-50 max-h-[90vh] overflow-y-auto"
+              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-[2.5rem] shadow-[0_-15px_50px_-12px_rgba(0,0,0,0.3)] z-[71] max-h-[90vh] overflow-y-auto pb-24"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -1398,7 +1398,7 @@ export default function ExploreMore() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/50 z-50"
+              className="fixed inset-0 bg-black/50 z-[70]"
               onClick={() => setScheduleOffOpen(false)}
             />
 
@@ -1412,7 +1412,7 @@ export default function ExploreMore() {
                 damping: 30,
                 stiffness: 300
               }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 max-h-[90vh] overflow-y-auto"
+              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-[71] max-h-[90vh] overflow-y-auto pb-24"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -1454,7 +1454,7 @@ export default function ExploreMore() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/50 z-50"
+              className="fixed inset-0 bg-black/50 z-[70]"
               onClick={() => setDateTimePickerOpen(false)}
             />
 
@@ -1468,7 +1468,7 @@ export default function ExploreMore() {
                 damping: 30,
                 stiffness: 300
               }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 max-h-[90vh] overflow-y-auto"
+              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-[71] max-h-[90vh] overflow-y-auto pb-24"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}
@@ -1656,7 +1656,7 @@ export default function ExploreMore() {
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               transition={{ duration: 0.2 }}
-              className="fixed inset-0 bg-black/50 z-50"
+              className="fixed inset-0 bg-black/50 z-[70]"
               onClick={() => setExistingScheduleOpen(false)}
             />
 
@@ -1670,7 +1670,7 @@ export default function ExploreMore() {
                 damping: 30,
                 stiffness: 300
               }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 max-h-[90vh] overflow-y-auto"
+              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-[71] max-h-[90vh] overflow-y-auto pb-24"
               onClick={(e) => e.stopPropagation()}
             >
               {/* Header */}

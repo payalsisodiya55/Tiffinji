@@ -639,15 +639,23 @@ export default function EditOwner() {
             {/* Pure Veg Toggle */}
             <div className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-100">
               <div className="flex items-center gap-3">
-                <div className={`w-4 h-4 border-2 rounded-sm flex items-center justify-center ${formData.pureVegRestaurant ? 'border-green-600' : 'border-gray-400'}`}>
-                  <div className={`w-2 h-2 rounded-full ${formData.pureVegRestaurant ? 'bg-green-600' : 'transparent'}`} />
+                <div 
+                  className="w-4 h-4 border-2 rounded-sm flex items-center justify-center"
+                  style={{ borderColor: formData.pureVegRestaurant ? '#16a34a' : '#9ca3af' }}
+                >
+                  <div 
+                    className="w-2 h-2 rounded-full" 
+                    style={{ backgroundColor: formData.pureVegRestaurant ? '#16a34a' : 'transparent' }}
+                  />
                 </div>
                 <span className="text-sm font-semibold text-gray-700">Pure Veg Restaurant</span>
               </div>
               <button
+                type="button"
                 onClick={() => handleInputChange("pureVegRestaurant", !formData.pureVegRestaurant)}
                 disabled={loading || saving}
-                className={`w-12 h-6 rounded-full transition-colors relative ${formData.pureVegRestaurant ? 'bg-green-600' : 'bg-gray-300'}`}
+                className="w-12 h-6 rounded-full transition-colors relative"
+                style={{ backgroundColor: formData.pureVegRestaurant ? '#16a34a' : '#d1d5db' }}
               >
                 <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${formData.pureVegRestaurant ? 'left-7' : 'left-1'}`} />
               </button>
@@ -660,7 +668,7 @@ export default function EditOwner() {
                 <Input
                   type="text"
                   value={loading ? "Loading..." : formData.name}
-                  onChange={(e) => handleInputChange("name", e.target.value)}
+                  onChange={(e) => handleInputChange("name", e.target.value.replace(/[^a-zA-Z\s]/g, ""))}
                   placeholder="Enter owner name"
                   className="w-full pr-10 focus-visible:border-black focus-visible:ring-0"
                   disabled={loading || saving}
@@ -690,7 +698,7 @@ export default function EditOwner() {
                 <Input
                   type="tel"
                   value={loading ? "Loading..." : formData.primaryContactNumber}
-                  onChange={(e) => handleInputChange("primaryContactNumber", e.target.value)}
+                  onChange={(e) => handleInputChange("primaryContactNumber", e.target.value.replace(/\D/g, "").slice(0, 10))}
                   placeholder="Enter contact number"
                   className="w-full pr-10 focus-visible:border-black focus-visible:ring-0"
                   disabled={loading || saving}
@@ -706,7 +714,7 @@ export default function EditOwner() {
                 <Input
                   type="email"
                   value={loading ? "Loading..." : formData.email}
-                  onChange={(e) => handleInputChange("email", e.target.value)}
+                  onChange={(e) => handleInputChange("email", e.target.value.toLowerCase())}
                   placeholder="Enter email address"
                   className="w-full pr-10 focus-visible:border-black focus-visible:ring-0"
                   disabled={loading || saving}
