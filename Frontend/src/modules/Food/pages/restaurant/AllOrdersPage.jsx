@@ -632,7 +632,12 @@ export default function AllOrdersPage() {
                   {order.status}
                 </span>
                 {order.tags && order.tags.map((tag, idx) => (
-                  <span key={idx} className="px-2.5 py-1 rounded text-xs font-bold bg-green-600 text-white">
+                  <span
+                    key={idx}
+                    className="px-2.5 py-1 rounded text-xs font-bold text-white"
+                    style={{
+                      backgroundColor: tag === 'VEG ONLY' ? '#16a34a' : (tag === 'HOME DELIVERY' ? '#2563eb' : '#4b5563')
+                    }}>
                     {tag}
                   </span>
                 ))}

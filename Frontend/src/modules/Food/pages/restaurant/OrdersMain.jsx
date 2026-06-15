@@ -1076,6 +1076,14 @@ export default function OrdersMain() {
   const [isMuted, setIsMuted] = useState(false);
   const [prepTime, setPrepTime] = useState(11);
   const [countdown, setCountdown] = useState(180); // 3 minutes in seconds
+  const [restaurantName, setRestaurantName] = useState(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem("restaurant_user") || "{}");
+      return user.restaurantName || user.name || localStorage.getItem("restaurantName") || "";
+    } catch (e) {
+      return localStorage.getItem("restaurantName") || "";
+    }
+  });
   const [isDetailsExpanded, setIsDetailsExpanded] = useState(true);
   const [showRejectPopup, setShowRejectPopup] = useState(false);
   const [rejectReason, setRejectReason] = useState("");
@@ -1279,6 +1287,11 @@ export default function OrdersMain() {
         const restaurant =
           response?.data?.data?.restaurant || response?.data?.restaurant;
         if (restaurant) {
+          const name = restaurant.name || restaurant.restaurantName || "";
+          if (name) {
+            setRestaurantName(name);
+            localStorage.setItem("restaurantName", name);
+          }
           setRestaurantStatus({
             isActive: restaurant.isActive,
             status: restaurant.status,
@@ -2006,8 +2019,9 @@ export default function OrdersMain() {
   };
 
   // Handle PDF download
-  const handlePrint = async () => {
-    if (!newOrder) {
+  const handlePrint = async (order = null) => {
+    const orderToPrint = order || popupOrder || newOrder;
+    if (!orderToPrint) {
       debugWarn("No order data available for PDF generation");
       return;
     }
@@ -2682,12 +2696,12 @@ export default function OrdersMain() {
         {showNewOrderPopup && (
           <>
             <motion.div
-              className="fixed inset-0 z-[60] bg-black/60 flex items-center justify-center p-4"
+              className="fixed inset-0 z-[80] bg-black/60 flex items-center justify-center p-4"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}>
               <motion.div
-                className="w-[95%] max-w-md max-h-[calc(100vh-2rem)] bg-white rounded-[2rem] shadow-2xl overflow-hidden p-1 flex flex-col"
+                className="w-[95%] max-w-md max-h-[82vh] bg-white rounded-[2rem] shadow-2xl overflow-hidden p-1 flex flex-col"
                 initial={{ scale: 0.9, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 exit={{ scale: 0.9, opacity: 0 }}
@@ -2700,12 +2714,14 @@ export default function OrdersMain() {
                       {(popupOrder || newOrder)?.orderId || "#Order"}
                     </h3>
                     <p className="text-xs text-gray-500 mt-0.5">
-                      {(popupOrder || newOrder)?.restaurantName || "Restaurant"}
+                      {((popupOrder || newOrder)?.restaurantName && (popupOrder || newOrder)?.restaurantName !== "Restaurant")
+                        ? (popupOrder || newOrder).restaurantName
+                        : (restaurantName || "Restaurant")}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <button
-                      onClick={handlePrint}
+                      onClick={() => handlePrint(popupOrder || newOrder)}
                       className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
                       aria-label="Print">
                       <Printer className="w-5 h-5 text-gray-700" />
@@ -2836,7 +2852,10 @@ export default function OrdersMain() {
                                   key={index}
                                   className="flex items-start gap-3">
                                   <div
-                                    className={`w-2 h-2 rounded-full mt-1.5 shrink-0 ${item.isVeg ? "bg-green-500" : "bg-red-500"}`}></div>
+                                    className="w-2 h-2 rounded-full mt-1.5 shrink-0"
+                                    style={{
+                                      backgroundColor: item.isVeg ? "#16a34a" : "#dc2626"
+                                    }}></div>
                                   <div className="flex-1">
                                     <div className="flex items-start justify-between">
                                       <p className="text-sm font-medium text-gray-900">
@@ -3057,7 +3076,7 @@ export default function OrdersMain() {
         {showRejectPopup && (
           <>
             <motion.div
-              className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4"
+              className="fixed inset-0 z-[90] bg-black/60 flex items-center justify-center p-4"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
@@ -3151,7 +3170,7 @@ export default function OrdersMain() {
         {showCancelPopup && orderToCancel && (
           <>
             <motion.div
-              className="fixed inset-0 z-[70] bg-black/60 flex items-center justify-center p-4"
+              className="fixed inset-0 z-[90] bg-black/60 flex items-center justify-center p-4"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}

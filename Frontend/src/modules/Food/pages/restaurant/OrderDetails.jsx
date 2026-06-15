@@ -872,9 +872,17 @@ export default function OrderDetails() {
                 <div className="flex-1">
                   <div className="flex items-center justify-between mb-1">
                     <div className="flex items-center gap-2">
-                       <div className={`w-3.5 h-3.5 border ${String(item.type).toLowerCase().includes("non") ? "border-red-600" : "border-green-600"} flex items-center justify-center p-[2px] rounded-[2px]`}>
-                        <div className={`w-1.5 h-1.5 rounded-full ${String(item.type).toLowerCase().includes("non") ? "bg-red-600" : "bg-green-600"}`}></div>
-                      </div>
+                       <div
+                         className="w-3.5 h-3.5 border flex items-center justify-center p-[2px] rounded-[2px]"
+                         style={{
+                           borderColor: String(item.type).toLowerCase().includes("non") ? "#dc2626" : "#16a34a"
+                         }}>
+                         <div
+                           className="w-1.5 h-1.5 rounded-full"
+                           style={{
+                             backgroundColor: String(item.type).toLowerCase().includes("non") ? "#dc2626" : "#16a34a"
+                           }}></div>
+                       </div>
                       <p className="text-sm font-semibold text-gray-900">
                         {item.quantity} x {item.name}
                       </p>
