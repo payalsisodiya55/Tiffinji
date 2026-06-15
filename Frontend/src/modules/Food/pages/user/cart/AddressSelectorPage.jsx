@@ -17,6 +17,18 @@ const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
 
+const sanitizeAddressText = (val) => {
+  return String(val || "").replace(/[^a-zA-Z0-9\s]/g, "")
+}
+
+const sanitizeAlphaText = (val) => {
+  return String(val || "").replace(/[^a-zA-Z\s]/g, "")
+}
+
+const sanitizeZipCode = (val) => {
+  return String(val || "").replace(/[^0-9]/g, "").slice(0, 6)
+}
+
 // Enable Maps if API Key is available, otherwise fallback to coordinates-only mode
 const MAPS_ENABLED = !!import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
@@ -334,11 +346,11 @@ export default function AddressSelectorPage() {
           setCurrentAddress(result.formatted_address)
           setAddressFormData(prev => ({
             ...prev,
-            street: result.formatted_address.split(',')[0] || "",
-            additionalDetails: area,
-            city: city,
-            state: state,
-            zipCode: zip
+            street: sanitizeAddressText(result.formatted_address.split(',')[0] || ""),
+            additionalDetails: sanitizeAddressText(area),
+            city: sanitizeAlphaText(city),
+            state: sanitizeAlphaText(state),
+            zipCode: sanitizeZipCode(zip)
           }))
           return
         }
@@ -373,10 +385,10 @@ export default function AddressSelectorPage() {
         setCurrentAddress(formatted)
         setAddressFormData(prev => ({
           ...prev,
-          street: street || formatted.split(",")[0] || prev.street,
-          city: city || prev.city,
-          state: state || prev.state,
-          zipCode: postcode || prev.zipCode,
+          street: sanitizeAddressText(street || formatted.split(",")[0] || prev.street),
+          city: sanitizeAlphaText(city || prev.city),
+          state: sanitizeAlphaText(state || prev.state),
+          zipCode: sanitizeZipCode(postcode || prev.zipCode),
         }))
       }
     } catch (error) {
@@ -393,6 +405,10 @@ export default function AddressSelectorPage() {
     }
     if (!addressFormData.street || !addressFormData.city) {
       toast.error("Please fill required fields")
+      return
+    }
+    if (addressFormData.zipCode && addressFormData.zipCode.length !== 6) {
+      toast.error("Pincode must be exactly 6 digits")
       return
     }
     setLoadingAddress(true)
@@ -518,10 +534,10 @@ export default function AddressSelectorPage() {
                           const zipCode = a.postcode || ""
                           setAddressFormData((prev) => ({
                             ...prev,
-                            street: display || prev.street,
-                            city: city || prev.city,
-                            state: state || prev.state,
-                            zipCode: zipCode || prev.zipCode,
+                            street: sanitizeAddressText(display || prev.street),
+                            city: sanitizeAlphaText(city || prev.city),
+                            state: sanitizeAlphaText(state || prev.state),
+                            zipCode: sanitizeZipCode(zipCode || prev.zipCode),
                           }))
                           setKeywordAddressSuggestions([])
                         }}
@@ -583,7 +599,7 @@ export default function AddressSelectorPage() {
               <Input 
                 placeholder="Search or drag to update street/area" 
                 value={addressFormData.street} 
-                onChange={e => setAddressFormData({...addressFormData, street: e.target.value})}
+                onChange={e => setAddressFormData({...addressFormData, street: sanitizeAddressText(e.target.value)})}
                 onFocus={() => scrollFieldIntoView("street")}
                 ref={(el) => { manualFieldRefs.current.street = el }}
                 className="mb-4 h-12 rounded-xl bg-gray-50 dark:bg-gray-800/50"
@@ -594,7 +610,7 @@ export default function AddressSelectorPage() {
               <Input 
                 placeholder="E.g. Flat 402, 4th Floor, AppZeto Building" 
                 value={addressFormData.additionalDetails} 
-                onChange={e => setAddressFormData({...addressFormData, additionalDetails: e.target.value})}
+                onChange={e => setAddressFormData({...addressFormData, additionalDetails: sanitizeAddressText(e.target.value)})}
                 onFocus={() => scrollFieldIntoView("additionalDetails")}
                 ref={(el) => { manualFieldRefs.current.additionalDetails = el }}
                 className="h-12 rounded-xl border-gray-200 dark:border-gray-800 focus:ring-[#D51F10]"
@@ -606,7 +622,7 @@ export default function AddressSelectorPage() {
                 <Label className="text-xs mb-1 block">City</Label>
                 <Input 
                   value={addressFormData.city} 
-                  onChange={e => setAddressFormData({...addressFormData, city: e.target.value})} 
+                  onChange={e => setAddressFormData({...addressFormData, city: sanitizeAlphaText(e.target.value)})} 
                   onFocus={() => scrollFieldIntoView("city")}
                   ref={(el) => { manualFieldRefs.current.city = el }}
                   className="h-12 rounded-xl"
@@ -617,7 +633,7 @@ export default function AddressSelectorPage() {
                 <Label className="text-xs mb-1 block">State</Label>
                 <Input 
                   value={addressFormData.state} 
-                  onChange={e => setAddressFormData({...addressFormData, state: e.target.value})} 
+                  onChange={e => setAddressFormData({...addressFormData, state: sanitizeAlphaText(e.target.value)})} 
                   onFocus={() => scrollFieldIntoView("state")}
                   ref={(el) => { manualFieldRefs.current.state = el }}
                   className="h-12 rounded-xl"
@@ -631,7 +647,11 @@ export default function AddressSelectorPage() {
               <Input 
                 placeholder="Pincode" 
                 value={addressFormData.zipCode || ""} 
-                onChange={e => setAddressFormData({...addressFormData, zipCode: e.target.value})} 
+                onChange={e => setAddressFormData({...addressFormData, zipCode: sanitizeZipCode(e.target.value)})} 
+                maxLength={6}
+                type="text"
+                pattern="[0-9]*"
+                inputMode="numeric"
                 onFocus={() => scrollFieldIntoView("zipCode")}
                 ref={(el) => { manualFieldRefs.current.zipCode = el }}
                 className="h-12 rounded-xl"
@@ -658,7 +678,7 @@ export default function AddressSelectorPage() {
         </div>
 
         <div
-          className="fixed left-0 right-0 p-4 bg-white dark:bg-[#1a1a1a] border-t dark:border-gray-800 transition-[bottom] duration-150"
+          className="absolute left-0 right-0 p-4 bg-white dark:bg-[#1a1a1a] border-t dark:border-gray-800 transition-[bottom] duration-150 z-20"
           style={{ bottom: `${keyboardInset}px` }}
         >
           <Button 
