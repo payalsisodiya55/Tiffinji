@@ -159,10 +159,7 @@ export default function TransactionReport() {
   const activeFiltersCount = (filters.zone !== "All Zones" ? 1 : 0) + (filters.restaurant !== "All restaurants" ? 1 : 0) + (filters.time !== "All Time" ? 1 : 0)
 
   const formatCurrency = (amount) => {
-    if (amount >= 1000) {
-      return `\u20B9 ${(amount / 1000).toFixed(2)}K`
-    }
-    return `\u20B9 ${amount.toFixed(2)}`
+    return `\u20B9 ${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
   }
 
   const formatFullCurrency = (amount) => {

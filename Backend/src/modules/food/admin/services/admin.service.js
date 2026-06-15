@@ -768,7 +768,20 @@ export async function getTransactionReport(query = {}) {
     let restaurantIds = null;
     if (zone || restaurant) {
         const restFilter = {};
-        if (zone) restFilter.zoneId = zone; // Assuming zone is an ID or we need to lookup
+        if (zone && zone !== 'All Zones') {
+            if (mongoose.Types.ObjectId.isValid(zone)) {
+                restFilter.zoneId = new mongoose.Types.ObjectId(zone);
+            } else {
+                const matchedZone = await FoodZone.findOne({
+                    $or: [{ name: zone }, { zoneName: zone }]
+                }).select('_id').lean();
+                if (matchedZone) {
+                    restFilter.zoneId = matchedZone._id;
+                } else {
+                    restFilter.zoneId = new mongoose.Types.ObjectId(); // Query with dummy ID to yield empty result
+                }
+            }
+        }
         if (restaurant && restaurant !== 'All restaurants') {
             const restDoc = await mongoose.model('FoodRestaurant').findOne({ restaurantName: restaurant }).lean();
             if (restDoc) restFilter._id = restDoc._id;
