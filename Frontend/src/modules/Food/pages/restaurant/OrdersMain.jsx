@@ -2098,18 +2098,26 @@ export default function OrdersMain() {
           startY: yPos,
           head: [["Item", "Qty", "Price", "Total"]],
           body: tableData,
-          theme: "striped",
+          theme: "grid",
           headStyles: {
-            fillColor: [0, 0, 0],
+            fillColor: [31, 41, 55],
             textColor: 255,
             fontStyle: "bold",
+            fontSize: 9,
           },
           styles: { fontSize: 9 },
           columnStyles: {
             0: { cellWidth: 80 },
-            1: { cellWidth: 30, halign: "center" },
-            2: { cellWidth: 35, halign: "right" },
-            3: { cellWidth: 35, halign: "right" },
+            1: { cellWidth: 30 },
+            2: { cellWidth: 35 },
+            3: { cellWidth: 35 },
+          },
+          didParseCell: (data) => {
+            if (data.column.index === 1) {
+              data.cell.styles.halign = "center";
+            } else if (data.column.index === 2 || data.column.index === 3) {
+              data.cell.styles.halign = "right";
+            }
           },
         });
 
@@ -2164,12 +2172,14 @@ export default function OrdersMain() {
 
       // Cutlery preference
       yPos += 15;
+      doc.setFont("helvetica", "bold");
+      doc.text("Cutlery Option:", 20, yPos);
       doc.setFont("helvetica", "normal");
       doc.text(
         orderToPrint.sendCutlery === false
-          ? "? Don't send cutlery"
-          : "? Send cutlery requested",
-        20,
+          ? "Don't send cutlery"
+          : "Send cutlery requested",
+        52,
         yPos,
       );
 
