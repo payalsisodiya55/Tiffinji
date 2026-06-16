@@ -2513,55 +2513,57 @@ function RestaurantDetailsContent() {
           )}
 
           {/* Offers */}
-          <button
-            type="button"
-            onClick={() => setShowOffersSheet(true)}
-            className="w-full rounded-2xl border border-gray-900/20 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] px-4 py-3 text-left shadow-[0_12px_30px_rgba(15,23,42,0.18)] transition-all hover:shadow-[0_16px_36px_rgba(15,23,42,0.24)]"
-          >
-            <div className="flex items-start gap-3">
-              <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
-                <Percent className="h-5 w-5" />
-              </div>
-              <div className={`min-w-0 flex-1 ${activeOffersList.length === 1 ? "animate-pulse" : ""}`}>
-                <div className="relative h-5 overflow-hidden">
-                  <AnimatePresence mode="wait">
-                    <motion.span
-                      key={highlightIndex}
-                      initial={{ y: 16, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      exit={{ y: -16, opacity: 0 }}
-                      transition={{ duration: 0.3 }}
-                      className="text-sm font-semibold text-gray-900 dark:text-white"
-                    >
-                      {offerHeadline}
-                    </motion.span>
-                  </AnimatePresence>
+          {activeOffersList.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowOffersSheet(true)}
+              className="w-full rounded-2xl border border-gray-900/20 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] px-4 py-3 text-left shadow-[0_12px_30px_rgba(15,23,42,0.18)] transition-all hover:shadow-[0_16px_36px_rgba(15,23,42,0.24)]"
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
+                  <Percent className="h-5 w-5" />
                 </div>
-                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{offerSubline}</p>
+                <div className={`min-w-0 flex-1 ${activeOffersList.length === 1 ? "animate-pulse" : ""}`}>
+                  <div className="relative h-5 overflow-hidden">
+                    <AnimatePresence mode="wait">
+                      <motion.span
+                        key={highlightIndex}
+                        initial={{ y: 16, opacity: 0 }}
+                        animate={{ y: 0, opacity: 1 }}
+                        exit={{ y: -16, opacity: 0 }}
+                        transition={{ duration: 0.3 }}
+                        className="text-sm font-semibold text-gray-900 dark:text-white"
+                      >
+                        {offerHeadline}
+                      </motion.span>
+                    </AnimatePresence>
+                  </div>
+                  <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">{offerSubline}</p>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                    <Star className="h-3 w-3 fill-emerald-700 dark:fill-emerald-400 text-emerald-700 dark:text-emerald-400" />
+                    {ratingLabel}
+                  </span>
+                  <span className="text-[10px] text-gray-400 dark:text-gray-500">
+                    {reviewsLabel}
+                  </span>
+                </div>
               </div>
-              <div className="flex flex-col items-end gap-1">
-                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 dark:bg-emerald-950/30 px-2.5 py-1 text-xs font-semibold text-emerald-700 dark:text-emerald-400">
-                  <Star className="h-3 w-3 fill-emerald-700 dark:fill-emerald-400 text-emerald-700 dark:text-emerald-400" />
-                  {ratingLabel}
-                </span>
-                <span className="text-[10px] text-gray-400 dark:text-gray-500">
-                  {reviewsLabel}
-                </span>
-              </div>
-            </div>
-            {offerIndicatorCount > 1 && (
-              <div className="mt-3 flex items-center gap-1.5">
-                {Array.from({ length: offerIndicatorCount }).map((_, index) => (
-                  <span
-                    key={`offer-dot-${index}`}
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      index === activeOfferIndicator ? "bg-orange-500" : "bg-gray-200 dark:bg-gray-700"
-                    }`}
-                  />
-                ))}
-              </div>
-            )}
-          </button>
+              {offerIndicatorCount > 1 && (
+                <div className="mt-3 flex items-center gap-1.5">
+                  {Array.from({ length: offerIndicatorCount }).map((_, index) => (
+                    <span
+                      key={`offer-dot-${index}`}
+                      className={`h-1.5 w-1.5 rounded-full ${
+                        index === activeOfferIndicator ? "bg-orange-500" : "bg-gray-200 dark:bg-gray-700"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
+            </button>
+          )}
 
           {/* Filter/Category Buttons */}
           <div className="border-y border-gray-200 dark:border-gray-800 py-3 -mx-4 px-4">
