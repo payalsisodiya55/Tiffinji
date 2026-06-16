@@ -3445,7 +3445,7 @@ function OrderCard({
   const normalizedStatus = String(status || "").toLowerCase();
   const isReady = normalizedStatus === "ready";
   const isPreparing = normalizedStatus === "preparing";
-  const brandColor = "#7e3866";
+  const brandColor = "#D51F10";
 
   const statusLabel = String(status || "")
     .replace(/_/g, " ")
