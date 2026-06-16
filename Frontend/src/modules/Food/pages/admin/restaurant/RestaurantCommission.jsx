@@ -280,13 +280,14 @@ export default function RestaurantCommission() {
       errors.restaurantId = "Restaurant is required"
     }
 
-    if (!formData.defaultCommission.value || parseFloat(formData.defaultCommission.value) < 0) {
-      errors.defaultCommission = "Default commission value is required"
+    const commVal = parseFloat(formData.defaultCommission.value)
+    if (!formData.defaultCommission.value || isNaN(commVal) || commVal < 0) {
+      errors.defaultCommission = "Valid default commission value is required and cannot be negative"
     }
 
     if (formData.defaultCommission.type === "percentage" && 
-        (parseFloat(formData.defaultCommission.value) < 0 || parseFloat(formData.defaultCommission.value) > 100)) {
-      errors.defaultCommission = "Percentage must be between 0-100"
+        (isNaN(commVal) || commVal < 0 || commVal > 100)) {
+      errors.defaultCommission = "Percentage must be a valid number between 0-100"
     }
 
     setFormErrors(errors)
@@ -584,12 +585,28 @@ export default function RestaurantCommission() {
                 <div>
                   <input
                     type="number"
+                    min="0"
                     step={formData.defaultCommission.type === "percentage" ? "0.1" : "0.01"}
                     value={formData.defaultCommission.value}
-                    onChange={(e) => setFormData(prev => ({
-                      ...prev,
-                      defaultCommission: { ...prev.defaultCommission, value: e.target.value }
-                    }))}
+                    onKeyDown={(e) => {
+                      if (e.key === "-" || e.key === "+" || e.key === "e" || e.key === "E") {
+                        e.preventDefault()
+                      }
+                    }}
+                    onPaste={(e) => {
+                      const pasteData = e.clipboardData.getData("text")
+                      if (pasteData.includes("-") || pasteData.includes("+") || pasteData.includes("e") || pasteData.includes("E")) {
+                        e.preventDefault()
+                      }
+                    }}
+                    onChange={(e) => {
+                      const val = e.target.value
+                      if (val.includes("-") || (val !== "" && parseFloat(val) < 0)) return
+                      setFormData(prev => ({
+                        ...prev,
+                        defaultCommission: { ...prev.defaultCommission, value: val }
+                      }))
+                    }}
                     className={`w-full px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                       formErrors.defaultCommission ? "border-red-500" : "border-slate-300"
                     }`}
