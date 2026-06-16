@@ -363,7 +363,9 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
       name: item.name,
       variantName: item.variantName || '',
       quantity: item.quantity,
-      price: item.price
+      price: item.price,
+      isVeg: item.isVeg,
+      foodType: item.foodType || ''
     })) || previousOrder?.items || [],
     total: apiOrder?.pricing?.total || previousOrder?.total || 0,
     // Backend canonical field is orderStatus; keep legacy `status` for UI compatibility.
@@ -2013,14 +2015,17 @@ export default function OrderTracking() {
               <Receipt className="w-5 h-5 text-gray-500 mt-0.5" />
               <div className="flex-1">
                 <div className="mt-2 space-y-1">
-                  {order?.items?.map((item, index) => (
-                    <div key={index} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                      <span className="w-4 h-4 rounded border border-green-600 flex items-center justify-center">
-                        <span className="w-2 h-2 rounded-full bg-green-600" />
-                      </span>
-                      <span>{item.quantity} x {item.name}{item.variantName ? ` (${item.variantName})` : ""}</span>
-                    </div>
-                  ))}
+                  {order?.items?.map((item, index) => {
+                    const isItemVeg = item.isVeg === true || item.foodType === 'Veg';
+                    return (
+                      <div key={index} className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
+                        <span className={`w-4 h-4 rounded border ${isItemVeg ? 'border-green-600' : 'border-red-600'} flex items-center justify-center`}>
+                          <span className={`w-2 h-2 rounded-full ${isItemVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                        </span>
+                        <span>{item.quantity} x {item.name}{item.variantName ? ` (${item.variantName})` : ""}</span>
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
               <ChevronRight className="w-5 h-5 text-gray-400" />
@@ -2194,23 +2199,26 @@ export default function OrderTracking() {
             <div>
               <p className="text-sm font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-3">Order Items</p>
               <div className="space-y-4">
-                {order?.items?.map((item, index) => (
-                  <div key={index} className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-3 flex-1">
-                      <div className="w-5 h-5 rounded border border-green-600 flex items-center justify-center mt-0.5 shrink-0">
-                        <div className="w-2.5 h-2.5 rounded-full bg-green-600" />
+                {order?.items?.map((item, index) => {
+                  const isItemVeg = item.isVeg === true || item.foodType === 'Veg';
+                  return (
+                    <div key={index} className="flex items-start justify-between gap-4">
+                      <div className="flex items-start gap-3 flex-1">
+                        <div className={`w-5 h-5 rounded border ${isItemVeg ? 'border-green-600' : 'border-red-600'} flex items-center justify-center mt-0.5 shrink-0`}>
+                          <div className={`w-2.5 h-2.5 rounded-full ${isItemVeg ? 'bg-green-600' : 'bg-red-600'}`} />
+                        </div>
+                        <div className="flex-1">
+                          <p className="font-semibold text-gray-900 dark:text-gray-100 leading-tight">{item.name}</p>
+                          {item.variantName ? (
+                            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{item.variantName}</p>
+                          ) : null}
+                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Quantity: {item.quantity}</p>
+                        </div>
                       </div>
-                      <div className="flex-1">
-                        <p className="font-semibold text-gray-900 dark:text-gray-100 leading-tight">{item.name}</p>
-                        {item.variantName ? (
-                          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{item.variantName}</p>
-                        ) : null}
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">Quantity: {item.quantity}</p>
-                      </div>
+                      <p className="font-semibold text-gray-900 dark:text-gray-100">₹{((item?.price || 0) * (item?.quantity || 0)).toFixed(2)}</p>
                     </div>
-                    <p className="font-semibold text-gray-900 dark:text-gray-100">₹{((item?.price || 0) * (item?.quantity || 0)).toFixed(2)}</p>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

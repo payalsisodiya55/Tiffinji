@@ -894,7 +894,7 @@ export default function Cart() {
           quantity: item.quantity || 1,
           image: item.image,
           description: item.description,
-          isVeg: item.isVeg !== false
+          isVeg: item.isVeg === true || item.foodType === 'Veg'
         }))
 
         const resolvedRestaurantId = restaurantData?.restaurantId || restaurantData?._id || restaurantId || undefined
@@ -1354,7 +1354,7 @@ export default function Cart() {
           quantity: item.quantity || 1,
           image: item.image,
           description: item.description,
-          isVeg: item.isVeg !== false
+          isVeg: item.isVeg === true || item.foodType === 'Veg'
         }))
 
         const response = await orderAPI.calculateOrder({
@@ -1415,7 +1415,7 @@ export default function Cart() {
         quantity: item.quantity || 1,
         image: item.image,
         description: item.description,
-        isVeg: item.isVeg !== false
+        isVeg: item.isVeg === true || item.foodType === 'Veg'
       }))
 
       const response = await orderAPI.calculateOrder({
