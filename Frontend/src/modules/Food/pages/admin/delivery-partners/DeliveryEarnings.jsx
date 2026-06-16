@@ -101,6 +101,27 @@ export default function DeliveryEarnings() {
   }, [fetchEarnings])
 
   const handleFilterChange = (key, value) => {
+    const todayStr = new Date().toISOString().split('T')[0]
+    if (key === 'fromDate' && value) {
+      if (value > todayStr) {
+        toast.error("From Date cannot be in the future")
+        return
+      }
+      if (filters.toDate && value > filters.toDate) {
+        toast.error("From Date cannot be later than To Date")
+        return
+      }
+    }
+    if (key === 'toDate' && value) {
+      if (value > todayStr) {
+        toast.error("To Date cannot be in the future")
+        return
+      }
+      if (filters.fromDate && value < filters.fromDate) {
+        toast.error("To Date cannot be earlier than From Date")
+        return
+      }
+    }
     setFilters(prev => ({ ...prev, [key]: value }))
     setPagination(prev => ({ ...prev, page: 1 }))
   }
@@ -275,6 +296,7 @@ export default function DeliveryEarnings() {
                 type="date"
                 value={filters.fromDate}
                 onChange={(e) => handleFilterChange('fromDate', e.target.value)}
+                max={new Date().toISOString().split('T')[0]}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

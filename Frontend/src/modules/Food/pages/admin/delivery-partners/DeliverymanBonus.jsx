@@ -21,7 +21,7 @@ const formatBonusAmount = (transaction) => {
   
   // Clean the bonus string - remove superscript characters
   let cleaned = transaction.bonus.toString()
-    .replace(/¹/g, '') // Remove superscript 1
+    .replace(/ï¿½/g, '') // Remove superscript 1
     .replace(/[\u2070-\u207F\u2080-\u208F]/g, '') // Remove all superscript characters
     .trim()
   
@@ -120,6 +120,12 @@ export default function DeliverymanBonus() {
   }, [transactions, searchQuery])
 
   const handleInputChange = (field, value) => {
+    if (field === "amount" && value !== "") {
+      const numVal = parseFloat(value)
+      if (numVal < 0) {
+        return
+      }
+    }
     setFormData(prev => ({ ...prev, [field]: value }))
     if (formErrors[field]) {
       setFormErrors(prev => ({ ...prev, [field]: "" }))
@@ -325,8 +331,20 @@ export default function DeliverymanBonus() {
                 <input
                   type="number"
                   step="0.01"
+                  min="0"
                   value={formData.amount}
                   onChange={(e) => handleInputChange("amount", e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "-" || e.key === "+" || e.key === "e" || e.key === "E") {
+                      e.preventDefault()
+                    }
+                  }}
+                  onPaste={(e) => {
+                    const content = e.clipboardData.getData("text")
+                    if (/[-\+eE]/.test(content) || parseFloat(content) < 0) {
+                      e.preventDefault()
+                    }
+                  }}
                   placeholder="Enter amount"
                   className={`w-full px-4 py-2.5 border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm ${
                     formErrors.amount ? "border-red-500" : "border-slate-300"

@@ -86,6 +86,25 @@ export default function FeedbackExperienceReport() {
     return result
   }, [feedbackExperiences, searchQuery])
 
+  const handleDateChange = (key, value) => {
+    const todayStr = new Date().toISOString().split('T')[0]
+    if (value) {
+      if (value > todayStr) {
+        toast.error(`${key === 'fromDate' ? 'From' : 'To'} Date cannot be in the future`)
+        return
+      }
+      if (key === 'fromDate' && filters.toDate && value > filters.toDate) {
+        toast.error("From Date cannot be later than To Date")
+        return
+      }
+      if (key === 'toDate' && filters.fromDate && value < filters.fromDate) {
+        toast.error("To Date cannot be earlier than From Date")
+        return
+      }
+    }
+    setFilters(prev => ({ ...prev, [key]: value }))
+  }
+
   const handleReset = () => {
     setFilters({
       fromDate: "",
@@ -209,7 +228,8 @@ export default function FeedbackExperienceReport() {
                     <input
                       type="date"
                       value={filters.fromDate}
-                      onChange={(e) => setFilters(prev => ({ ...prev, fromDate: e.target.value }))}
+                      onChange={(e) => handleDateChange('fromDate', e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
                       className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>
@@ -224,7 +244,8 @@ export default function FeedbackExperienceReport() {
                     <input
                       type="date"
                       value={filters.toDate}
-                      onChange={(e) => setFilters(prev => ({ ...prev, toDate: e.target.value }))}
+                      onChange={(e) => handleDateChange('toDate', e.target.value)}
+                      max={new Date().toISOString().split('T')[0]}
                       className="w-full pl-10 pr-4 py-2.5 text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     />
                   </div>

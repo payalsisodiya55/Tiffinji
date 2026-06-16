@@ -318,8 +318,8 @@ const formatBonusForExport = (transaction) => {
   if (transaction.bonus) {
     // Remove all superscript/special characters and unwanted text
     let cleaned = transaction.bonus.toString()
-      .replace(/¹/g, '') // Remove superscript 1
-      .replace(/[¹²³45678?°]/g, '') // Remove all superscript numbers
+      .replace(/ï¿½/g, '') // Remove superscript 1
+      .replace(/[ï¿½ï¿½ï¿½45678?ï¿½]/g, '') // Remove all superscript numbers
       .replace(/[\u2070-\u207F\u2080-\u208F]/g, '') // Remove all superscript Unicode ranges
       .replace(/[^\d.-]/g, '') // Keep only digits, dots, and minus signs
       .trim()
@@ -380,7 +380,7 @@ export const exportBonusToExcel = (transactions, filename = "deliveryman_bonus")
     </html>
   `
   
-  const blob = new Blob([htmlContent], { type: "application/vnd.ms-excel;charset=utf-8" })
+  const blob = new Blob(["\uFEFF", htmlContent], { type: "application/vnd.ms-excel;charset=utf-8" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)

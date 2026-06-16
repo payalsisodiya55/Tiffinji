@@ -14,7 +14,7 @@ export const exportReportsToCSV = (data, headers, filename = "report") => {
     ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
   ].join("\n")
   
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+  const blob = new Blob(["\uFEFF", csvContent], { type: "text/csv;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -33,13 +33,34 @@ export const exportReportsToExcel = (data, headers, filename = "report") => {
     })
   })
   
-  const headerRow = headers.map(h => typeof h === 'string' ? h : h.label).join("\t")
-  const csvContent = [
-    headerRow,
-    ...rows.map(row => row.join("\t"))
-  ].join("\n")
+  const headerLabels = headers.map(h => typeof h === 'string' ? h : h.label)
   
-  const blob = new Blob([csvContent], { type: "application/vnd.ms-excel" })
+  const htmlContent = `
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background-color: #f2f2f2; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <thead>
+            <tr>
+              ${headerLabels.map(h => `<th>${h}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => `<tr>${row.map(cell => `<td>${String(cell).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`).join("")}</tr>`).join("")}
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `
+  
+  const blob = new Blob(["\uFEFF", htmlContent], { type: "application/vnd.ms-excel;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -134,7 +155,7 @@ export const exportTransactionReportToCSV = (transactions, filename = "transacti
     ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
   ].join("\n")
   
-  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+  const blob = new Blob(["\uFEFF", csvContent], { type: "text/csv;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -160,12 +181,32 @@ export const exportTransactionReportToExcel = (transactions, filename = "transac
     transaction.orderAmount.toFixed(2)
   ])
   
-  const csvContent = [
-    headers.join("\t"),
-    ...rows.map(row => row.join("\t"))
-  ].join("\n")
+  const htmlContent = `
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          table { border-collapse: collapse; width: 100%; }
+          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+          th { background-color: #f2f2f2; font-weight: bold; }
+        </style>
+      </head>
+      <body>
+        <table>
+          <thead>
+            <tr>
+              ${headers.map(h => `<th>${h}</th>`).join("")}
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map(row => `<tr>${row.map(cell => `<td>${String(cell).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`).join("")}</tr>`).join("")}
+          </tbody>
+        </table>
+      </body>
+    </html>
+  `
   
-  const blob = new Blob([csvContent], { type: "application/vnd.ms-excel" })
+  const blob = new Blob(["\uFEFF", htmlContent], { type: "application/vnd.ms-excel;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
