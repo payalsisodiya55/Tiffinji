@@ -5,6 +5,7 @@ import { deliveryAPI } from '@food/api';
 const alertSound = '/alert.mp3';
 const originalSound = '/original.mp3';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
+import { addDeliveryNotification } from '@food/utils/deliveryNotifications';
 import { DeliveryNotificationContext } from '../context/DeliveryNotificationContext';
 import { isModuleAuthenticated } from '@food/utils/auth';
 
@@ -870,6 +871,11 @@ export const useDeliveryNotifications = () => {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
         dispatchStatus: orderData?.dispatch?.status,
       });
+      addDeliveryNotification({
+        title: 'New Order Proposal',
+        message: `You have received a new order proposal #${orderData?.orderId || orderData?.id || ''}.`,
+        link: '/food/delivery/feed'
+      });
       setNewOrder(orderData);
       handleIncomingOrderAlert(orderData);
     });
@@ -880,6 +886,11 @@ export const useDeliveryNotifications = () => {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
         phase: orderData?.phase || 'unknown',
         dispatchStatus: orderData?.dispatch?.status,
+      });
+      addDeliveryNotification({
+        title: 'New Order Available',
+        message: `A new order #${orderData?.orderId || orderData?.id || ''} is available in your area.`,
+        link: '/food/delivery/feed'
       });
       // Treat it the same as new_order for now - delivery boy can accept it
       setNewOrder(orderData);
@@ -895,6 +906,11 @@ export const useDeliveryNotifications = () => {
         orderMongoId: data?.orderMongoId || data?.order_mongo_id,
         ...data
       };
+      addDeliveryNotification({
+        title: 'Order Alert',
+        message: `New order sound alert for order #${data?.orderId || data?.order_id || ''}.`,
+        link: '/food/delivery/feed'
+      });
       // Force immediate buzz for notification events, even if dedupe would skip.
       activeOrderRef.current = normalizedData || { id: Date.now() };
       playNotificationSound(normalizedData);
@@ -909,17 +925,32 @@ export const useDeliveryNotifications = () => {
       debugLog('order_ready received via socket', {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
       });
+      addDeliveryNotification({
+        title: 'Order Ready',
+        message: `Order #${orderData?.orderId || orderData?.id || ''} is ready. Proceed to pickup.`,
+        link: '/food/delivery/feed'
+      });
       setOrderReady(orderData);
       playNotificationSound(orderData);
     });
 
     socketRef.current.on('order_status_update', (statusData) => {
       debugLog('?? Delivery order status update received via socket:', statusData);
+      addDeliveryNotification({
+        title: 'Order Status Updated',
+        message: `Order #${statusData?.orderId || statusData?.id || ''} status is now ${statusData?.orderStatus || 'updated'}.`,
+        link: '/food/delivery/feed'
+      });
       setOrderStatusUpdate(statusData || null);
     });
 
     socketRef.current.on('order_cancelled', (statusData) => {
       debugLog('?? Delivery order cancelled event received via socket:', statusData);
+      addDeliveryNotification({
+        title: 'Order Cancelled',
+        message: `Order #${statusData?.orderId || statusData?.id || ''} has been cancelled.`,
+        link: '/food/delivery/feed'
+      });
       setOrderStatusUpdate({
         ...(statusData || {}),
         status: 'cancelled'
@@ -928,6 +959,11 @@ export const useDeliveryNotifications = () => {
 
     socketRef.current.on('order_deleted', (statusData) => {
       debugLog('?? Delivery order deleted event received via socket:', statusData);
+      addDeliveryNotification({
+        title: 'Order Deleted',
+        message: `Order #${statusData?.orderId || statusData?.id || ''} was deleted.`,
+        link: '/food/delivery/feed'
+      });
       setOrderStatusUpdate({
         ...(statusData || {}),
         status: 'deleted'
@@ -936,6 +972,11 @@ export const useDeliveryNotifications = () => {
 
     socketRef.current.on('order_reassigned_elsewhere', (data) => {
       debugLog('?? Order reassigned to another partner:', data);
+      addDeliveryNotification({
+        title: 'Order Reassigned',
+        message: `Order #${data?.orderId || ''} was reassigned to another partner.`,
+        link: '/food/delivery/feed'
+      });
       stopAlertLoop();
       activeOrderRef.current = null;
       setNewOrder(null);
@@ -945,6 +986,11 @@ export const useDeliveryNotifications = () => {
     // Backend emits 'order_claimed' when another delivery boy accepts an offered order
     socketRef.current.on('order_claimed', (data) => {
       debugLog('?? order_claimed received - order taken by another partner:', data);
+      addDeliveryNotification({
+        title: 'Order Claimed',
+        message: `Order #${data?.orderId || data?.order_id || ''} has been claimed by another partner.`,
+        link: '/food/delivery/feed'
+      });
       stopAlertLoop();
       activeOrderRef.current = null;
       setNewOrder(null);
@@ -986,6 +1032,11 @@ export const useDeliveryNotifications = () => {
         }
       }
 
+      addDeliveryNotification({
+        title: payload?.title || 'System Notification',
+        message: payload?.message || 'New broadcast notification received.',
+        link: payload?.link || '/food/delivery/feed'
+      });
       setAdminNotification(payload);
       dispatchNotificationInboxRefresh();
     });

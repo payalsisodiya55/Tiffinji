@@ -10,27 +10,40 @@ const debugError = (...args) => {}
 const DELIVERY_NOTIFICATIONS_KEY = 'delivery_notifications'
 
 /**
- * Get all notifications (Legacy function, no longer uses localStorage)
- * @returns {Array} - Empty array
+ * Get all notifications
+ * @returns {Array} - Array of notifications from localStorage
  */
 export const getDeliveryNotifications = () => {
-  return []
+  if (typeof localStorage === 'undefined') return [];
+  try {
+    const raw = localStorage.getItem(DELIVERY_NOTIFICATIONS_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (err) {
+    debugError('Failed to parse delivery notifications', err);
+    return [];
+  }
 }
 
 /**
- * Save notifications (Legacy function, no-op)
- * @param {Array} notifications - Array of notifications
+ * Save notifications
+ * @param {Array} notifications - Array of notifications to save
  */
 export const saveDeliveryNotifications = (notifications) => {
-  // No-op
+  if (typeof localStorage === 'undefined') return;
+  try {
+    localStorage.setItem(DELIVERY_NOTIFICATIONS_KEY, JSON.stringify(notifications || []));
+  } catch (err) {
+    debugError('Failed to save delivery notifications', err);
+  }
 }
 
 /**
  * Get unread notification count
- * @returns {number} - 0
+ * @returns {number} - Count of unread notifications
  */
 export const getUnreadDeliveryNotificationCount = () => {
-  return 0
+  const list = getDeliveryNotifications();
+  return list.filter(item => !item.read).length;
 }
 
 /**
@@ -38,15 +51,42 @@ export const getUnreadDeliveryNotificationCount = () => {
  * @param {Object} notification - Notification object
  */
 export const addDeliveryNotification = (notification) => {
-  return notification
+  try {
+    const list = getDeliveryNotifications();
+    const newNotif = {
+      id: notification.id || `delivery-notification-${Date.now()}-${Math.random()}`,
+      title: notification.title || 'Notification',
+      message: notification.message || notification.body || '',
+      read: false,
+      createdAt: notification.createdAt || new Date().toISOString(),
+      ...notification
+    };
+    list.unshift(newNotif);
+    // Keep only the most recent 100 notifications
+    saveDeliveryNotifications(list.slice(0, 100));
+    window.dispatchEvent(new CustomEvent('deliveryNotificationsUpdated'));
+    return newNotif;
+  } catch (err) {
+    debugError('Failed to add delivery notification', err);
+    return notification;
+  }
 }
 
 /**
  * Mark notification as read
- * @param {number} notificationId - Notification ID
+ * @param {number|string} notificationId - Notification ID
  */
 export const markDeliveryNotificationAsRead = (notificationId) => {
-  // No-op
+  try {
+    const list = getDeliveryNotifications();
+    const updated = list.map(item => 
+      item.id === notificationId ? { ...item, read: true } : item
+    );
+    saveDeliveryNotifications(updated);
+    window.dispatchEvent(new CustomEvent('deliveryNotificationsUpdated'));
+  } catch (err) {
+    debugError('Failed to mark delivery notification as read', err);
+  }
 }
 
 

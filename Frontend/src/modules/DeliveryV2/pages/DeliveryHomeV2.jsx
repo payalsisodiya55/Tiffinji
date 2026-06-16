@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useCallback } from 'react';
+import React, { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { useProximityCheck } from '@/modules/DeliveryV2/hooks/useProximityCheck';
@@ -33,6 +33,11 @@ import { getHaversineDistance, calculateETA, calculateHeading } from '@/modules/
 import { useCompanyName } from "@food/hooks/useCompanyName";
 import { useNavigate } from 'react-router-dom';
 import useNotificationInbox from "@food/hooks/useNotificationInbox";
+import { 
+  getDeliveryNotifications, 
+  saveDeliveryNotifications, 
+  markDeliveryNotificationAsRead 
+} from '@food/utils/deliveryNotifications';
 
 /** Minimal bottom-sheet popup (Restored from legacy FeedNavbar) */
 function BottomPopup({ isOpen, onClose, title, children }) {
@@ -72,6 +77,31 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const { newOrder, clearNewOrder, orderStatusUpdate, clearOrderStatusUpdate, claimedOrderId, clearClaimedOrderId, adminNotification, clearAdminNotification, isConnected: isSocketConnected, emitLocation } = useDeliveryNotifications();
   const companyName = useCompanyName();
   const { items: broadcastItems, unreadCount: notificationUnreadCount, markAsRead: markBroadcastAsRead, dismissAll: dismissAllBroadcast } = useNotificationInbox("delivery", { limit: 20 });
+  const [localNotifications, setLocalNotifications] = useState(() => getDeliveryNotifications());
+
+  useEffect(() => {
+    const handleUpdate = () => {
+      setLocalNotifications(getDeliveryNotifications());
+    };
+    window.addEventListener('deliveryNotificationsUpdated', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    return () => {
+      window.removeEventListener('deliveryNotificationsUpdated', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, []);
+
+  const mergedNotifications = useMemo(() => {
+    const combined = [
+      ...(localNotifications || []).map(item => ({ ...item, source: "local" })),
+      ...(broadcastItems || []).map(item => ({ ...item, source: "broadcast" }))
+    ];
+    return combined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+  }, [localNotifications, broadcastItems]);
+
+  const totalUnreadCount = useMemo(() => {
+    return mergedNotifications.filter(item => !item.read).length;
+  }, [mergedNotifications]);
 
   const [incomingOrder, setIncomingOrder] = useState(null);
   const [cashLimitNotice, setCashLimitNotice] = useState(null);
@@ -749,9 +779,9 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
              <button onClick={() => navigate('/food/delivery/help/id-card')} className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20 active:scale-95 transition-all shadow-lg"><Contact className="w-4 h-4" /></button>
              <button onClick={() => setShowNotifications(true)} className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white border border-white/10 active:scale-95 transition-all shadow-lg">
                 <Bell className="w-4 h-4" />
-                {notificationUnreadCount > 0 && (
+                {totalUnreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-orange-600 flex items-center justify-center text-[9px] font-black text-white border-2 border-[#121212] shadow-xl animate-in zoom-in duration-300">
-                    {notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}
+                    {totalUnreadCount > 9 ? '9+' : totalUnreadCount}
                   </span>
                 )}
              </button>
@@ -1152,16 +1182,17 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         title="Notifications" 
         onClose={() => {
            setShowNotifications(false);
-           // Optional: refresh count if needed
         }}
       >
          <div className="flex flex-col gap-3 -mt-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
-            {broadcastItems && broadcastItems.length > 0 ? (
+            {mergedNotifications && mergedNotifications.length > 0 ? (
                <>
                   <div className="flex justify-end mb-1">
                      <button 
                         onClick={() => {
                            dismissAllBroadcast();
+                           saveDeliveryNotifications([]);
+                           setLocalNotifications([]);
                            toast.success("All notifications cleared");
                         }}
                         className="text-[10px] font-black uppercase tracking-widest text-red-500 bg-red-50 px-3 py-1.5 rounded-full"
@@ -1170,13 +1201,16 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                      </button>
                   </div>
                   <div className="grid gap-2.5">
-                     {broadcastItems.map((item) => (
+                     {mergedNotifications.map((item) => (
                         <div 
                            key={item.id} 
                            onClick={() => {
-                              markBroadcastAsRead(item.id);
+                              if (item.source === "broadcast") {
+                                 markBroadcastAsRead(item.id);
+                              } else {
+                                 markDeliveryNotificationAsRead(item.id);
+                              }
                               if (item.link) {
-                                 // Handle link if present
                                  const path = item.link.startsWith('/') ? item.link : `/${item.link}`;
                                  navigate(path);
                                  setShowNotifications(false);
@@ -1226,8 +1260,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
             >
                View Notification History
             </button>
-         </div>
-      </BottomPopup>
+          </div>
+       </BottomPopup>
 
       {/* Floating Minimize/Restore Toggle - Above navbar */}
       {isModalMinimized && (activeOrder || incomingOrder || showVerification) && (
