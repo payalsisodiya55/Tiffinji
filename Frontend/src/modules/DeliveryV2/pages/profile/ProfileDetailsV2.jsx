@@ -346,7 +346,11 @@ export const ProfileDetailsV2 = () => {
     setIsUpdatingBankDetails(true)
     try {
       // Validation
-      const { accountNumber, ifscCode, panNumber, upiId } = bankDetails
+      const { accountHolderName, accountNumber, ifscCode, panNumber, upiId } = bankDetails
+
+      if (accountHolderName && !/^[a-zA-Z\s]+$/.test(accountHolderName.trim())) {
+        return toast.error("Account Holder Name can only contain letters and spaces")
+      }
 
       if (accountNumber && !/^\d{9,18}$/.test(accountNumber.trim())) {
         return toast.error("Invalid Account Number (9-18 digits)")
@@ -833,9 +837,52 @@ export const ProfileDetailsV2 = () => {
       >
         <div className="space-y-5 pb-10">
           <div className="grid gap-4">
+             {/* Account Holder — letters/spaces only */}
+             <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 group focus-within:border-orange-500/50 transition-all">
+               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+                 <User className="w-3.5 h-3.5" /> Account Holder
+               </label>
+               <input
+                 type="text"
+                 inputMode="text"
+                 maxLength={60}
+                 value={bankDetails.accountHolderName}
+                 onChange={(e) => {
+                   const val = e.target.value;
+                   if (!/^[a-zA-Z\s]*$/.test(val)) return;
+                   setBankDetails({ ...bankDetails, accountHolderName: val });
+                 }}
+                 className="w-full bg-transparent text-sm font-bold text-gray-950 outline-none"
+                 placeholder="Enter account holder name"
+               />
+             </div>
+
+             {/* Account Number — numeric keyboard */}
+             <div className="bg-gray-50/50 p-4 rounded-2xl border border-gray-100 group focus-within:border-orange-500/50 transition-all">
+               <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-2">
+                 <Banknote className="w-3.5 h-3.5" /> Account Number
+               </label>
+               <input
+                 type="number"
+                 inputMode="numeric"
+                 pattern="[0-9]*"
+                 min="0"
+                 value={bankDetails.accountNumber}
+                 onChange={(e) => {
+                   const val = e.target.value.replace(/\D/g, "");
+                   if (val.length > 20) return;
+                   setBankDetails({ ...bankDetails, accountNumber: val });
+                 }}
+                 onKeyDown={(e) => {
+                   if (["e","E","+","-","."].includes(e.key)) e.preventDefault();
+                 }}
+                 className="w-full bg-transparent text-sm font-bold text-gray-950 outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                 placeholder="Enter account number"
+               />
+             </div>
+
+             {/* Remaining fields */}
              {[
-               { label: "Account Holder", key: "accountHolderName", icon: User, maxLength: 60 },
-               { label: "Account Number", key: "accountNumber", icon: Banknote, maxLength: 20, isNumeric: true },
                { label: "IFSC Code", key: "ifscCode", icon: Shield, format: (v) => v.toUpperCase(), maxLength: 11 },
                { label: "Bank Name", key: "bankName", icon: MapPin, maxLength: 60 },
                { label: "PAN Number", key: "panNumber", icon: FileText, format: (v) => v.toUpperCase(), maxLength: 10 },
@@ -845,16 +892,15 @@ export const ProfileDetailsV2 = () => {
                   <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest flex items-center gap-2 mb-2">
                      <field.icon className="w-3.5 h-3.5" /> {field.label}
                   </label>
-                  <input 
-                    type="text" 
-                    value={bankDetails[field.key]} 
+                  <input
+                    type="text"
+                    value={bankDetails[field.key]}
                     onChange={(e) => {
                         let val = e.target.value;
-                        if (field.isNumeric) val = val.replace(/\D/g, "");
                         if (field.maxLength && val.length > field.maxLength) return;
                         if (field.format) val = field.format(val);
                         setBankDetails({...bankDetails, [field.key]: val})
-                    }} 
+                    }}
                     className="w-full bg-transparent text-sm font-bold text-gray-950 outline-none"
                     placeholder={`Enter ${field.label.toLowerCase()}`}
                   />
