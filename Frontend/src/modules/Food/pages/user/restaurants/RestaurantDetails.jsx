@@ -2178,63 +2178,71 @@ function RestaurantDetailsContent() {
         </div>
 
         {/* Right Side - Image and Add Button Wrapper */}
-        <div className="relative w-32 h-32 flex-shrink-0">
-          {/* Image Container with rounded-2xl overflow-hidden */}
-          <div className="w-full h-full bg-gray-100 dark:bg-gray-800 rounded-2xl overflow-hidden shadow-sm">
-            <DishImage src={item.image} alt={item.name} className="w-full h-full object-cover" />
-          </div>
-          {/* Button overlay - rendered outside of overflow-hidden image container to prevent clipping */}
-          {quantity > 0 ? (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className={`absolute -bottom-2.5 left-1/2 -translate-x-1/2 font-bold px-3 py-1.5 rounded-xl shadow-md flex items-center gap-2 bg-[#7e3866] text-white min-w-[84px] justify-between z-10 ${
-                shouldShowGrayscale ? 'bg-gray-300 text-gray-400 cursor-not-allowed opacity-50' : 'hover:bg-[#55254b]'
-              }`}
-            >
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (!shouldShowGrayscale) {
-                    updateItemQuantity(item, Math.max(0, quantity - 1), e)
-                  }
-                }}
-                disabled={shouldShowGrayscale}
-                className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-white hover:text-white/80'}
-              >
-                <Minus size={14} className="stroke-[3px]" />
-              </button>
-              <span className="text-xs font-bold text-white">{quantity}</span>
-              <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (!shouldShowGrayscale) {
-                    updateItemQuantity(item, quantity + 1, e)
-                  }
-                }}
-                disabled={shouldShowGrayscale}
-                className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-white hover:text-white/80'}
-              >
-                <Plus size={14} className="stroke-[3px]" />
-              </button>
-            </motion.div>
-          ) : (
-            <motion.button
-              whileTap={shouldShowGrayscale ? {} : { scale: 0.95 }}
-              onClick={(e) => {
-                e.stopPropagation()
-                if (!shouldShowGrayscale) {
-                  updateItemQuantity(item, 1, e)
-                }
-              }}
-              disabled={shouldShowGrayscale}
-              className={`absolute -bottom-2.5 left-1/2 -translate-x-1/2 bg-[#7e3866] text-white font-bold px-5 py-1.5 rounded-xl shadow-md hover:bg-[#55254b] transition-all whitespace-nowrap min-w-[84px] text-center text-xs tracking-wider border border-white/10 z-10 ${shouldShowGrayscale
-                ? 'bg-gray-300 text-gray-400 cursor-not-allowed opacity-50'
-                : ''
+        <div className="flex flex-col items-center flex-shrink-0">
+          <div className="relative w-32 h-32">
+            {/* Image Container with rounded-2xl overflow-hidden */}
+            <div className="w-full h-full bg-gray-100 dark:bg-gray-800 rounded-2xl overflow-hidden shadow-sm">
+              <DishImage src={item.image} alt={item.name} className="w-full h-full object-cover" />
+            </div>
+            {/* Button overlay - rendered outside of overflow-hidden image container to prevent clipping */}
+            {quantity > 0 ? (
+              <motion.div
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className={`absolute -bottom-2.5 left-1/2 -translate-x-1/2 font-bold px-3 py-1.5 rounded-xl shadow-md flex items-center gap-2 bg-[#7e3866] text-white min-w-[84px] justify-between z-10 ${
+                  shouldShowGrayscale ? 'bg-gray-300 text-gray-400 cursor-not-allowed opacity-50' : 'hover:bg-[#55254b]'
                 }`}
-            >
-              ADD +
-            </motion.button>
+              >
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!shouldShowGrayscale) {
+                      updateItemQuantity(item, Math.max(0, quantity - 1), e)
+                    }
+                  }}
+                  disabled={shouldShowGrayscale}
+                  className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-white hover:text-white/80'}
+                >
+                  <Minus size={14} className="stroke-[3px]" />
+                </button>
+                <span className="text-xs font-bold text-white">{quantity}</span>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    if (!shouldShowGrayscale) {
+                      updateItemQuantity(item, quantity + 1, e)
+                    }
+                  }}
+                  disabled={shouldShowGrayscale}
+                  className={shouldShowGrayscale ? 'text-gray-400 cursor-not-allowed' : 'text-white hover:text-white/80'}
+                >
+                  <Plus size={14} className="stroke-[3px]" />
+                </button>
+              </motion.div>
+            ) : (
+              <motion.button
+                whileTap={shouldShowGrayscale ? {} : { scale: 0.95 }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  if (!shouldShowGrayscale) {
+                    updateItemQuantity(item, 1, e)
+                  }
+                }}
+                disabled={shouldShowGrayscale}
+                className={`absolute -bottom-2.5 left-1/2 -translate-x-1/2 bg-[#7e3866] text-white font-bold px-5 py-1.5 rounded-xl shadow-md hover:bg-[#55254b] transition-all whitespace-nowrap min-w-[84px] text-center text-xs tracking-wider border border-white/10 z-10 ${shouldShowGrayscale
+                  ? 'bg-gray-300 text-gray-400 cursor-not-allowed opacity-50'
+                  : ''
+                  }`}
+              >
+                ADD +
+              </motion.button>
+            )}
+          </div>
+          {/* Customizable tag */}
+          {hasFoodVariants(item) && (
+            <span className="text-[11px] text-gray-400 dark:text-gray-500 font-semibold mt-3 text-center">
+              Customizable
+            </span>
           )}
         </div>
       </>
