@@ -71,11 +71,11 @@ export const PickupActionModal = ({
   }
 
   const isAtPickup = status === 'REACHED_PICKUP';
-  const restaurantName = order.restaurantName || order.restaurant_name || 'Restaurant';
-  const restaurantAddress = order.restaurantAddress || order.restaurant_address || order.restaurantLocation?.address || 'Address not available';
-  const restaurantPhone = order.restaurantPhone || order.restaurant_phone || order.restaurantId?.phone || '';
+  const restaurantName = order.restaurantName || order.restaurant_name || order.restaurantId?.restaurantName || order.restaurantId?.name || order.restaurant?.restaurantName || order.restaurant?.name || 'Restaurant';
+  const restaurantAddress = order.restaurantAddress || order.restaurant_address || order.restaurantLocation?.address || order.restaurantId?.addressLine1 || order.restaurantId?.location?.address || order.restaurantId?.address || 'Address not available';
+  const restaurantPhone = order.restaurantPhone || order.restaurant_phone || order.restaurantId?.phone || order.restaurant?.phone || '';
   const items = order.items || [];
-  const restaurantLogo = order.restaurantImage || order.restaurant?.logo || order.restaurant?.profileImage || 'https://cdn-icons-png.flaticon.com/512/3170/3170733.png';
+  const restaurantLogo = order.restaurantImage || order.restaurant?.logo || order.restaurant?.profileImage || order.restaurantId?.profileImage || 'https://cdn-icons-png.flaticon.com/512/3170/3170733.png';
 
   return (
     <div className="fixed inset-0 z-110 p-0 sm:p-4 flex items-end justify-center">
