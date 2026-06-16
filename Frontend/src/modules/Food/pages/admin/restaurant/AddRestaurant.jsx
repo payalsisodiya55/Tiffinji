@@ -8,7 +8,7 @@ import { Label } from "@food/components/ui/label"
 import { Button } from "@food/components/ui/button"
 import { adminAPI, uploadAPI, zoneAPI } from "@food/api"
 import { toast } from "sonner"
-import { EMAIL_REGEX } from "@/shared/utils/emailValidation"
+const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i
 const debugLog = (...args) => {}
 const debugWarn = (...args) => { console.warn(...args) }
 const debugError = (...args) => { console.error(...args) }
@@ -420,14 +420,41 @@ export default function AddRestaurant() {
       errors.push("Owner name must contain valid characters")
     }
     if (!step1.ownerEmail?.trim()) errors.push("Owner email is required")
-    if (step1.ownerEmail?.trim() && !EMAIL_REGEX.test(step1.ownerEmail.trim())) errors.push("Please enter a valid email address")
+    if (step1.ownerEmail?.trim() && !/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(step1.ownerEmail.trim())) {
+      errors.push("Please enter a valid email address (lowercase letters only)")
+    }
     if (!step1.ownerPhone?.trim()) errors.push("Owner phone number is required")
     if (step1.ownerPhone?.trim() && !PHONE_REGEX.test(step1.ownerPhone.trim())) errors.push("Owner phone number must be 10 digits")
     if (!step1.primaryContactNumber?.trim()) errors.push("Primary contact number is required")
     if (step1.primaryContactNumber?.trim() && !PHONE_REGEX.test(step1.primaryContactNumber.trim())) errors.push("Primary contact number must be 10 digits")
     if (!step1.zoneId?.trim()) errors.push("Service zone is required")
-    if (!step1.location?.area?.trim()) errors.push("Area/Sector/Locality is required")
-    if (!step1.location?.city?.trim()) errors.push("City is required")
+    
+    // Address fields validation
+    const area = step1.location?.area || ""
+    const city = step1.location?.city || ""
+    const state = step1.location?.state || ""
+    const pincode = step1.location?.pincode || ""
+
+    if (!area.trim()) {
+      errors.push("Area/Sector/Locality is required")
+    } else if (/[^A-Za-z0-9\s]/.test(area)) {
+      errors.push("Area/Sector/Locality must not contain special characters")
+    }
+
+    if (!city.trim()) {
+      errors.push("City is required")
+    } else if (/[^A-Za-z0-9\s]/.test(city)) {
+      errors.push("City must not contain special characters")
+    }
+
+    if (state.trim() && /[^A-Za-z0-9\s]/.test(state)) {
+      errors.push("State must not contain special characters")
+    }
+
+    if (pincode.trim() && !/^\d{6}$/.test(pincode.trim())) {
+      errors.push("Pincode must be exactly 6 digits")
+    }
+
     return errors
   }
 
@@ -436,7 +463,11 @@ export default function AddRestaurant() {
     if (!step2.menuImages || step2.menuImages.length === 0) errors.push("At least one menu image is required")
     if (!step2.profileImage) errors.push("Restaurant profile image is required")
     if (!step2.cuisines || step2.cuisines.length === 0) errors.push("Please select at least one cuisine")
-    if (!step2.estimatedDeliveryTime?.trim()) errors.push("Estimated delivery time is required")
+    if (!step2.estimatedDeliveryTime?.trim()) {
+      errors.push("Estimated delivery time is required")
+    } else if (/\D/.test(step2.estimatedDeliveryTime.trim())) {
+      errors.push("Estimated delivery time must contain digits only")
+    }
     if (!step2.openingTime?.trim()) errors.push("Opening time is required")
     if (!step2.closingTime?.trim()) errors.push("Closing time is required")
     const openingMinutes = timeStringToMinutes(step2.openingTime)
@@ -743,10 +774,10 @@ export default function AddRestaurant() {
         
         return {
           formattedAddress,
-          area,
-          city,
-          state,
-          pincode,
+          area: String(area || "").replace(/[^A-Za-z0-9\s]/g, ""),
+          city: String(city || "").replace(/[^A-Za-z0-9\s]/g, ""),
+          state: String(state || "").replace(/[^A-Za-z0-9\s]/g, ""),
+          pincode: String(pincode || "").replace(/\D/g, "").slice(0, 6),
           latitude: typeof lat === 'number' ? Number(lat.toFixed(6)) : "",
           longitude: typeof lng === 'number' ? Number(lng.toFixed(6)) : "",
         }
@@ -932,7 +963,7 @@ export default function AddRestaurant() {
             <Input
               type="email"
               value={step1.ownerEmail || ""}
-              onChange={(e) => setStep1({ ...step1, ownerEmail: e.target.value })}
+              onChange={(e) => setStep1({ ...step1, ownerEmail: e.target.value.toLowerCase() })}
               className="mt-1 bg-white text-sm text-black placeholder-black"
               placeholder="owner@example.com"
             />
@@ -989,10 +1020,10 @@ export default function AddRestaurant() {
                         ...prev.location,
                         formattedAddress: display,
                         addressLine1: display,
-                        area: area || prev.location.area,
-                        city: city || prev.location.city,
-                        state: state || prev.location.state,
-                        pincode: pincode || prev.location.pincode,
+                        area: (area || prev.location.area).replace(/[^A-Za-z0-9\s]/g, ""),
+                        city: (city || prev.location.city).replace(/[^A-Za-z0-9\s]/g, ""),
+                        state: (state || prev.location.state).replace(/[^A-Za-z0-9\s]/g, ""),
+                        pincode: (pincode || prev.location.pincode).replace(/\D/g, "").slice(0, 6),
                         latitude: lat,
                         longitude: lng,
                       },
@@ -1049,13 +1080,13 @@ export default function AddRestaurant() {
         <div className="space-y-3">
           <Input
             value={step1.location?.area || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, area: e.target.value } })}
+            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, area: e.target.value.replace(/[^A-Za-z0-9\s]/g, "") } })}
             className="bg-white text-sm"
             placeholder="Area / Sector / Locality*"
           />
           <Input
             value={step1.location?.city || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, city: e.target.value } })}
+            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, city: e.target.value.replace(/[^A-Za-z0-9\s]/g, "") } })}
             className="bg-white text-sm"
             placeholder="City*"
           />
@@ -1073,15 +1104,17 @@ export default function AddRestaurant() {
           />
           <Input
             value={step1.location?.state || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, state: e.target.value } })}
+            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, state: e.target.value.replace(/[^A-Za-z0-9\s]/g, "") } })}
             className="bg-white text-sm"
             placeholder="State (optional)"
           />
           <Input
             value={step1.location?.pincode || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, pincode: e.target.value } })}
+            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) } })}
             className="bg-white text-sm"
             placeholder="Pin code (optional)"
+            inputMode="numeric"
+            maxLength={6}
           />
           <Input
             value={step1.location?.landmark || ""}
@@ -1260,10 +1293,10 @@ export default function AddRestaurant() {
           <Label className="text-xs text-gray-700">Estimated delivery time*</Label>
           <Input
             value={step2.estimatedDeliveryTime || ""}
-            onChange={(e) => setStep2({ ...step2, estimatedDeliveryTime: e.target.value })}
+            onChange={(e) => setStep2({ ...step2, estimatedDeliveryTime: e.target.value.replace(/\D/g, "") })}
             autoComplete="off"
             className="mt-1 bg-white text-sm"
-            placeholder="e.g., 25-30 mins"
+            placeholder="e.g., 30 (digits only)"
           />
         </div>
 
