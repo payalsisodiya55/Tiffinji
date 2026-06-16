@@ -321,11 +321,15 @@ export default function BottomPopup({
                   e.stopPropagation()
                 }}
                 onTouchEnd={(e) => {
-                  // Handle touch end for mobile collapse toggle
+                  // Handle touch end — respect closeOnHandleClick prop (same as onClick)
                   debugLog('?? Handle touched, current collapsed:', isCollapsed)
                   e.stopPropagation()
                   e.preventDefault()
-                  handleCollapseToggle(e)
+                  if (closeOnHandleClick) {
+                    handleClose()
+                  } else {
+                    handleCollapseToggle(e)
+                  }
                 }}
                 onMouseDown={(e) => {
                   // Prevent drag when clicking handle
