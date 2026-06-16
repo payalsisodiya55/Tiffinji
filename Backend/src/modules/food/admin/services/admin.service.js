@@ -3350,7 +3350,7 @@ export async function approveRestaurant(id) {
             await notifyOwnersSafely(
                 [{ ownerType: 'RESTAURANT', ownerId: updated._id }],
                 {
-                    title: 'Congratulations! Ã°Å¸Å½â€°',
+                    title: 'Congratulations! 🎉',
                     body: `Your restaurant "${updated.restaurantName}" has been approved. You can now start receiving orders!`,
                     image: updated.profileImage || 'https://i.ibb.co/3m2Yh7r/Appzeto-Brand-Image.png',
                     data: {
@@ -3388,7 +3388,7 @@ export async function rejectRestaurant(id, reason) {
             await notifyOwnersSafely(
                 [{ ownerType: 'RESTAURANT', ownerId: updated._id }],
                 {
-                    title: 'Update on Registration Ã°Å¸â€œâ€¹',
+                    title: 'Update on Registration 📋',
                     body: `Your restaurant registration for "${updated.restaurantName}" has been rejected. Reason: ${reason || 'Incomplete documents'}.`,
                     image: 'https://i.ibb.co/3m2Yh7r/Appzeto-Brand-Image.png',
                     data: {
@@ -3513,7 +3513,7 @@ export async function createAdminOffer(body) {
             await notifyOwnersSafely(
                 [{ ownerType: 'RESTAURANT', ownerId: doc.restaurantId }],
                 {
-                    title: 'New Campaign Invitation! Ã°Å¸â€œÂ¢',
+                    title: 'New Campaign Invitation! 📢',
                     body: `You have been invited to join a new campaign: "${doc.couponCode}". Check it out now!`,
                     image: 'https://i.ibb.co/3m2Yh7r/Appzeto-Brand-Image.png',
                     data: {
@@ -3887,7 +3887,7 @@ export async function addDeliveryPartnerBonus(body, adminUser) {
         await notifyOwnerSafely(
             { ownerType: 'DELIVERY_PARTNER', ownerId: body.deliveryPartnerId },
             {
-                title: 'Bonus Credited! Ã°Å¸Å½Å ',
+                title: 'Bonus Credited! 🎊',
                 body: `You have received a bonus of \u20B9${body.amount}. ${body.reference || 'Great job!'}`,
                 image: 'https://i.ibb.co/3m2Yh7r/Appzeto-Brand-Image.png',
                 data: {
@@ -4244,7 +4244,7 @@ export async function creditEarningAddonHistory(historyId, notes) {
         await notifyOwnerSafely(
             { ownerType: 'DELIVERY_PARTNER', ownerId: doc.deliveryPartnerId },
             {
-                title: 'Incentive Credited! Ã°Å¸Å½Â¯',
+                title: 'Incentive Credited! 🎯',
                 body: `Your incentive for "${doc.offerId?.title || 'Earning Addon'}" has been approved and moved to your pocket.`,
                 image: 'https://i.ibb.co/3m2Yh7r/Appzeto-Brand-Image.png',
                 data: {
@@ -4276,7 +4276,7 @@ export async function cancelEarningAddonHistory(historyId, reason) {
         await notifyOwnerSafely(
             { ownerType: 'DELIVERY_PARTNER', ownerId: doc.deliveryPartnerId },
             {
-                title: 'Incentive Update Ã°Å¸â€œâ€¹',
+                title: 'Incentive Update 📋',
                 body: `Your incentive request for "${doc.offerId?.title || 'Earning Addon'}" was not approved. Reason: ${doc.cancelReason || 'Ineligible'}`,
                 image: 'https://i.ibb.co/3m2Yh7r/Appzeto-Brand-Image.png',
                 data: {
@@ -4482,7 +4482,7 @@ export async function approveDeliveryPartner(id) {
         await notifyOwnerSafely(
             { ownerType: 'DELIVERY_PARTNER', ownerId: partner._id },
             {
-                title: 'Welcome Aboard! Ã°Å¸Å¡Â²',
+                title: 'Welcome Aboard! 🚀',
                 body: `Your delivery partner application has been approved. You can now go online and start earning!`,
                 image: 'https://i.ibb.co/3m2Yh7r/Appzeto-Brand-Image.png',
                 data: {
@@ -4563,7 +4563,7 @@ export async function rejectDeliveryPartner(id, reason) {
             await notifyOwnerSafely(
                 { ownerType: 'DELIVERY_PARTNER', ownerId: updated._id },
                 {
-                    title: 'Onboarding Update Ã°Å¸â€œâ€¹',
+                    title: 'Onboarding Update 📋',
                     body: `Your application to join as a delivery partner was rejected. Reason: ${reason || 'Incomplete documents'}.`,
                     image: 'https://i.ibb.co/3m2Yh7r/Appzeto-Brand-Image.png',
                     data: {
