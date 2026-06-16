@@ -103,6 +103,25 @@ export default function AdminProfile() {
   };
 
   const handleInputChange = (field, value) => {
+    if (field === "name") {
+      // Allow only letters and spaces
+      if (!/^[a-zA-Z\s]*$/.test(value)) {
+        return;
+      }
+    }
+    if (field === "phone") {
+      // Allow only digits up to 10 digits
+      if (!/^\d*$/.test(value) || value.length > 10) {
+        return;
+      }
+    }
+    if (field === "email") {
+      // Disallow uppercase letters in email input
+      if (/[A-Z]/.test(value)) {
+        return;
+      }
+    }
+
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -161,6 +180,23 @@ export default function AdminProfile() {
     e.preventDefault();
     
     try {
+      if (!formData.name || !formData.name.trim()) {
+        toast.error("Name field is required");
+        return;
+      }
+      if (!/^[a-zA-Z\s]+$/.test(formData.name)) {
+        toast.error("Name can only contain alphabets and spaces");
+        return;
+      }
+      if (formData.email && /[A-Z]/.test(formData.email)) {
+        toast.error("Email cannot contain capital letters");
+        return;
+      }
+      if (formData.phone && formData.phone.length > 10) {
+        toast.error("Phone number cannot exceed 10 digits");
+        return;
+      }
+
       const currentPassword = String(passwordData.currentPassword || "").trim();
       const newPassword = String(passwordData.newPassword || "").trim();
       const confirmPassword = String(passwordData.confirmPassword || "").trim();
