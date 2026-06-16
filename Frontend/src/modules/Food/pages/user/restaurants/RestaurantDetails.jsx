@@ -504,6 +504,32 @@ function RestaurantDetailsContent() {
                   : []
           const normalizedRestaurantOffers = actualRestaurant?.restaurantOffers || apiRestaurant?.restaurantOffers || {}
 
+          let mappedCoupons = []
+          try {
+            const offersResponse = await restaurantAPI.getPublicOffers()
+            const allOffersList = offersResponse?.data?.data?.allOffers || offersResponse?.data?.allOffers || []
+            const currentRestaurantId = actualRestaurant?.restaurantId || actualRestaurant?._id || actualRestaurant?.id || apiRestaurant?.restaurantId || apiRestaurant?._id || null
+
+            const filteredOffers = allOffersList.filter(o => 
+              o.restaurantScope === "all" || 
+              (o.restaurantId && String(o.restaurantId) === String(currentRestaurantId))
+            )
+
+            mappedCoupons = filteredOffers.map(o => ({
+              id: o.id || o.offerId,
+              title: o.title || `${o.discountValue}% OFF`,
+              code: o.couponCode,
+              description: o.minOrderValue ? `Min. order ₹${o.minOrderValue}` : "No minimum order",
+              discountType: o.discountType,
+              discountValue: o.discountValue,
+              minOrderValue: o.minOrderValue,
+              maxDiscount: o.maxDiscount,
+              showInCart: o.showInCart
+            }))
+          } catch (offersError) {
+            debugWarn('Error fetching public offers for restaurant details:', offersError)
+          }
+
           // Transform API data to match expected format with comprehensive fallbacks
           // Handle both dining restaurant and regular restaurant data structures
           const transformedRestaurant = {
@@ -534,9 +560,9 @@ function RestaurantDetailsContent() {
               || apiRestaurant?.image
               || null,
             priceRange: actualRestaurant?.priceRange || apiRestaurant?.priceRange || onboardingStep4?.priceRange || "$$",
-            offers: Array.isArray(actualRestaurant?.offers) ? actualRestaurant.offers : (Array.isArray(apiRestaurant?.offers) ? apiRestaurant.offers : []), // Will be populated from menu/offers API later
-            offerText: actualRestaurant?.offer || apiRestaurant?.offer || onboardingStep4?.offer || "FLAT 50% OFF",
-            offerCount: actualRestaurant?.offerCount || apiRestaurant?.offerCount || 0,
+            offers: mappedCoupons.length > 0 ? mappedCoupons : (Array.isArray(actualRestaurant?.offers) ? actualRestaurant.offers : (Array.isArray(apiRestaurant?.offers) ? apiRestaurant.offers : [])),
+            offerText: mappedCoupons.length > 0 ? mappedCoupons[0].title : (actualRestaurant?.offer || apiRestaurant?.offer || onboardingStep4?.offer || "FLAT 50% OFF"),
+            offerCount: mappedCoupons.length > 0 ? mappedCoupons.length : (actualRestaurant?.offerCount || apiRestaurant?.offerCount || 0),
             restaurantOffers: {
               goldOffer: {
                 title: normalizedRestaurantOffers?.goldOffer?.title || "Gold exclusive offer",
@@ -544,9 +570,7 @@ function RestaurantDetailsContent() {
                 unlockText: normalizedRestaurantOffers?.goldOffer?.unlockText || "join Gold to unlock",
                 buttonText: apiRestaurant?.restaurantOffers?.goldOffer?.buttonText || "Add Gold - ₹1",
               },
-              coupons: Array.isArray(normalizedRestaurantOffers?.coupons)
-                ? normalizedRestaurantOffers.coupons
-                : [],
+              coupons: mappedCoupons.length > 0 ? mappedCoupons : (Array.isArray(normalizedRestaurantOffers?.coupons) ? normalizedRestaurantOffers.coupons : []),
             },
             outlets: Array.isArray(actualRestaurant?.outlets) ? actualRestaurant.outlets : (Array.isArray(apiRestaurant?.outlets) ? apiRestaurant.outlets : []),
             categories: Array.isArray(actualRestaurant?.categories) ? actualRestaurant.categories : (Array.isArray(apiRestaurant?.categories) ? apiRestaurant.categories : []),
@@ -2044,49 +2068,49 @@ function RestaurantDetailsContent() {
     }
   }, [restaurant, targetDishId])
 
-  // Highlight offers/texts for the blue offer line
-  const highlightOffers = [
-    "Upto 50% OFF",
-    restaurant?.offerText || "",
-    ...(Array.isArray(restaurant?.offers) ? restaurant.offers.map((offer) => offer?.title || "") : []),
-  ]
-  const rotatingOffers = highlightOffers
-    .map((offer) => String(offer || "").trim())
-    .filter(Boolean)
-  const offersForDisplay = rotatingOffers.length > 0 ? rotatingOffers : ["Offers available"]
-  const activeOfferText = offersForDisplay[highlightIndex % offersForDisplay.length]
-  const offerIndicatorCount = Math.min(offersForDisplay.length, 5)
-  const activeOfferIndicator = offerIndicatorCount > 0 ? highlightIndex % offerIndicatorCount : 0
-  const primaryOffer = Array.isArray(restaurant?.offers) && restaurant.offers.length > 0
-    ? restaurant.offers[0]
-    : null
-  const offerHeadline = primaryOffer?.title || restaurant?.offerText || activeOfferText
-  const offerSubline =
-    primaryOffer?.description ||
-    primaryOffer?.subtitle ||
-    (primaryOffer?.code ? `Use ${primaryOffer.code}` : "Tap to view all offers")
+  // Highlight offers/texts for the offer line
+  const activeOffersList = Array.isArray(restaurant?.offers) && restaurant.offers.length > 0
+    ? restaurant.offers
+    : []
+
+  const offerIndicatorCount = activeOffersList.length > 0 ? activeOffersList.length : 1
+  const activeOfferIndex = activeOffersList.length > 0 ? (highlightIndex % activeOffersList.length) : 0
+  const activeOfferIndicator = activeOfferIndex
+
+  const currentOffer = activeOffersList.length > 0 ? activeOffersList[activeOfferIndex] : null
+
+  const offerHeadline = currentOffer
+    ? currentOffer.title
+    : (restaurant?.offerText || "FLAT 50% OFF")
+
+  const offerSubline = currentOffer
+    ? (currentOffer.description || (currentOffer.code ? `Use code ${currentOffer.code}` : "Tap to view all offers"))
+    : "Tap to view all offers"
 
   // Auto-rotate images every 3 seconds
   useEffect(() => {
     const interval = setInterval(() => {
       setCurrentImageIndex((prev) => {
-        const offersLength = Array.isArray(restaurant?.offers) && restaurant.offers.length > 0
-          ? restaurant.offers.length
+        const offersLength = activeOffersList.length > 0
+          ? activeOffersList.length
           : 1
         return (prev + 1) % offersLength
       })
     }, 3000)
     return () => clearInterval(interval)
-  }, [restaurant?.offers?.length || 0])
+  }, [activeOffersList.length])
 
   // Auto-rotate highlight offer text every 2 seconds
   useEffect(() => {
     const interval = setInterval(() => {
-      setHighlightIndex((prev) => (prev + 1) % highlightOffers.length)
+      setHighlightIndex((prev) => {
+        const offersLength = activeOffersList.length > 0 ? activeOffersList.length : 1
+        return (prev + 1) % offersLength
+      })
     }, 2000)
 
     return () => clearInterval(interval)
-  }, [highlightOffers.length])
+  }, [activeOffersList.length])
 
   // Render a single dish card with layout and performance optimizations
   const renderDishCard = (item, isRecommendedSection) => {
@@ -2498,7 +2522,7 @@ function RestaurantDetailsContent() {
               <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400">
                 <Percent className="h-5 w-5" />
               </div>
-              <div className="min-w-0 flex-1">
+              <div className={`min-w-0 flex-1 ${activeOffersList.length === 1 ? "animate-pulse" : ""}`}>
                 <div className="relative h-5 overflow-hidden">
                   <AnimatePresence mode="wait">
                     <motion.span
@@ -2525,16 +2549,18 @@ function RestaurantDetailsContent() {
                 </span>
               </div>
             </div>
-            <div className="mt-3 flex items-center gap-1.5">
-              {Array.from({ length: offerIndicatorCount }).map((_, index) => (
-                <span
-                  key={`offer-dot-${index}`}
-                  className={`h-1.5 w-1.5 rounded-full ${
-                    index === activeOfferIndicator ? "bg-orange-500" : "bg-gray-200 dark:bg-gray-700"
-                  }`}
-                />
-              ))}
-            </div>
+            {offerIndicatorCount > 1 && (
+              <div className="mt-3 flex items-center gap-1.5">
+                {Array.from({ length: offerIndicatorCount }).map((_, index) => (
+                  <span
+                    key={`offer-dot-${index}`}
+                    className={`h-1.5 w-1.5 rounded-full ${
+                      index === activeOfferIndicator ? "bg-orange-500" : "bg-gray-200 dark:bg-gray-700"
+                    }`}
+                  />
+                ))}
+              </div>
+            )}
           </button>
 
           {/* Filter/Category Buttons */}
@@ -3784,35 +3810,6 @@ function RestaurantDetailsContent() {
 
                   {/* Scrollable Content */}
                   <div className="flex-1 overflow-y-auto px-4 py-4">
-                    {/* Gold Exclusive Offer Section */}
-                    {restaurant?.restaurantOffers?.goldOffer && (
-                      <div className="mb-6">
-                        <h3 className="text-sm font-semibold text-gray-900 dark:text-white mb-3">
-                          {restaurant.restaurantOffers.goldOffer?.title || "Gold exclusive offer"}
-                        </h3>
-                        <div className="bg-gray-50 dark:bg-gray-800 rounded-lg p-4 flex items-start justify-between gap-4 border border-gray-100 dark:border-gray-700 shadow-md">
-                          <div className="flex items-start gap-3 flex-1">
-                            <Lock className="h-5 w-5 text-yellow-600 dark:text-yellow-500 flex-shrink-0 mt-0.5" />
-                            <div className="flex-1">
-                              <p className="text-sm font-medium text-gray-900 dark:text-white mb-1">
-                                {restaurant.restaurantOffers.goldOffer?.description || "Free delivery above ₹99"}
-                              </p>
-                              <p className="text-xs text-gray-500 dark:text-gray-400">
-                                {restaurant.restaurantOffers.goldOffer?.unlockText || "join Gold to unlock"}
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            className="bg-red-500 hover:bg-red-600 text-white text-sm px-4 py-2 rounded-lg whitespace-nowrap"
-                            onClick={() => {
-                              // Handle add gold
-                            }}
-                          >
-                            {restaurant.restaurantOffers.goldOffer?.buttonText || "Add Gold - ₹1"}
-                          </Button>
-                        </div>
-                      </div>
-                    )}
 
                     {/* Restaurant Coupons Section */}
                     {restaurant?.restaurantOffers?.coupons && Array.isArray(restaurant.restaurantOffers.coupons) && restaurant.restaurantOffers.coupons.length > 0 && (
@@ -3854,12 +3851,13 @@ function RestaurantDetailsContent() {
                                   </div>
                                   <div className="flex items-center gap-2">
                                     <button
-                                      className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium rounded"
+                                      className="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs font-medium rounded hover:bg-gray-200 dark:hover:bg-gray-750 transition-colors"
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         // Copy code to clipboard
                                         if (coupon?.code) {
                                           navigator.clipboard.writeText(coupon.code)
+                                          toast.success(`Coupon code "${coupon.code}" copied to clipboard!`)
                                         }
                                       }}
                                     >
@@ -3873,9 +3871,19 @@ function RestaurantDetailsContent() {
                                 </button>
                                 {isExpanded && (
                                   <div className="px-4 pb-4 pt-2 border-t border-gray-100 dark:border-gray-800">
-                                    <p className="text-xs text-gray-600 dark:text-gray-400">
-                                      Terms and conditions apply
+                                    <p className="text-xs text-gray-600 dark:text-gray-400 mb-1 font-semibold">
+                                      {coupon?.description || "Terms and conditions apply"}
                                     </p>
+                                    {coupon?.minOrderValue > 0 && (
+                                      <p className="text-[11px] text-gray-500">
+                                        • Minimum order value of ₹{coupon.minOrderValue} required.
+                                      </p>
+                                    )}
+                                    {coupon?.maxDiscount > 0 && (
+                                      <p className="text-[11px] text-gray-500">
+                                        • Maximum discount up to ₹{coupon.maxDiscount}.
+                                      </p>
+                                    )}
                                   </div>
                                 )}
                               </div>
