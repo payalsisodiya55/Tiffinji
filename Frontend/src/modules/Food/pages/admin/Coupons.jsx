@@ -81,6 +81,15 @@ export default function Coupons() {
     fetchRestaurants()
   }, [])
 
+  useEffect(() => {
+    if (submitSuccess) {
+      const timer = setTimeout(() => {
+        setSubmitSuccess("")
+      }, 3000)
+      return () => clearTimeout(timer)
+    }
+  }, [submitSuccess])
+
   const todayYMD = () => {
     const d = new Date()
     const m = String(d.getMonth() + 1).padStart(2, "0")
@@ -226,6 +235,9 @@ export default function Coupons() {
       setSubmitSuccess("Coupon created successfully")
       resetForm()
       await fetchOffers()
+      setTimeout(() => {
+        setSubmitSuccess("")
+      }, 3000)
     } catch (err) {
       debugError("Error creating coupon:", err)
       setSubmitError(err?.response?.data?.message || "Failed to create coupon")

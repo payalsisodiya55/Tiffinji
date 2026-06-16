@@ -10,6 +10,24 @@ const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
 
+const formatDateTime = (dateString) => {
+  if (!dateString) return "N/A"
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) return "N/A"
+    return date.toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true
+    }).toUpperCase()
+  } catch (_) {
+    return "N/A"
+  }
+}
+
 export default function RestaurantReviews() {
   const [searchQuery, setSearchQuery] = useState("")
   const [reviews, setReviews] = useState([])
