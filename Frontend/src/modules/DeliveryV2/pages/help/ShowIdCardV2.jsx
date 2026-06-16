@@ -151,7 +151,7 @@ export default function ShowIdCardV2() {
         </div>
 
         {/* Main White Content Area */}
-        <div className="bg-white min-h-[calc(100vh-10rem)] relative pt-20 px-6 pb-12">
+        <div className="bg-white min-h-[calc(100vh-10rem)] relative pt-24 px-6 pb-12">
           <div className="flex flex-col items-center text-center">
             {/* Brand Name */}
             <p className="text-xs font-black uppercase tracking-[0.3em] text-orange-500 mb-2">{companyName}</p>
