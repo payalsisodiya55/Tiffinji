@@ -127,9 +127,9 @@
 .delivery-v2-theme .bg-blue-500\/10,
 .delivery-v2-theme .bg-cyan-500\/10,
 .delivery-v2-theme .bg-indigo-500\/10,
-.delivery-v2-theme [class*="bg-orange-50"],
-.delivery-v2-theme [class*="bg-green-50"],
-.delivery-v2-theme [class*="bg-emerald-50"] {
+.delivery-v2-theme [class*="bg-orange-50/"],
+.delivery-v2-theme [class*="bg-green-50/"],
+.delivery-v2-theme [class*="bg-emerald-50/"] {
   background-color: var(--dv-primary-soft) !important;
 }
 
