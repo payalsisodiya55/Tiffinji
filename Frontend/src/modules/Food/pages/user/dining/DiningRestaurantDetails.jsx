@@ -539,13 +539,6 @@ export default function DiningRestaurantDetails() {
           <h2 className="text-[28px] font-black leading-none text-[#23180f] dark:text-slate-100">About the restaurant</h2>
           <div className="mt-4 rounded-[18px] border border-[#ececf4] dark:border-slate-800 bg-[#fafbff] dark:bg-slate-900 p-4 transition-colors">
             <div className="space-y-4 text-[14px] text-[#5f6474] dark:text-slate-400">
-              {cuisines && (
-                <div className="flex items-start gap-3">
-                  <div className="mt-[7px] h-2 w-2 shrink-0 rounded-full bg-[#8a8f9d]" />
-                  <p>{cuisines}</p>
-                </div>
-              )}
-
               <div className="flex items-start gap-3">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#7e3866]" />
                 <p>{address}</p>
