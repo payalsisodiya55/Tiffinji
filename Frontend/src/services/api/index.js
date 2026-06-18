@@ -600,6 +600,12 @@ export const adminAPI = {
   },
 };
 
+/** Single in-flight + short cache for restaurant /food/restaurant/current - prevents request storms. */
+let restaurantCurrentInFlight = null;
+let restaurantCurrentCached = null;
+let restaurantCurrentCacheTime = 0;
+const RESTAURANT_CURRENT_CACHE_MS = 3000;
+
 /** Restaurant API - OTP login via new backend; no email/password. */
 export const restaurantAPI = {
   sendOTP: (phone, _purpose = "login") => {
@@ -613,7 +619,7 @@ export const restaurantAPI = {
   },
   getMe: () => authService.getMe("restaurant"),
   /** Restaurant dashboard: fetch current restaurant profile (deduped + short-cached). */
-  getCurrentRestaurant: () => getRestaurantCurrentOnce(),
+  getCurrentRestaurant: (force = false) => getRestaurantCurrentOnce(force),
   /** Finance dashboard for `hub-finance`. */
   getFinance: (params = {}) =>
     restaurantClient.get("/food/restaurant/finance", { params: params || {} }),
@@ -791,7 +797,7 @@ export const restaurantAPI = {
   getOutletTimings: () =>
     restaurantClient.get("/food/restaurant/outlet-timings"),
   saveOutletTimings: (outletTimings) =>
-    restaurantClient.post(
+    restaurantClient.put(
       "/food/restaurant/outlet-timings",
       { outletTimings: outletTimings || {} }
     ),
@@ -1163,13 +1169,12 @@ const getPublicRestaurantOutletTimingsOnce = (id, config = {}) => {
   );
 };
 
-/** Single in-flight + short cache for restaurant /food/restaurant/current - prevents request storms. */
-let restaurantCurrentInFlight = null;
-let restaurantCurrentCached = null;
-let restaurantCurrentCacheTime = 0;
-const RESTAURANT_CURRENT_CACHE_MS = 3000;
-
-const getRestaurantCurrentOnce = () => {
+const getRestaurantCurrentOnce = (force = false) => {
+  if (force) {
+    restaurantCurrentCached = null;
+    restaurantCurrentCacheTime = 0;
+    restaurantCurrentInFlight = null;
+  }
   const now = Date.now();
   if (
     restaurantCurrentCached &&

@@ -32,6 +32,10 @@ const diningRestaurantSchema = new mongoose.Schema(
             type: Boolean,
             required: true,
             default: false
+        },
+        mealSessions: {
+            type: [String],
+            default: []
         }
     },
     {

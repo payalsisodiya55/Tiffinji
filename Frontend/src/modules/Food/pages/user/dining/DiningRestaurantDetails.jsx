@@ -6,6 +6,7 @@ import { restaurantAPI, diningAPI } from "@food/api"
 import { useProfile } from "@food/context/ProfileContext"
 import { getMenuFromResponse } from "@food/utils/menuItems"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
+import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 import {
     ArrowLeft,
     Bookmark,
@@ -53,16 +54,23 @@ const buildImageList = (restaurant) => {
 const buildFacilities = (restaurant) => {
   const facilities = []
 
-  if (restaurant?.diningSettings?.tableBookingEnabled !== false) facilities.push("Dinner")
-  if (restaurant?.isAcceptingOrders !== false) facilities.push("Lunch")
+  const sessions = restaurant?.diningSettings?.mealSessions
+  if (Array.isArray(sessions) && sessions.length > 0) {
+    if (sessions.includes("breakfast")) facilities.push("Breakfast")
+    if (sessions.includes("lunch")) facilities.push("Lunch")
+    if (sessions.includes("dinner")) facilities.push("Dinner")
+  } else {
+    // fallback: show both lunch + dinner if sessions not set
+    facilities.push("Lunch")
+    facilities.push("Dinner")
+  }
+
   if (restaurant?.diningSettings?.homeDeliveryAvailable || restaurant?.homeDeliveryAvailable) facilities.push("Home delivery")
   if (restaurant?.diningSettings?.takeawayAvailable || restaurant?.takeawayAvailable) facilities.push("Takeaway available")
   if (restaurant?.diningSettings?.vegOnly || restaurant?.vegOnly) facilities.push("Vegetarian only")
   if (restaurant?.diningSettings?.lessNoisy || restaurant?.ambience === "quiet") facilities.push("Less noisy")
 
-  return facilities.length > 0
-    ? facilities
-    : ["Dinner", "Lunch", "Home delivery", "Takeaway available", "Vegetarian only", "Less noisy"]
+  return facilities
 }
 
 const buildFeaturedSections = (menuSections) =>
@@ -114,6 +122,17 @@ export default function DiningRestaurantDetails() {
   const [isFetchingBookings, setIsFetchingBookings] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [sharePayload, setSharePayload] = useState(null)
+  const [outletTimings, setOutletTimings] = useState({})
+
+  // Merge fetched outletTimings into restaurant so availability utility uses today's real timing
+  const restaurantWithTimings = restaurant
+    ? { ...restaurant, outletTimings }
+    : null
+
+  const availability = useMemo(
+    () => getRestaurantAvailabilityStatus(restaurantWithTimings),
+    [restaurant, outletTimings]
+  )
 
   const fetchRestaurantData = async () => {
     try {
@@ -148,6 +167,14 @@ export default function DiningRestaurantDetails() {
       setRestaurant(resolvedRestaurant)
       
       const restaurantId = resolvedRestaurant?._id || resolvedRestaurant?.id || slug
+      
+      // Fetch outlet timings to get today's actual opening/closing time
+      restaurantAPI.getOutletTimingsByRestaurantId(restaurantId)
+        .then((res) => {
+          const timings = res?.data?.data?.outletTimings || {}
+          setOutletTimings(timings)
+        })
+        .catch(() => {})
       
       // Fetch Occupied Seats for Availability Check
       setIsFetchingBookings(true)
@@ -210,17 +237,17 @@ export default function DiningRestaurantDetails() {
   const cuisines =
     Array.isArray(restaurant?.cuisines) && restaurant.cuisines.length > 0
       ? restaurant.cuisines.join(", ")
-      : "Asian, Italian, Continental, Chinese, North Indian, Desserts, Beverages, Coffee"
-  const costForTwo = restaurant?.costForTwo ? `${"\u20B9"}${restaurant.costForTwo} for two` : `${"\u20B9"}1900 for two`
+      : null
   const facilities = buildFacilities(restaurant)
   const rating = Number(restaurant?.rating || restaurant?.avgRating || 0).toFixed(1)
   const reviewCount = restaurant?.totalRatings || restaurant?.reviewCount || restaurant?.reviewsCount || 0
-  const openingTime = formatTimeLabel(restaurant?.openingTime || restaurant?.diningSettings?.openingTime || "12:00")
-  const closingTime = formatTimeLabel(restaurant?.closingTime || restaurant?.diningSettings?.closingTime || "23:59")
+
+  // Opening/closing time — availability already uses today's outletTimings (merged above)
+  const openingTime = formatTimeLabel(availability?.openingTime || restaurant?.openingTime || restaurant?.diningSettings?.openingTime || "12:00")
+  const closingTime = formatTimeLabel(availability?.closingTime || restaurant?.closingTime || restaurant?.diningSettings?.closingTime || "23:00")
+
   const isDiningEnabled = restaurant?.diningSettings?.isEnabled !== false
   const topTabs = [
-    { id: "prebook", label: "Pre-book offers", target: "restaurant-prebook" },
-    { id: "walkin", label: "Walk-in offers", target: "restaurant-prebook" },
     { id: "menu", label: "Menu", target: "restaurant-menu" },
     { id: "photos", label: "Photos", target: "restaurant-photos" },
     { id: "about", label: "About", target: "restaurant-about" },
@@ -371,14 +398,9 @@ export default function DiningRestaurantDetails() {
               <div className="min-w-0 flex-1">
                 <h1 className="text-[36px] font-black leading-none tracking-[-0.03em]">{restaurantName}</h1>
                 <p className="mt-2 max-w-[94%] text-[14px] leading-5 text-white/92">{address}</p>
-                <p className="mt-2 text-[14px] text-white/90">
-                  {costForTwo}
-                  <span className="mx-1.5 text-white/65">•</span>
-                  {cuisines}
-                </p>
                 <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-black/28 px-2.5 py-1 text-[13px] font-medium backdrop-blur-sm">
-                  <CheckCircle2 className="h-4 w-4 text-[#48d597]" />
-                  <span>Open now</span>
+                  <span className={`inline-block h-2 w-2 rounded-full ${availability?.isOpen ? "bg-[#48d597]" : "bg-rose-500"}`} />
+                  <span>{availability?.isOpen ? "Open now" : "Closed now"}</span>
                   <span className="text-white/70">|</span>
                   <span>{openingTime} to {closingTime}</span>
                 </div>
@@ -444,29 +466,7 @@ export default function DiningRestaurantDetails() {
       </div>
 
       <div className="mx-auto max-w-md px-4 pt-4">
-        <section id="restaurant-prebook">
-          <div>
-            <h2 className="text-[29px] font-black leading-none text-[#23180f] dark:text-slate-100">Pre-book offers</h2>
-            <p className="mt-1 text-[15px] text-[#7e3866] dark:text-purple-400">Limited slots with extra offers</p>
-          </div>
-
-          <div className="mt-3 overflow-hidden rounded-[18px] bg-[linear-gradient(135deg,#0f4a87,#0b2954_70%)] text-white shadow-[0_10px_26px_rgba(8,52,95,0.25)]">
-            <div className="flex items-start justify-between px-4 pb-3 pt-4">
-              <div>
-                <p className="text-[28px] font-black leading-none">Flat 50% OFF</p>
-                <p className="mt-2 text-[14px] text-white/80">Dining Carnival offer</p>
-              </div>
-              <button className="rounded-full bg-black/45 px-4 py-2 text-[13px] font-semibold text-white backdrop-blur-sm">
-                Book now
-              </button>
-            </div>
-            <div className="border-t border-white/10 px-4 py-2 text-center text-[12px] text-white/75">
-              3 slots available from 3:30 PM today
-            </div>
-          </div>
-        </section>
-
-        <section id="restaurant-menu" className="mt-5 border-t border-[#e8e8ef] dark:border-slate-800 pt-4">
+        <section id="restaurant-menu" className="pt-4">
           <div className="flex items-end justify-between gap-3">
             <div>
               <h2 className="text-[28px] font-black leading-none text-[#23180f] dark:text-slate-100">Menu</h2>
@@ -527,15 +527,12 @@ export default function DiningRestaurantDetails() {
           <h2 className="text-[28px] font-black leading-none text-[#23180f] dark:text-slate-100">About the restaurant</h2>
           <div className="mt-4 rounded-[18px] border border-[#ececf4] dark:border-slate-800 bg-[#fafbff] dark:bg-slate-900 p-4 transition-colors">
             <div className="space-y-4 text-[14px] text-[#5f6474] dark:text-slate-400">
-              <div className="flex items-start gap-3">
-                <IndianRupee className="mt-0.5 h-4 w-4 shrink-0 text-[#f0b500]" />
-                <p>{costForTwo}</p>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <div className="mt-[7px] h-2 w-2 shrink-0 rounded-full bg-[#8a8f9d]" />
-                <p>{cuisines}</p>
-              </div>
+              {cuisines && (
+                <div className="flex items-start gap-3">
+                  <div className="mt-[7px] h-2 w-2 shrink-0 rounded-full bg-[#8a8f9d]" />
+                  <p>{cuisines}</p>
+                </div>
+              )}
 
               <div className="flex items-start gap-3">
                 <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#7e3866]" />

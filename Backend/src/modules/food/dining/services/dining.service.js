@@ -7,6 +7,7 @@ import { FoodDiningRequest } from '../models/diningRequest.model.js';
 import { FoodDiningBooking } from '../models/diningBooking.model.js';
 import { notifyOwnerSafely } from '../../../../core/notifications/firebase.service.js';
 import { createInboxNotifications } from '../../../../core/notifications/notification.service.js';
+import { invalidateCache } from '../../../../middleware/cache.js';
 
 const slugify = (value) =>
     String(value || '')
@@ -36,7 +37,8 @@ async function syncRestaurantDiningSettings(restaurantId, diningDoc) {
                 diningSettings: {
                     isEnabled: Boolean(diningDoc?.isEnabled),
                     maxGuests: Math.max(1, Number(diningDoc?.maxGuests) || 6),
-                    diningType: Array.isArray(diningDoc?.diningType) ? diningDoc.diningType : (primaryCategory?.slug ? [primaryCategory.slug] : ['family-dining'])
+                    diningType: Array.isArray(diningDoc?.diningType) ? diningDoc.diningType : (primaryCategory?.slug ? [primaryCategory.slug] : ['family-dining']),
+                    mealSessions: Array.isArray(diningDoc?.mealSessions) ? diningDoc.mealSessions : []
                 }
             }
         },
@@ -139,7 +141,8 @@ function mapDiningRestaurant(restaurant, diningDoc, categoriesById) {
             isEnabled: Boolean(diningDoc?.isEnabled),
             maxGuests: Math.max(1, Number(diningDoc?.maxGuests) || 6),
             pureVegRestaurant: diningDoc?.pureVegRestaurant === true || restaurant?.pureVegRestaurant === true,
-            diningType: primaryCategory?.slug || restaurant?.diningSettings?.diningType || ''
+            diningType: primaryCategory?.slug || restaurant?.diningSettings?.diningType || '',
+            mealSessions: Array.isArray(diningDoc?.mealSessions) ? diningDoc.mealSessions : (restaurant?.diningSettings?.mealSessions || [])
         }
     };
 }
@@ -291,6 +294,9 @@ export async function updateDiningRestaurant(restaurantId, body = {}) {
     if (body.isEnabled !== undefined) {
         diningDoc.isEnabled = body.isEnabled === true;
     }
+    if (body.mealSessions !== undefined) {
+        diningDoc.mealSessions = Array.isArray(body.mealSessions) ? body.mealSessions : [];
+    }
     if (body.maxGuests !== undefined) {
         diningDoc.maxGuests = Math.max(1, parseInt(body.maxGuests, 10) || 6);
     }
@@ -398,7 +404,8 @@ export async function listDiningRestaurantsPublic(query = {}) {
                 isEnabled: true,
                 maxGuests: Math.max(1, Number(doc.maxGuests) || 6),
                 pureVegRestaurant: doc.pureVegRestaurant === true || doc.restaurantId?.pureVegRestaurant === true,
-                diningType: doc.categoryIds?.[0]?.slug || doc.restaurantId?.diningSettings?.diningType || ''
+                diningType: doc.categoryIds?.[0]?.slug || doc.restaurantId?.diningSettings?.diningType || '',
+                mealSessions: Array.isArray(doc.mealSessions) ? doc.mealSessions : (doc.restaurantId?.diningSettings?.mealSessions || [])
             }
         }));
 }
@@ -436,7 +443,8 @@ export async function createDiningRequest(restaurantId, settings = {}) {
         requestedSettings: {
             isEnabled: Boolean(settings.isEnabled),
             maxGuests: parseInt(settings.maxGuests, 10) >= 0 ? parseInt(settings.maxGuests, 10) : 6,
-            diningType: diningType
+            diningType: diningType,
+            mealSessions: Array.isArray(settings.mealSessions) ? settings.mealSessions : []
         }
     });
 
@@ -504,7 +512,8 @@ export async function approveDiningRequest(requestId) {
                 isEnabled: request.requestedSettings.isEnabled,
                 maxGuests: request.requestedSettings.maxGuests,
                 categoryIds: categoryIds,
-                primaryCategoryId: categoryIds[0] || null
+                primaryCategoryId: categoryIds[0] || null,
+                mealSessions: Array.isArray(request.requestedSettings.mealSessions) ? request.requestedSettings.mealSessions : []
             }
         },
         { upsert: true }
@@ -518,7 +527,8 @@ export async function approveDiningRequest(requestId) {
                 diningSettings: {
                     isEnabled: request.requestedSettings.isEnabled,
                     maxGuests: request.requestedSettings.maxGuests,
-                    diningType: finalDiningType
+                    diningType: finalDiningType,
+                    mealSessions: Array.isArray(request.requestedSettings.mealSessions) ? request.requestedSettings.mealSessions : []
                 }
             }
         }
@@ -526,6 +536,13 @@ export async function approveDiningRequest(requestId) {
 
     request.status = 'approved';
     await request.save();
+
+    try {
+        await invalidateCache('restaurants:*');
+        await invalidateCache('restaurant_detail:*');
+    } catch (cacheErr) {
+        console.error('Failed to invalidate cache on dining settings approval:', cacheErr);
+    }
 
     return request.toObject();
 }

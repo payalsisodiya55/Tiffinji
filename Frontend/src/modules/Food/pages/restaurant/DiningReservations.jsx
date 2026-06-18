@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { useNavigate } from "react-router-dom"
 import useRestaurantBackNavigation from "@food/hooks/useRestaurantBackNavigation"
-import { Calendar, Clock, Users, Search, MessageSquare, CheckCircle2, Clock4, UploadCloud, ImagePlus, ChevronDown, ChevronUp, Sparkles, MapPin, Phone, Info, X, ArrowLeft } from "lucide-react"
+import { Calendar, Clock, Users, Search, MessageSquare, CheckCircle2, Clock4, UploadCloud, ImagePlus, ChevronDown, ChevronUp, Sparkles, MapPin, Phone, Info, X, ArrowLeft, UtensilsCrossed } from "lucide-react"
 import { diningAPI, restaurantAPI } from "@food/api"
 import Loader from "@food/components/Loader"
 import { Badge } from "@food/components/ui/badge"
@@ -99,6 +99,7 @@ export default function DiningReservations() {
     const [availableCategories, setAvailableCategories] = useState([])
     const [pendingRequest, setPendingRequest] = useState(null)
     const [fetchingRequest, setFetchingRequest] = useState(true)
+    const [mealSessions, setMealSessions] = useState([])
 
     const syncRestaurantMediaState = (restaurantData) => {
         setRestaurant(restaurantData || null)
@@ -112,6 +113,9 @@ export default function DiningReservations() {
         
         const rawDiningType = restaurantData?.diningSettings?.diningType
         setDiningType(Array.isArray(rawDiningType) ? rawDiningType : (rawDiningType ? [rawDiningType].filter(Boolean) : []))
+
+        const rawMealSessions = restaurantData?.diningSettings?.mealSessions
+        setMealSessions(Array.isArray(rawMealSessions) ? rawMealSessions : [])
     }
 
     useEffect(() => {
@@ -119,7 +123,7 @@ export default function DiningReservations() {
             try {
                 if (!isPoll) setLoading(true)
 
-                const resResponse = await restaurantAPI.getCurrentRestaurant()
+                const resResponse = await restaurantAPI.getCurrentRestaurant(!isPoll)
                 if (resResponse.data.success) {
                     const resData = getRestaurantFromResponse(resResponse)
                     const restaurantId = resData?._id || resData?.id
@@ -143,7 +147,7 @@ export default function DiningReservations() {
                         const newPendingRequest = requestRes.data.success && requestRes.data.data ? requestRes.data.data : null
 
                         if (pendingRequest && !newPendingRequest) {
-                            const updatedRes = await restaurantAPI.getCurrentRestaurant()
+                            const updatedRes = await restaurantAPI.getCurrentRestaurant(true)
                             const updatedData = getRestaurantFromResponse(updatedRes)
                             
                             // Simple check: if isEnabled matches what we requested, it was likely approved
@@ -166,6 +170,8 @@ export default function DiningReservations() {
                             setMaxGuestsLimit(newPendingRequest.requestedSettings.maxGuests)
                             const reqType = newPendingRequest.requestedSettings.diningType
                             setDiningType(Array.isArray(reqType) ? reqType : (reqType ? [reqType] : []))
+                            const reqMealSessions = newPendingRequest.requestedSettings.mealSessions
+                            setMealSessions(Array.isArray(reqMealSessions) ? reqMealSessions : [])
                         }
                     }
                 }
@@ -197,7 +203,7 @@ export default function DiningReservations() {
 
         try {
             await restaurantAPI.uploadCoverImages(files)
-            const refreshedResponse = await restaurantAPI.getCurrentRestaurant()
+            const refreshedResponse = await restaurantAPI.getCurrentRestaurant(true)
             const refreshedRestaurant = getRestaurantFromResponse(refreshedResponse)
             syncRestaurantMediaState(refreshedRestaurant)
             setUploadMessage(`Uploaded ${files.length} restaurant photo(s) successfully.`)
@@ -220,7 +226,7 @@ export default function DiningReservations() {
 
         try {
             await restaurantAPI.uploadMenuImages(files)
-            const refreshedResponse = await restaurantAPI.getCurrentRestaurant()
+            const refreshedResponse = await restaurantAPI.getCurrentRestaurant(true)
             syncRestaurantMediaState(getRestaurantFromResponse(refreshedResponse))
             setUploadMessage(`Uploaded ${files.length} menu photo(s) successfully.`)
         } catch (error) {
@@ -257,7 +263,7 @@ export default function DiningReservations() {
             if (updatedRestaurant) {
                 syncRestaurantMediaState(updatedRestaurant)
             } else {
-                const refreshedResponse = await restaurantAPI.getCurrentRestaurant()
+                const refreshedResponse = await restaurantAPI.getCurrentRestaurant(true)
                 syncRestaurantMediaState(getRestaurantFromResponse(refreshedResponse))
             }
 
@@ -290,7 +296,7 @@ export default function DiningReservations() {
             if (updatedRestaurant) {
                 syncRestaurantMediaState(updatedRestaurant)
             } else {
-                const refreshedResponse = await restaurantAPI.getCurrentRestaurant()
+                const refreshedResponse = await restaurantAPI.getCurrentRestaurant(true)
                 syncRestaurantMediaState(getRestaurantFromResponse(refreshedResponse))
             }
 
@@ -312,6 +318,12 @@ export default function DiningReservations() {
             return
         }
 
+        if (!mealSessions || mealSessions.length === 0) {
+            setDiningSettingsError("Please select at least one meal session")
+            toast.error("Meal session is required")
+            return
+        }
+
         const nextMaxGuests = parseInt(maxGuestsLimit, 10) || 0
 
         if (diningEnabled && nextMaxGuests <= 0) {
@@ -324,6 +336,7 @@ export default function DiningReservations() {
             isEnabled: Boolean(diningEnabled),
             maxGuests: nextMaxGuests,
             diningType: Array.isArray(diningType) ? [...new Set(diningType)] : [diningType],
+            mealSessions: mealSessions,
         }
 
         setDiningSettingsError("")
@@ -798,6 +811,44 @@ export default function DiningReservations() {
                                         No categories available. Please contact support.
                                     </div>
                                 )}
+                            </div>
+                        </div>
+
+                        {/* Meal Sessions Selection */}
+                        <div className="mt-8 border-t border-slate-100 pt-6">
+                            <label className="block text-sm font-bold text-slate-900 mb-1">
+                                Meal sessions
+                            </label>
+                            <p className="text-sm text-slate-500 mb-4">
+                                Select what you offer for table reservations.
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                                {["Breakfast", "Lunch", "Dinner"].map((label) => {
+                                    const id = label.toLowerCase()
+                                    const isSelected = Array.isArray(mealSessions) && mealSessions.includes(id)
+                                    return (
+                                        <button
+                                            key={id}
+                                            type="button"
+                                            onClick={() => {
+                                                if (pendingRequest) return
+                                                if (isSelected) {
+                                                    setMealSessions(mealSessions.filter((s) => s !== id))
+                                                } else {
+                                                    setMealSessions([...mealSessions, id])
+                                                }
+                                            }}
+                                            disabled={!!pendingRequest}
+                                            className={`rounded-full px-5 py-2 text-sm font-semibold border transition-all ${
+                                                isSelected
+                                                    ? "bg-emerald-500 border-emerald-500 text-white"
+                                                    : "bg-white border-slate-200 text-slate-700 hover:border-slate-300"
+                                            } ${!!pendingRequest ? "cursor-not-allowed opacity-60" : "cursor-pointer"}`}
+                                        >
+                                            {label}
+                                        </button>
+                                    )
+                                })}
                             </div>
                         </div>
 

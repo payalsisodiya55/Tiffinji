@@ -10,7 +10,8 @@ const diningRequestSchema = new mongoose.Schema(
         requestedSettings: {
             isEnabled: { type: Boolean, required: true },
             maxGuests: { type: Number, required: true, min: 0 },
-            diningType: { type: [String], required: true }
+            diningType: { type: [String], required: true },
+            mealSessions: { type: [String], default: [] }
         },
         status: {
             type: String,

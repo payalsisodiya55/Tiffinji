@@ -180,7 +180,8 @@ const toRestaurantProfile = (doc) => {
         diningSettings: {
             isEnabled: doc.diningSettings?.isEnabled !== false,
             maxGuests: Math.max(1, parseInt(doc.diningSettings?.maxGuests, 10) || 6),
-            diningType: String(doc.diningSettings?.diningType || 'family-dining').trim() || 'family-dining'
+            diningType: String(doc.diningSettings?.diningType || 'family-dining').trim() || 'family-dining',
+            mealSessions: Array.isArray(doc.diningSettings?.mealSessions) ? doc.diningSettings.mealSessions : []
         },
         isAcceptingOrders: doc.isAcceptingOrders !== false,
         status: doc.status || null,
@@ -569,12 +570,18 @@ export const updateCurrentRestaurantDiningSettings = async (restaurantId, body =
         1,
         parseInt(body.maxGuests ?? currentDiningSettings.maxGuests ?? 6, 10) || 6
     );
-    const diningType =
-        String(body.diningType ?? currentDiningSettings.diningType ?? 'family-dining').trim() ||
-        'family-dining';
+    const diningType = Array.isArray(body.diningType)
+        ? body.diningType
+        : (body.diningType
+            ? [String(body.diningType).trim()].filter(Boolean)
+            : (Array.isArray(currentDiningSettings.diningType)
+                ? currentDiningSettings.diningType
+                : ['family-dining']));
 
     const isEnabled = parseBoolean(body.isEnabled, currentDiningSettings.isEnabled);
     
+    const mealSessions = Array.isArray(body.mealSessions) ? body.mealSessions : (currentDiningSettings.mealSessions || []);
+
     // First, update the FoodDiningRestaurant collection to keep it synced
     await FoodDiningRestaurant.findOneAndUpdate(
         { restaurantId },
@@ -582,6 +589,7 @@ export const updateCurrentRestaurantDiningSettings = async (restaurantId, body =
             $set: {
                 isEnabled,
                 maxGuests,
+                mealSessions,
             }
         },
         { upsert: true }
@@ -594,7 +602,8 @@ export const updateCurrentRestaurantDiningSettings = async (restaurantId, body =
                 diningSettings: {
                     isEnabled,
                     maxGuests,
-                    diningType
+                    diningType,
+                    mealSessions,
                 }
             }
         },

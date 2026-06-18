@@ -135,7 +135,7 @@ export default function DiningRequests() {
                                         </Badge>
                                     </div>
 
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-4 rounded-xl bg-slate-50 border border-slate-100">
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-6 p-4 rounded-xl bg-slate-50 border border-slate-100">
                                         <div className="space-y-1">
                                             <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Dining Status</p>
                                             <p className="font-semibold text-slate-900 flex items-center gap-2">
@@ -155,6 +155,16 @@ export default function DiningRequests() {
                                                     // Handle array or string by converting to string and splitting everything
                                                     const allSlugs = String(raw).split(",").map(s => s.trim())
                                                     return [...new Set(allSlugs)].filter(Boolean).join(", ")
+                                                })()}
+                                            </p>
+                                        </div>
+                                        <div className="space-y-1">
+                                            <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Requested Sessions</p>
+                                            <p className="font-semibold text-slate-900 capitalize">
+                                                {(() => {
+                                                    const sessions = request.requestedSettings?.mealSessions
+                                                    if (!sessions || !sessions.length) return "None"
+                                                    return sessions.join(", ")
                                                 })()}
                                             </p>
                                         </div>

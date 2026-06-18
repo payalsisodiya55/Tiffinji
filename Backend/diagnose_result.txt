@@ -1,0 +1,85 @@
+{
+  "requests": [
+    {
+      "_id": "6a328617571b172ba76a9d17",
+      "restaurantId": "69ba83b6f2a2e60a9ab85b93",
+      "requestedSettings": {
+        "isEnabled": true,
+        "maxGuests": 6,
+        "diningType": [
+          "cafes"
+        ],
+        "mealSessions": [
+          "lunch",
+          "dinner",
+          "breakfast"
+        ]
+      },
+      "status": "approved",
+      "rejectionReason": null,
+      "createdAt": "2026-06-17T11:33:43.835Z",
+      "updatedAt": "2026-06-17T11:34:06.350Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a327e987286da4ece9d3824",
+      "restaurantId": "69ba83b6f2a2e60a9ab85b93",
+      "requestedSettings": {
+        "isEnabled": true,
+        "maxGuests": 6,
+        "diningType": [
+          "cafes"
+        ],
+        "mealSessions": [
+          "lunch",
+          "dinner",
+          "breakfast"
+        ]
+      },
+      "status": "approved",
+      "rejectionReason": null,
+      "createdAt": "2026-06-17T11:01:44.178Z",
+      "updatedAt": "2026-06-17T11:01:58.138Z",
+      "__v": 0
+    },
+    {
+      "_id": "6a327e6a7286da4ece9d37b1",
+      "restaurantId": "69ba83b6f2a2e60a9ab85b93",
+      "requestedSettings": {
+        "isEnabled": true,
+        "maxGuests": 6,
+        "diningType": [
+          "cafes"
+        ],
+        "mealSessions": [
+          "lunch",
+          "dinner",
+          "breakfast"
+        ]
+      },
+      "status": "approved",
+      "rejectionReason": null,
+      "createdAt": "2026-06-17T11:00:58.253Z",
+      "updatedAt": "2026-06-17T11:01:31.896Z",
+      "__v": 0
+    }
+  ],
+  "restaurants": [
+    {
+      "_id": "69ba83b6f2a2e60a9ab85b93",
+      "restaurantName": "Raddison",
+      "diningSettings": {
+        "isEnabled": true,
+        "maxGuests": 6,
+        "diningType": [
+          "cafes"
+        ],
+        "mealSessions": [
+          "lunch",
+          "dinner",
+          "breakfast"
+        ]
+      }
+    }
+  ]
+}
