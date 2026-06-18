@@ -1134,6 +1134,12 @@ export default function Cart() {
   // Restaurant name from data or cart
   const restaurantName = restaurantData?.name || cart[0]?.restaurant || "Restaurant"
 
+  // Check if the restaurant is currently open
+  const restaurantIsOpen = useMemo(() => {
+    if (!restaurantData) return true // Assume open while loading
+    return getRestaurantAvailabilityStatus(restaurantData)?.isOpen !== false
+  }, [restaurantData])
+
   const handleShare = async () => {
     const restaurantNameStr = restaurantName || companyName || "this restaurant"
     const shareUrl = window.location.href
@@ -1495,6 +1501,12 @@ export default function Cart() {
 
 
   const handlePlaceOrder = async () => {
+    // Block ordering from closed restaurants
+    if (!restaurantIsOpen) {
+      toast.error(`${restaurantName} is currently closed. Please try again later.`)
+      return
+    }
+
     if (!hasSavedAddress) {
       toast.error("Please choose a delivery location to continue")
       openLocationSelector()
@@ -2112,6 +2124,25 @@ export default function Cart() {
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden pb-44 md:pb-52">
+        {/* Restaurant Closed Warning */}
+        {!restaurantIsOpen && (
+          <div className="bg-red-100 dark:bg-red-900/30 px-4 md:px-6 py-3 md:py-4 flex-shrink-0 border-b border-red-200 dark:border-red-800">
+            <div className="max-w-7xl mx-auto flex items-center gap-3">
+              <div className="w-8 h-8 md:w-10 md:h-10 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0">
+                <Clock className="h-4 w-4 md:h-5 md:w-5 text-white" />
+              </div>
+              <div>
+                <p className="text-sm md:text-base font-bold text-red-800 dark:text-red-200">
+                  {restaurantName} is currently closed
+                </p>
+                <p className="text-xs md:text-sm text-red-600 dark:text-red-300">
+                  This restaurant is not accepting orders right now. Please try again later.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Savings Banner */}
         {savings > 0 && (
           <div className="bg-blue-100 dark:bg-blue-900/20 px-4 md:px-6 py-2 md:py-3 flex-shrink-0">
@@ -2869,21 +2900,23 @@ export default function Cart() {
             {/* Place Order Button */}
             <button
               onClick={handlePlaceOrder}
-              disabled={isPlacingOrder || (selectedPaymentMethod === "wallet" && walletBalance < total)}
-              className="w-full bg-gradient-to-r from-[#D51F10] to-[#9C120A] hover:from-[#9C120A] hover:to-[#1E0301] text-white px-6 h-12 md:h-14 rounded-2xl font-bold shadow-lg shadow-[#D51F10]/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]"
+              disabled={isPlacingOrder || !restaurantIsOpen || (selectedPaymentMethod === "wallet" && walletBalance < total)}
+              className={`w-full px-6 h-12 md:h-14 rounded-2xl font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98] ${!restaurantIsOpen ? 'bg-gray-400 shadow-gray-400/30 cursor-not-allowed' : 'bg-gradient-to-r from-[#D51F10] to-[#9C120A] hover:from-[#9C120A] hover:to-[#1E0301] shadow-[#D51F10]/30'} text-white`}
             >
-              {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
+              {!restaurantIsOpen ? null : (selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
                 <div className="text-left flex flex-col justify-center border-r-[1.5px] border-white/20 pr-4">
                   <span className="text-xs md:text-sm font-semibold text-white/90">{RUPEE_SYMBOL}{total.toFixed(2)}</span>
                   <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-wider text-white/80 mt-[-2px]">Total</span>
                 </div>
               )}
               <div className="flex items-center gap-1 mx-auto text-sm md:text-lg tracking-wide">
-                {isPlacingOrder
-                  ? "Processing..."
-                  : !hasSavedAddress
-                    ? "Select Address"
-                    : "Place Order"}
+                {!restaurantIsOpen
+                  ? "Restaurant Closed"
+                  : isPlacingOrder
+                    ? "Processing..."
+                    : !hasSavedAddress
+                      ? "Select Address"
+                      : "Place Order"}
                 <div className="flex align-center h-full">
                   <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
                 </div>

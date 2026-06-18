@@ -11,9 +11,10 @@ import { useSearchOverlay, useLocationSelector } from "@food/components/user/Use
 import { useLocation as useLocationHook } from "@food/hooks/useLocation"
 import { useZone } from "@food/hooks/useZone"
 import { useProfile } from "@food/context/ProfileContext"
-import { diningAPI } from "@food/api"
+import { diningAPI, restaurantAPI } from "@food/api"
 import PageNavbar from "@food/components/user/PageNavbar"
 import OptimizedImage from "@food/components/OptimizedImage"
+import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -216,9 +217,25 @@ export default function Dining() {
               .filter(Boolean)
           : []
 
+        const rawRests = rests?.data?.success ? (rests.data.data || []) : []
+        const enrichedRests = await Promise.all(
+          rawRests.map(async (rest) => {
+            const restId = rest._id || rest.id
+            if (!restId) return rest
+            try {
+              const outletResponse = await restaurantAPI.getOutletTimingsByRestaurantId(restId, { noCache: true })
+              const outletTimings = outletResponse?.data?.data?.outletTimings || outletResponse?.data?.outletTimings || null
+              if (outletTimings) {
+                return { ...rest, outletTimings }
+              }
+            } catch (_) {}
+            return rest
+          })
+        )
+
         setDiningHeroBanners(heroBanners)
         setCategories(cats?.data?.success ? (cats.data.data || []) : [])
-        setRestaurantList(rests?.data?.success ? (rests.data.data || []) : [])
+        setRestaurantList(enrichedRests)
       } catch (error) {
         debugError("Failed to fetch dining data", error)
         setDiningHeroBanners([])
@@ -308,6 +325,7 @@ export default function Dining() {
             return uniqueTypes[0] || "family-dining"
           })(),
           isEnabled: restaurant?.diningSettings?.isEnabled === true,
+          isOpen: getRestaurantAvailabilityStatus(restaurant)?.isOpen !== false,
         }
       })
   }, [restaurantList, location])
@@ -872,7 +890,10 @@ export default function Dining() {
                       state={{ restaurant }}
                       className="h-full flex rounded-[22px]"
                     >
-                      <Card className="overflow-hidden gap-0 space-y-0 cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-500 py-0 rounded-[22px] h-full flex flex-col w-full relative">
+                      <Card 
+                        className={`overflow-hidden gap-0 space-y-0 cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-500 py-0 rounded-[22px] h-full flex flex-col w-full relative ${!restaurant.isEnabled || !restaurant.isOpen ? "grayscale opacity-75" : ""}`}
+                        style={{ filter: (!restaurant.isEnabled || !restaurant.isOpen) ? 'grayscale(100%)' : 'none', opacity: (!restaurant.isEnabled || !restaurant.isOpen) ? 0.75 : 1 }}
+                      >
                         {/* Image Section */}
                         <div className="relative h-44 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full flex-shrink-0">
                           <motion.div
@@ -1023,14 +1044,18 @@ export default function Dining() {
                                 <Badge 
                                     variant="outline" 
                                     className={`px-2 py-0 h-5 text-[10px] uppercase font-bold tracking-wider ${
-                                        restaurant.isEnabled 
-                                            ? "bg-green-50 text-green-700 border-green-200" 
-                                            : "bg-plum-50 text-plum-700 border-plum-100"
+                                        !restaurant.isEnabled
+                                            ? "bg-plum-50 text-plum-700 border-plum-100"
+                                            : !restaurant.isOpen
+                                                ? "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
+                                                : "bg-green-50 text-green-700 border-green-200"
                                     }`}
                                 >
-                                    {restaurant.isEnabled ? "ON" : "OFF"}
+                                    {!restaurant.isEnabled ? "OFF" : !restaurant.isOpen ? "CLOSED" : "ON"}
                                 </Badge>
-                                <span className="text-[13px] font-bold text-slate-700">Pre-book table</span>
+                                <span className="text-[13px] font-bold text-slate-700 dark:text-slate-300">
+                                    {!restaurant.isEnabled ? "Dining paused" : !restaurant.isOpen ? "Closed" : "Pre-book table"}
+                                </span>
                             </div>
 
                           </CardContent>
@@ -1111,7 +1136,10 @@ export default function Dining() {
                       state={{ restaurant }}
                       className="h-full flex rounded-[22px]"
                     >
-                      <Card className="overflow-hidden gap-0 space-y-0 cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-500 py-0 rounded-[22px] h-full flex flex-col w-full relative">
+                      <Card 
+                        className={`overflow-hidden gap-0 space-y-0 cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-500 py-0 rounded-[22px] h-full flex flex-col w-full relative ${!restaurant.isEnabled || !restaurant.isOpen ? "grayscale opacity-75" : ""}`}
+                        style={{ filter: (!restaurant.isEnabled || !restaurant.isOpen) ? 'grayscale(100%)' : 'none', opacity: (!restaurant.isEnabled || !restaurant.isOpen) ? 0.75 : 1 }}
+                      >
                         {/* Image Section */}
                         <div className="relative h-44 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full flex-shrink-0">
                           <motion.div
@@ -1231,17 +1259,21 @@ export default function Dining() {
 
                             {/* Pre-book Table Promo (If applicable) */}
                             <div className="flex items-center gap-2">
-                              <Badge 
+                                <Badge 
                                     variant="outline" 
                                     className={`px-2 py-0 h-5 text-[10px] uppercase font-bold tracking-wider ${
-                                        restaurant.isEnabled 
-                                            ? "bg-green-50 text-green-700 border-green-200" 
-                                            : "bg-plum-50 text-plum-700 border-plum-100"
+                                        !restaurant.isEnabled
+                                            ? "bg-plum-50 text-plum-700 border-plum-100"
+                                            : !restaurant.isOpen
+                                                ? "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
+                                                : "bg-green-50 text-green-700 border-green-200"
                                     }`}
                                 >
-                                    {restaurant.isEnabled ? "ON" : "OFF"}
+                                    {!restaurant.isEnabled ? "OFF" : !restaurant.isOpen ? "CLOSED" : "ON"}
                                 </Badge>
-                              <span className="text-sm font-bold text-gray-600 dark:text-gray-400">Pre-book table</span>
+                                <span className="text-sm font-bold text-gray-600 dark:text-gray-400">
+                                    {!restaurant.isEnabled ? "Dining paused" : !restaurant.isOpen ? "Closed" : "Pre-book table"}
+                                </span>
                             </div>
                           </CardContent>
                         </motion.div>

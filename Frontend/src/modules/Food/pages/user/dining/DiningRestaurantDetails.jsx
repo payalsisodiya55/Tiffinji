@@ -247,6 +247,8 @@ export default function DiningRestaurantDetails() {
   const closingTime = formatTimeLabel(availability?.closingTime || restaurant?.closingTime || restaurant?.diningSettings?.closingTime || "23:00")
 
   const isDiningEnabled = restaurant?.diningSettings?.isEnabled !== false
+  const isCurrentlyOpen = availability?.isOpen !== false
+  const canBookTable = isDiningEnabled && isCurrentlyOpen
   const topTabs = [
     { id: "menu", label: "Menu", target: "restaurant-menu" },
     { id: "photos", label: "Photos", target: "restaurant-photos" },
@@ -355,7 +357,7 @@ export default function DiningRestaurantDetails() {
   }
 
   const handleContinueBooking = () => {
-    if (!isDiningEnabled) return
+    if (!canBookTable) return
     setIsBookingSheetOpen(false)
     navigate(`/food/user/dining/book/${slug}`, {
       state: {
@@ -420,24 +422,34 @@ export default function DiningRestaurantDetails() {
           <div className="px-3 pb-1 pt-3">
             <div className="w-full">
               <button
-                onClick={() => isDiningEnabled && setIsBookingSheetOpen(true)}
-                disabled={!isDiningEnabled}
+                onClick={() => canBookTable && setIsBookingSheetOpen(true)}
+                disabled={!canBookTable}
                 className={`flex h-[52px] w-full items-center justify-center gap-2 rounded-full border px-3 text-[15px] font-medium shadow-[0_10px_24px_rgba(15,23,42,0.05)] transition-all ${
-                  isDiningEnabled
+                  canBookTable
                     ? "border-[#f1ebee] dark:border-slate-800 bg-white dark:bg-slate-900 text-[#2b2118] dark:text-slate-100"
                     : "cursor-not-allowed border-[#f2d7da] dark:border-red-900/30 bg-[#fff5f6] dark:bg-red-950/20 text-[#c06a79] opacity-80"
                 }`}
               >
               <Ticket className="h-[15px] w-[15px] text-[#7e3866]" />
-              <span>{isDiningEnabled ? "Book a table" : "Dining paused"}</span>
+              <span>
+                {canBookTable 
+                  ? "Book a table" 
+                  : !isDiningEnabled 
+                    ? "Dining paused" 
+                    : "Closed now"}
+              </span>
               </button>
             </div>
 
-            {!isDiningEnabled && (
+            {!isDiningEnabled ? (
               <div className="mt-3 rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
                 Dining bookings are currently turned off by the restaurant.
               </div>
-            )}
+            ) : !isCurrentlyOpen ? (
+              <div className="mt-3 rounded-[18px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
+                This restaurant is currently closed and not accepting bookings.
+              </div>
+            ) : null}
 
         </div>
       </section>
@@ -574,15 +586,19 @@ export default function DiningRestaurantDetails() {
       <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#ebe5da] dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 p-4 backdrop-blur-xl transition-colors">
         <div className="mx-auto max-w-md">
           <Button
-            onClick={() => isDiningEnabled && setIsBookingSheetOpen(true)}
-            disabled={!isDiningEnabled}
+            onClick={() => canBookTable && setIsBookingSheetOpen(true)}
+            disabled={!canBookTable}
             className={`h-12 w-full rounded-2xl border text-[17px] font-medium transition-all ${
-              isDiningEnabled
+              canBookTable
                 ? "border-[#b18da5] bg-white dark:bg-slate-900 text-[#7e3866] dark:text-purple-400 hover:bg-[#fdfafc] dark:hover:bg-slate-800"
                 : "cursor-not-allowed border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-gray-400 dark:text-slate-600 opacity-80"
             }`}
           >
-            {isDiningEnabled ? "Book a table" : "Dining paused"}
+            {canBookTable 
+              ? "Book a table" 
+              : !isDiningEnabled 
+                ? "Dining paused" 
+                : "Closed now"}
           </Button>
         </div>
       </div>

@@ -437,6 +437,15 @@ export default function Under250() {
                   ? formatDistance(restaurant.distance)
                   : (restaurant?.distance || "")
 
+              // Fetch outlet timings to determine accurate open/closed state
+              let outletTimings = null
+              try {
+                const outletResponse = await restaurantAPI.getOutletTimingsByRestaurantId(restaurantId, { noCache: true })
+                outletTimings = outletResponse?.data?.data?.outletTimings || outletResponse?.data?.outletTimings || null
+              } catch (_) {}
+
+              const restaurantWithTimings = outletTimings ? { ...restaurant, outletTimings } : restaurant
+
               return {
                 id: String(restaurantId),
                 restaurantId: String(restaurantId),
@@ -453,7 +462,7 @@ export default function Under250() {
                   (deliveryMinutes ? `${deliveryMinutes} mins` : "30 mins"),
                 distance: distanceInKm !== null ? formatDistance(distanceInKm) : fallbackDistance,
                 distanceInKm,
-                isOpen: getRestaurantAvailabilityStatus(restaurant, new Date(), { ignoreOperationalStatus: true }).isOpen,
+                isOpen: getRestaurantAvailabilityStatus(restaurantWithTimings).isOpen,
                 originalIndex: index,
                 menuItems,
               }
@@ -651,6 +660,12 @@ export default function Under250() {
     // CRITICAL: Check if user is in service zone
     if (isOutOfService) {
       toast.error('You are outside the service zone. Please select a location within the service area.')
+      return
+    }
+
+    // Check if restaurant is open/online
+    if (item.isOpen === false) {
+      toast.error("Cannot add item. The restaurant is closed or offline.")
       return
     }
 
@@ -1044,7 +1059,11 @@ export default function Under250() {
           sortedAndFilteredRestaurants.map((restaurant) => {
             const restaurantSlug = restaurant.slug || restaurant.name.toLowerCase().replace(/\s+/g, "-")
             return (
-              <section key={restaurant.id} className="pt-4 sm:pt-6 md:pt-8 lg:pt-10">
+              <section 
+                key={restaurant.id} 
+                className={`pt-4 sm:pt-6 md:pt-8 lg:pt-10 ${!restaurant.isOpen ? "grayscale opacity-75" : ""}`}
+                style={{ filter: !restaurant.isOpen ? 'grayscale(100%)' : 'none', opacity: !restaurant.isOpen ? 0.75 : 1 }}
+              >
                 {/* Restaurant Header */}
                 <div className="flex items-start justify-between mb-3 md:mb-4 lg:mb-6">
                   <div className="flex-1">

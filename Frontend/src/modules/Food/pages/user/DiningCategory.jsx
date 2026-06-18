@@ -9,7 +9,7 @@ import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { useLocation as useLocationHook } from "@food/hooks/useLocation"
 import { useProfile } from "@food/context/ProfileContext"
 import { FaLocationDot } from "react-icons/fa6"
-import { diningAPI } from "@food/api"
+import { diningAPI, restaurantAPI } from "@food/api"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 
 const slugifyRestaurant = (value) =>
@@ -71,7 +71,23 @@ export default function DiningCategory() {
         )
 
         if (response?.data?.success) {
-          const mapped = (Array.isArray(response.data.data) ? response.data.data : []).map((restaurant) => {
+          const rawData = Array.isArray(response.data.data) ? response.data.data : []
+          const enrichedData = await Promise.all(
+            rawData.map(async (rest) => {
+              const restId = rest._id || rest.id
+              if (!restId) return rest
+              try {
+                const outletResponse = await restaurantAPI.getOutletTimingsByRestaurantId(restId, { noCache: true })
+                const outletTimings = outletResponse?.data?.data?.outletTimings || outletResponse?.data?.outletTimings || null
+                if (outletTimings) {
+                  return { ...rest, outletTimings }
+                }
+              } catch (_) {}
+              return rest
+            })
+          )
+
+          const mapped = enrichedData.map((restaurant) => {
             const availability = getRestaurantAvailabilityStatus(restaurant)
             return {
               id: restaurant._id || restaurant.id,
@@ -94,6 +110,7 @@ export default function DiningCategory() {
               featuredDish: restaurant.featuredDish || "Chef's special",
               featuredPrice: restaurant.featuredPrice || null,
               availability,
+              isEnabled: restaurant.diningSettings?.isEnabled === true,
             }
           })
           setRestaurants(mapped)
@@ -202,7 +219,10 @@ export default function DiningCategory() {
                   to={`/food/user/dining/${category}/${restaurant.slug}`}
                   state={{ restaurant }}
                 >
-                  <Card className="group overflow-hidden rounded-[30px] border border-[#f0dfca] bg-white py-0 shadow-[0_18px_60px_rgba(17,24,39,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_80px_rgba(17,24,39,0.14)] dark:border-gray-800 dark:bg-[#141414] dark:shadow-[0_18px_60px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+                  <Card 
+                    className={`group overflow-hidden rounded-[30px] border border-[#f0dfca] bg-white py-0 shadow-[0_18px_60px_rgba(17,24,39,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_80px_rgba(17,24,39,0.14)] dark:border-gray-800 dark:bg-[#141414] dark:shadow-[0_18px_60px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_24px_80px_rgba(0,0,0,0.45)] ${!restaurant.isEnabled || !restaurant.availability?.isOpen ? "grayscale opacity-75" : ""}`}
+                    style={{ filter: (!restaurant.isEnabled || !restaurant.availability?.isOpen) ? 'grayscale(100%)' : 'none', opacity: (!restaurant.isEnabled || !restaurant.availability?.isOpen) ? 0.75 : 1 }}
+                  >
                     <div className="relative h-64 overflow-hidden">
                       <img
                         src={restaurant.image}
