@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useSearchParams } from "react-router-dom"
 import { Phone, ArrowRight, ShieldCheck, Loader2, Utensils, Star, Heart, ShieldQuestion } from "lucide-react"
 import { toast } from "sonner"
 import { authAPI, userAPI } from "@food/api"
@@ -31,7 +31,11 @@ export default function UnifiedOTPFastLogin() {
   const [tempAuth, setTempAuth] = useState(null)
   const [pendingVerify, setPendingVerify] = useState(null)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const submitting = useRef(false)
+
+  // Capture referral code from URL (e.g. ?ref=<userId>)
+  const referralCode = String(searchParams.get("ref") || "").trim() || null
 
   const normalizedPhone = () => {
     const digits = String(phoneNumber).replace(/\D/g, "")
@@ -138,7 +142,7 @@ export default function UnifiedOTPFastLogin() {
         console.warn("Failed to get FCM token during login", e);
       }
 
-      const response = await authAPI.verifyOTP(phoneNumber, otpDigits, "login", null, null, "user", null, null, fcmToken, platform)
+      const response = await authAPI.verifyOTP(phoneNumber, otpDigits, "login", null, null, "user", null, referralCode, fcmToken, platform)
       const data = response?.data?.data || response?.data || {}
       const accessToken = data.accessToken
       const refreshToken = data.refreshToken || null
@@ -195,7 +199,7 @@ export default function UnifiedOTPFastLogin() {
           null,
           "user",
           null,
-          null,
+          referralCode,
           pendingVerify.fcmToken,
           pendingVerify.platform,
         )

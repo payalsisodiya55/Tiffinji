@@ -11,6 +11,8 @@ const referralLogSchema = new mongoose.Schema(
             index: true
         },
         rewardAmount: { type: Number, required: true, min: 0, default: 0 },
+        referrerRewardAmount: { type: Number, min: 0, default: 0 },
+        refereeRewardAmount: { type: Number, min: 0, default: 0 },
         status: {
             type: String,
             enum: ['pending', 'credited', 'rejected'],
@@ -26,5 +28,5 @@ const referralLogSchema = new mongoose.Schema(
 referralLogSchema.index({ refereeId: 1, role: 1 }, { unique: true });
 referralLogSchema.index({ referrerId: 1, role: 1, createdAt: -1 });
 
-export const FoodReferralLog = mongoose.model('FoodReferralLog', referralLogSchema);
+export const FoodReferralLog = mongoose.model('FoodReferralLog', referralLogSchema, 'food_referral_logs');
 

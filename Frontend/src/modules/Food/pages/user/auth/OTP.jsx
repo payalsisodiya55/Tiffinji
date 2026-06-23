@@ -5,7 +5,7 @@ import { Link } from "react-router-dom"
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import { Input } from "@food/components/ui/input"
 import { Button } from "@food/components/ui/button"
-import { authAPI, userAPI } from "@food/api"
+import { authAPI } from "@food/api"
 import { setAuthData as setUserAuthData } from "@food/utils/auth"
 
 export default function OTP() {
@@ -303,20 +303,40 @@ export default function OTP() {
     setNameError("")
 
     try {
-      const response = await userAPI.updateProfile({ name: trimmedName })
+      const phone = authData?.method === "phone" ? authData.phone : null
+      const email = authData?.method === "email" ? authData.email : null
+      const purpose = authData?.isSignUp ? "register" : "login"
+      const referralCode = authData?.referralCode || null
+
+      // Second call with name to auto-register and login
+      const response = await authAPI.verifyOTP(
+        phone,
+        verifiedOtp,
+        purpose,
+        trimmedName,
+        email,
+        "user",
+        null,
+        referralCode,
+        deviceToken,
+        activePlatform
+      )
       const data = response?.data?.data || response?.data || {}
-      const user = data.user || data
 
-      const accessToken = localStorage.getItem("user_accessToken")
-      const refreshToken = localStorage.getItem("user_refreshToken")
+      const accessToken = data.accessToken
+      const refreshToken = data.refreshToken ?? null
+      const user = data.user
 
-      if (!accessToken) {
-        throw new Error("Authentication data is missing")
+      if (!accessToken || !user) {
+        throw new Error("Invalid response from server")
+      }
+      if (!refreshToken) {
+        throw new Error("Invalid response from server: missing refresh token")
       }
 
-      setUserAuthData("user", accessToken, user, refreshToken)
-
       sessionStorage.removeItem("userAuthData")
+
+      setUserAuthData("user", accessToken, user, refreshToken)
 
       window.dispatchEvent(new Event("userAuthChanged"))
 
