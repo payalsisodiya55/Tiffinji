@@ -295,26 +295,8 @@ export default function Wallet() {
                   ))}
                 </div>
               ) : (
-                <div className="py-12 md:py-16 lg:py-20 xl:py-24">
-                  <div className="space-y-3 md:space-y-4 mb-6 md:mb-8 max-w-2xl mx-auto">
-                    {[1, 2, 3].map((i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-3 md:gap-4 bg-gray-100 dark:bg-gray-800 rounded-xl px-4 md:px-5 lg:px-6 py-3 md:py-4"
-                        style={{
-                          opacity: 0.3 + i * 0.15,
-                        }}
-                      >
-                        <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-200 dark:bg-gray-700 rounded-lg flex-shrink-0" />
-                        <div className="flex-1 space-y-2">
-                          <div className="h-3 md:h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
-                          <div className="h-2 md:h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <p className="text-gray-600 dark:text-gray-400 text-sm md:text-base lg:text-lg text-center font-medium">
+                <div className="py-12 md:py-16 lg:py-20 xl:py-24 text-center">
+                  <p className="text-gray-600 dark:text-gray-400 text-sm md:text-base lg:text-lg font-medium">
                     Your transactions will appear here
                   </p>
                 </div>
