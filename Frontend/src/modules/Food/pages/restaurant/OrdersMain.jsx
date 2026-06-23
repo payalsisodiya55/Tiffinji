@@ -838,15 +838,7 @@ function AllOrders({ onSelectOrder, onCancel }) {
           <h2 className="text-base font-semibold text-black">All orders</h2>
           <span className="text-xs text-gray-500">({orders.length})</span>
         </div>
-        <button 
-          onClick={() => navigate('/food/restaurant/orders/all')}
-          className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1"
-        >
-          Full History
-          <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-          </svg>
-        </button>
+
       </div>
       {orders.length === 0 ? (
         <div className="text-center py-8 text-gray-500 text-sm">
@@ -1006,23 +998,7 @@ function ScheduledOrders({ onSelectOrder, refreshToken }) {
           <h2 className="text-base font-semibold text-black">Scheduled orders</h2>
           <span className="text-xs text-gray-500">({orders.length})</span>
         </div>
-        <button
-          onClick={() => navigate("/food/restaurant/orders/all")}
-          className="text-xs font-bold text-blue-600 hover:underline flex items-center gap-1">
-          Full History
-          <svg
-            className="w-3 h-3"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24">
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={3}
-              d="M9 5l7 7-7 7"
-            />
-          </svg>
-        </button>
+
       </div>
 
       {orders.length === 0 ? (

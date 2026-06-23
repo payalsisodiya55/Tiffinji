@@ -2561,19 +2561,27 @@ export default function Inventory() {
                               </div>
 
                               <div className="flex shrink-0 flex-col items-center gap-3 sm:gap-4">
-                                <button
+                                <motion.button
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleRecommendToggle(category.id, item.id)
                                   }}
-                                  className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-[14px] sm:rounded-2xl transition-all shadow-sm border ${
+                                  animate={item.isRecommended ? {
+                                    rotate: [0, 15, -10, 5, 0],
+                                    scale: [1, 1.2, 1.15, 1.1]
+                                  } : {
+                                    rotate: 0,
+                                    scale: 1
+                                  }}
+                                  transition={{ duration: 0.4 }}
+                                  className={`w-8 h-8 sm:w-10 sm:h-10 flex items-center justify-center rounded-[14px] sm:rounded-2xl transition-colors duration-300 shadow-sm border ${
                                     item.isRecommended
-                                      ? "bg-blue-600 border-blue-600 text-white rotate-12 scale-110"
+                                      ? "bg-blue-600 border-blue-600 text-white"
                                       : "bg-white border-slate-100 text-slate-300 hover:border-slate-200 hover:text-slate-600"
                                   }`}
                                 >
                                   <ThumbsUp className="w-4 h-4 sm:w-5 sm:h-5" />
-                                </button>
+                                </motion.button>
                                 
                                 <div
                                   onClick={(e) => e.stopPropagation()}
