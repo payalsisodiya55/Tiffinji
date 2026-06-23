@@ -4,7 +4,7 @@ import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { useProximityCheck } from '@/modules/DeliveryV2/hooks/useProximityCheck';
 import { useOrderManager } from '@/modules/DeliveryV2/hooks/useOrderManager';
 import { useDeliveryNotifications } from '@food/hooks/useDeliveryNotifications';
-import { writeOrderTracking } from '@food/realtimeTracking';
+import { writeOrderTracking, writeDeliveryLocation } from '@food/realtimeTracking';
 import { deliveryAPI } from '@food/api';
 import { toast } from 'sonner';
 
@@ -38,6 +38,7 @@ import {
   saveDeliveryNotifications, 
   markDeliveryNotificationAsRead 
 } from '@food/utils/deliveryNotifications';
+import { getCurrentUser } from '@food/utils/auth';
 
 /** Minimal bottom-sheet popup (Restored from legacy FeedNavbar) */
 function BottomPopup({ isOpen, onClose, title, children }) {
@@ -230,6 +231,21 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                   polyline: activePolyline,
                   status: tripStatus,
                   eta: eta // Publish live ETA to Firebase
+                }).catch(() => {});
+              }
+
+              // D. FIREBASE DELIVERY BOYS DB (Persistent Route for Admin Map)
+              const user = getCurrentUser('delivery');
+              const deliveryId = user?._id || user?.id;
+              if (deliveryId) {
+                writeDeliveryLocation({
+                  deliveryId,
+                  lat,
+                  lng,
+                  heading,
+                  isOnline: true,
+                  activeOrderId: activeOrder?.orderId || activeOrder?._id || null,
+                  timestamp: now
                 }).catch(() => {});
               }
             }
@@ -428,6 +444,22 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   // 2. Online/Offline Status Sync (Low Frequency)
   useEffect(() => {
     deliveryAPI.updateOnlineStatus(isOnline).catch(() => {});
+    
+    // Also sync with Firebase Realtime Database
+    const user = getCurrentUser('delivery');
+    const deliveryId = user?._id || user?.id;
+    if (deliveryId) {
+      const currentLoc = useDeliveryStore.getState().riderLocation || lastCoordRef.current || { lat: 22.7196, lng: 75.8577 };
+      writeDeliveryLocation({
+        deliveryId,
+        lat: currentLoc.lat || currentLoc.latitude || 22.7196,
+        lng: currentLoc.lng || currentLoc.longitude || 75.8577,
+        heading: currentLoc.heading || 0,
+        isOnline: Boolean(isOnline),
+        activeOrderId: activeOrder?.orderId || activeOrder?._id || null,
+        timestamp: Date.now()
+      }).catch(() => {});
+    }
   }, [isOnline]);
 
   // 3. Location logic (Smart Frequency Tracking)
@@ -508,6 +540,23 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
             eta: eta
           }).catch(() => {});
         }
+
+        // D. FIREBASE DELIVERY BOYS DB (Persistent Route for Admin Map)
+        const user = getCurrentUser('delivery');
+        const deliveryId = user?._id || user?.id;
+        if (deliveryId) {
+          writeDeliveryLocation({
+            deliveryId,
+            lat,
+            lng,
+            heading: heading || 0,
+            speed: speed || 0,
+            accuracy: pos.coords.accuracy,
+            isOnline: true,
+            activeOrderId: activeOrder?.orderId || activeOrder?._id || null,
+            timestamp: now
+          }).catch(() => {});
+        }
       }
     }, () => {
       // IF GPS FAILS/DENIED: Use Indore as a fallback for testing
@@ -517,6 +566,21 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         setRiderLocation(fallbackPos);
       }
       toast.error('GPS Blocked!', { description: 'Showing test location in Indore.' });
+
+      // Sync fallback to Firebase so they show up on admin map even if GPS is blocked
+      const user = getCurrentUser('delivery');
+      const deliveryId = user?._id || user?.id;
+      if (deliveryId) {
+        writeDeliveryLocation({
+          deliveryId,
+          lat: 22.7196,
+          lng: 75.8577,
+          heading: 0,
+          isOnline: true,
+          activeOrderId: activeOrder?.orderId || activeOrder?._id || null,
+          timestamp: Date.now()
+        }).catch(() => {});
+      }
     }, { 
       enableHighAccuracy: true,
       maximumAge: 3000,
@@ -536,19 +600,39 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     const pingInterval = setInterval(() => {
       const now = Date.now();
       // If no natural GPS update happened in the last 15 seconds, force a ping
-      if (now - lastLocationSentAt.current >= 15000 && lastCoordRef.current) {
+      if (now - lastLocationSentAt.current >= 15000) {
         lastLocationSentAt.current = now;
+        const currentLoc = useDeliveryStore.getState().riderLocation || lastCoordRef.current || { lat: 22.7196, lng: 75.8577 };
+        const latVal = currentLoc.lat || currentLoc.latitude || 22.7196;
+        const lngVal = currentLoc.lng || currentLoc.longitude || 75.8577;
+
         deliveryAPI.updateLocation(
-          lastCoordRef.current.lat, 
-          lastCoordRef.current.lng, 
+          latVal, 
+          lngVal, 
           true, 
-          { heading: 0, speed: 0, accuracy: null }
+          { heading: currentLoc.heading || 0, speed: 0, accuracy: null }
         ).catch(() => {});
+
+        // Also sync with Firebase Realtime Database for Admin Map
+        const user = getCurrentUser('delivery');
+        const deliveryId = user?._id || user?.id;
+        if (deliveryId) {
+          writeDeliveryLocation({
+            deliveryId,
+            lat: latVal,
+            lng: lngVal,
+            heading: currentLoc.heading || 0,
+            speed: 0,
+            isOnline: true,
+            activeOrderId: activeOrder?.orderId || activeOrder?._id || null,
+            timestamp: now
+          }).catch(() => {});
+        }
       }
     }, 10000); // Check every 10 seconds
     
     return () => clearInterval(pingInterval);
-  }, [isOnline]);
+  }, [isOnline, activeOrder]);
 
   useEffect(() => { if (newOrder) setIncomingOrder(newOrder); }, [newOrder]);
 

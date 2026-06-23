@@ -3781,7 +3781,11 @@ export async function getDeliveryPartners(query) {
         status: doc.status,
         totalOrders: countsMap.get(String(doc._id)) || 0,
         profilePhoto: doc.profilePhoto || null,
-        profileImage: doc.profilePhoto ? { url: doc.profilePhoto } : null
+        profileImage: doc.profilePhoto ? { url: doc.profilePhoto } : null,
+        lastLat: doc.lastLat || null,
+        lastLng: doc.lastLng || null,
+        lastLocationAt: doc.lastLocationAt || null,
+        availabilityStatus: doc.availabilityStatus || 'offline'
     }));
 
     return {

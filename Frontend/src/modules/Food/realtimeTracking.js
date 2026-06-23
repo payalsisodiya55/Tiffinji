@@ -1,5 +1,5 @@
 import { onValue, ref, set, update } from 'firebase/database';
-import { firebaseRealtimeDb, ensureFirebaseInitialized } from '@food/firebase';
+import { getFirebaseRealtimeDb, ensureFirebaseInitialized } from '@food/firebase';
 
 function sanitizeRealtimeKey(value) {
   return String(value || '').trim().replace(/[.#$/[\]]/g, '_');
@@ -28,8 +28,9 @@ export function subscribeOrderTracking(orderId, onChange, onError) {
   // getProjectConfig calls that can fail for API-key-restricted setups.
   ensureFirebaseInitialized({ enableAuth: false, enableRealtimeDb: true });
   const path = getOrderTrackingPath(orderId);
+  const db = getFirebaseRealtimeDb();
   const unsub = onValue(
-    ref(firebaseRealtimeDb, path),
+    ref(db, path),
     (snapshot) => {
       const data = snapshot.val();
       if (!data) return;
@@ -46,8 +47,9 @@ export function subscribeDeliveryLocation(deliveryId, onChange, onError) {
   if (!deliveryId || typeof onChange !== 'function') return () => {};
   ensureFirebaseInitialized({ enableAuth: false, enableRealtimeDb: true });
   const path = getDeliveryLocationPath(deliveryId);
+  const db = getFirebaseRealtimeDb();
   const unsub = onValue(
-    ref(firebaseRealtimeDb, path),
+    ref(db, path),
     (snapshot) => {
       const data = snapshot.val();
       if (!data) return;
@@ -63,10 +65,18 @@ export function subscribeDeliveryLocation(deliveryId, onChange, onError) {
 export function subscribeAllDeliveryLocations(onChange, onError) {
   if (typeof onChange !== 'function') return () => {};
   ensureFirebaseInitialized({ enableAuth: false, enableRealtimeDb: true });
-  const path = 'delivery';
+  const path = 'delivery_boys';
+  const db = getFirebaseRealtimeDb();
+  if (!db) {
+    console.error('[realtimeTracking] Firebase Realtime DB failed to initialize');
+    if (typeof onError === 'function') onError(new Error('Firebase Realtime DB not initialized'));
+    return () => {};
+  }
+  console.log('[realtimeTracking] Subscribing to path:', path, 'DB instance:', !!db);
   const unsub = onValue(
-    ref(firebaseRealtimeDb, path),
+    ref(db, path),
     (snapshot) => {
+      console.log('[realtimeTracking] Got snapshot, exists:', snapshot.exists(), 'keys:', Object.keys(snapshot.val() || {}));
       onChange(snapshot.val() || {}, path);
     },
     (error) => {
@@ -80,8 +90,9 @@ export function subscribeRestaurantLocation(restaurantId, onChange, onError) {
   if (!restaurantId || typeof onChange !== 'function') return () => {};
   ensureFirebaseInitialized({ enableAuth: false, enableRealtimeDb: true });
   const path = getRestaurantLocationPath(restaurantId);
+  const db = getFirebaseRealtimeDb();
   const unsub = onValue(
-    ref(firebaseRealtimeDb, path),
+    ref(db, path),
     (snapshot) => {
       const data = snapshot.val();
       if (!data) return;
@@ -118,7 +129,8 @@ export async function writeDeliveryLocation({
     isOnline: Boolean(isOnline),
     activeOrderId: activeOrderId ? String(activeOrderId) : null,
   };
-  await set(ref(firebaseRealtimeDb, getDeliveryLocationPath(deliveryId)), payload);
+  const db = getFirebaseRealtimeDb();
+  await set(ref(db, getDeliveryLocationPath(deliveryId)), payload);
   return true;
 }
 
@@ -140,6 +152,7 @@ export async function writeOrderTracking(orderId, payload = {}) {
   if (payload.timestamp != null) {
     toWrite.timestamp = toFiniteNumber(payload.timestamp) || Date.now();
   }
-  await update(ref(firebaseRealtimeDb, getOrderTrackingPath(orderId)), toWrite);
+  const db = getFirebaseRealtimeDb();
+  await update(ref(db, getOrderTrackingPath(orderId)), toWrite);
   return true;
 }

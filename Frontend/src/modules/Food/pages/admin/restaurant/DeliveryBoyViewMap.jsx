@@ -4,11 +4,10 @@ import { MapPin, ArrowLeft, Search, Bike } from "lucide-react"
 import { adminAPI } from "@food/api"
 import { getGoogleMapsApiKey } from "@food/utils/googleMapsApiKey"
 import { Loader } from "@googlemaps/js-api-loader"
-import { subscribeAllDeliveryLocations } from "@food/realtimeTracking"
-import bikeLogo from "@food/assets/bikelogo.png"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+import { subscribeDeliveryLocation } from "@food/realtimeTracking"
+const debugLog = (...args) => console.log('[DeliveryBoyViewMap]', ...args)
+const debugWarn = (...args) => console.warn('[DeliveryBoyViewMap]', ...args)
+const debugError = (...args) => console.error('[DeliveryBoyViewMap]', ...args)
 
 
 export default function DeliveryBoyViewMap() {
@@ -18,7 +17,13 @@ export default function DeliveryBoyViewMap() {
   const zonesPolygonsRef = useRef([])
   const infoWindowsRef = useRef([])
   const deliveryBoyMarkersRef = useRef([])
+  const markersMapRef = useRef(new Map()) // Cache/Ref for active markers on map
   const rotatedIconCacheRef = useRef(new Map()) // Cache for rotated bike icons
+  const directoryPartnersRef = useRef([])
+  const latestRealtimeNodeRef = useRef({})
+  const activeSubscriptionsRef = useRef(new Map()) // Maps deliveryId -> unsubscribe function
+  const riderImageRef = useRef(null) // Pre-loaded rider image
+  const hasFitBoundsRef = useRef(false)
   
   const [googleMapsApiKey, setGoogleMapsApiKey] = useState("")
   const [mapLoading, setMapLoading] = useState(true)
@@ -31,57 +36,43 @@ export default function DeliveryBoyViewMap() {
   const autocompleteRef = useRef(null)
 
   useEffect(() => {
+    // Pre-load rider image for marker rendering
+    const img = new Image()
+    img.src = "/MapRider.png"
+    img.onload = () => {
+      debugLog("Image /MapRider.png loaded successfully")
+      riderImageRef.current = img
+      if (mapInstanceRef.current && window.google) {
+        drawDeliveryBoyMarkers(window.google, mapInstanceRef.current).catch(err => {
+          debugError("Error redrawing markers on image load:", err)
+        })
+      }
+    }
+    img.onerror = (e) => {
+      debugError("Failed to load /MapRider.png image", e)
+    }
+
     fetchZones()
     fetchDeliveryPartnerDirectory()
     loadGoogleMaps()
 
-    const unsubscribeRealtime = subscribeAllDeliveryLocations(
-      (deliveryNode) => {
-        const nextDeliveryBoys = Object.entries(deliveryNode || {})
-          .map(([deliveryId, payload]) => {
-            const location = payload?.location || {}
-            const lat = Number(location?.lat)
-            const lng = Number(location?.lng)
-            const isOnline =
-              location?.isOnline === true ||
-              location?.status === "online" ||
-              location?.status === "busy"
-
-            if (!isOnline || !Number.isFinite(lat) || !Number.isFinite(lng)) {
-              return null
-            }
-
-            const meta = deliveryMetaByIdRef.current.get(String(deliveryId)) || {}
-
-            return {
-              _id: String(deliveryId),
-              name: meta.name || meta.fullName || "Delivery Partner",
-              phone: meta.phone || "N/A",
-              availability: {
-                isOnline: true,
-                currentLocation: {
-                  type: "Point",
-                  coordinates: [lng, lat],
-                  heading: Number(location?.heading) || 0,
-                  speed: Number(location?.speed) || 0,
-                  lastUpdate: Number(location?.timestamp || location?.last_updated) || Date.now()
-                },
-                lastLocationUpdate: Number(location?.timestamp || location?.last_updated) || Date.now()
-              }
-            }
-          })
-          .filter(Boolean)
-
-        setDeliveryBoys(nextDeliveryBoys)
-        setLoading(false)
-      },
-      (error) => {
-        debugError("Firebase delivery listener failed:", error)
-      }
-    )
+    // Periodically poll backend directory as a fallback for real-time updates when Firebase is blocked
+    const pollInterval = setInterval(() => {
+      fetchDeliveryPartnerDirectory()
+    }, 10000)
 
     return () => {
-      if (typeof unsubscribeRealtime === "function") unsubscribeRealtime()
+      clearInterval(pollInterval)
+      // Unsubscribe from all individual listeners
+      activeSubscriptionsRef.current.forEach(unsub => {
+        if (typeof unsub === "function") unsub()
+      })
+      activeSubscriptionsRef.current.clear()
+
+      markersMapRef.current.forEach(item => {
+        if (item.marker) item.marker.setMap(null)
+      })
+      markersMapRef.current.clear()
     }
   }, [])
 
@@ -106,20 +97,96 @@ export default function DeliveryBoyViewMap() {
     }
   }, [mapLoading])
 
-  // Draw zones and delivery boy markers when map and data are ready
+  // Draw zones when map and zones are ready (bounds fit only once)
+  useEffect(() => {
+    if (!mapLoading && mapInstanceRef.current && window.google && zones.length > 0) {
+      drawAllZonesOnMap(window.google, mapInstanceRef.current)
+    }
+  }, [zones, mapLoading])
+
+  // Draw delivery boy markers when map and deliveryBoys are ready
   useEffect(() => {
     if (!mapLoading && mapInstanceRef.current && window.google) {
-      if (zones.length > 0) {
-        drawAllZonesOnMap(window.google, mapInstanceRef.current)
-      }
-      if (deliveryBoys.length > 0) {
-        // drawDeliveryBoyMarkers is async, so handle it properly
-        drawDeliveryBoyMarkers(window.google, mapInstanceRef.current).catch(error => {
-          debugError("Error drawing delivery boy markers:", error)
+      drawDeliveryBoyMarkers(window.google, mapInstanceRef.current).catch(error => {
+        debugError("Error drawing delivery boy markers:", error)
+      })
+    }
+  }, [deliveryBoys, mapLoading])
+
+  const getMergedDeliveryBoys = (realtimeNode) => {
+    const nextMap = new Map()
+
+    // 1. Populate from MongoDB directory partners
+    const directoryList = directoryPartnersRef.current || []
+    directoryList.forEach(boy => {
+      const fullData = boy.fullData || boy
+      const boyId = boy._id || boy.id || boy.deliveryId || fullData?._id || fullData?.id || fullData?.deliveryId
+      if (!boyId) return
+
+      const idString = String(boyId)
+      const lat = Number(boy.lastLat ?? boy.location?.latitude ?? boy.location?.lat ?? fullData?.location?.latitude ?? fullData?.location?.lat ?? fullData?.lastLat)
+      const lng = Number(boy.lastLng ?? boy.location?.longitude ?? boy.location?.lng ?? fullData?.location?.longitude ?? fullData?.location?.lng ?? fullData?.lastLng)
+
+      const isOnlineStatus = boy.availabilityStatus === 'online' || fullData?.availabilityStatus === 'online'
+
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        nextMap.set(idString, {
+          _id: idString,
+          name: boy.name || fullData.name || "Delivery Partner",
+          phone: boy.phone || fullData.phone || "N/A",
+          availability: {
+            isOnline: isOnlineStatus, // Fallback to backend online status
+            currentLocation: {
+              type: "Point",
+              coordinates: [lng, lat],
+              heading: 0,
+              speed: 0,
+              lastUpdate: boy.lastLocationAt ? new Date(boy.lastLocationAt).getTime() : null
+            },
+            lastLocationUpdate: boy.lastLocationAt ? new Date(boy.lastLocationAt).getTime() : null
+          }
         })
       }
-    }
-  }, [zones, mapLoading, deliveryBoys])
+    })
+
+    // 2. Overwrite / merge with real-time Firebase coordinates
+    Object.entries(realtimeNode || {}).forEach(([deliveryId, payload]) => {
+      const idString = String(deliveryId)
+      const location = payload?.location || payload || {}
+      const lat = Number(location?.lat ?? location?.latitude)
+      const lng = Number(location?.lng ?? location?.longitude)
+      
+      const isOnline =
+        location?.isOnline === true ||
+        location?.status === "online" ||
+        location?.status === "busy" ||
+        payload?.isOnline === true ||
+        payload?.status === "online" ||
+        payload?.status === "busy"
+
+      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+        const meta = deliveryMetaByIdRef.current.get(idString) || {}
+        nextMap.set(idString, {
+          _id: idString,
+          name: meta.name || meta.fullName || "Delivery Partner",
+          phone: meta.phone || "N/A",
+          availability: {
+            isOnline: Boolean(isOnline),
+            currentLocation: {
+              type: "Point",
+              coordinates: [lng, lat],
+              heading: Number(location?.heading ?? payload?.heading) || 0,
+              speed: Number(location?.speed ?? payload?.speed) || 0,
+              lastUpdate: Number(location?.timestamp || location?.last_updated || payload?.timestamp || payload?.last_updated) || Date.now()
+            },
+            lastLocationUpdate: Number(location?.timestamp || location?.last_updated || payload?.timestamp || payload?.last_updated) || Date.now()
+          }
+        })
+      }
+    })
+
+    return Array.from(nextMap.values())
+  }
 
   const fetchZones = async () => {
     try {
@@ -136,6 +203,53 @@ export default function DeliveryBoyViewMap() {
     }
   }
 
+  const syncFirebaseSubscriptions = (partners) => {
+    const currentIds = new Set(partners.map(p => {
+      const pId = p._id || p.id || p.deliveryId || p.fullData?._id || p.fullData?.id
+      return pId ? String(pId) : null
+    }).filter(Boolean))
+
+    // Unsubscribe from IDs no longer in list
+    activeSubscriptionsRef.current.forEach((unsub, id) => {
+      if (!currentIds.has(id)) {
+        unsub()
+        activeSubscriptionsRef.current.delete(id)
+        
+        const nextNode = { ...latestRealtimeNodeRef.current }
+        delete nextNode[id]
+        latestRealtimeNodeRef.current = nextNode
+      }
+    })
+
+    // Subscribe to new IDs
+    partners.forEach(partner => {
+      const boyId = String(partner._id || partner.id || partner.deliveryId || partner.fullData?._id || partner.fullData?.id)
+      if (!boyId || activeSubscriptionsRef.current.has(boyId)) return
+
+      debugLog(`📡 Subscribing to location for delivery partner: ${boyId}`)
+      
+      const unsub = subscribeDeliveryLocation(
+        boyId,
+        (data) => {
+          debugLog(`🔥 Firebase update for ${boyId}:`, JSON.stringify(data))
+          
+          latestRealtimeNodeRef.current = {
+            ...latestRealtimeNodeRef.current,
+            [boyId]: data
+          }
+          
+          const merged = getMergedDeliveryBoys(latestRealtimeNodeRef.current)
+          setDeliveryBoys(merged)
+        },
+        (error) => {
+          debugError(`🚨 Firebase listener for ${boyId} FAILED:`, error?.message || error)
+        }
+      )
+
+      activeSubscriptionsRef.current.set(boyId, unsub)
+    })
+  }
+
   const fetchDeliveryPartnerDirectory = async () => {
     try {
       const response = await adminAPI.getDeliveryPartners({
@@ -147,7 +261,16 @@ export default function DeliveryBoyViewMap() {
 
       if (response.data?.success && response.data.data?.deliveryPartners) {
         const nextMap = new Map()
-        response.data.data.deliveryPartners.forEach((boy) => {
+        const partners = response.data.data.deliveryPartners || []
+        directoryPartnersRef.current = partners
+        
+        debugLog('📋 API returned', partners.length, 'delivery partners')
+        if (partners.length > 0) {
+          debugLog('📋 Sample partner keys:', Object.keys(partners[0]))
+          debugLog('📋 Sample partner data:', JSON.stringify(partners[0]).substring(0, 500))
+        }
+
+        partners.forEach((boy) => {
           const boyId =
             boy?._id ||
             boy?.id ||
@@ -164,6 +287,14 @@ export default function DeliveryBoyViewMap() {
           })
         })
         deliveryMetaByIdRef.current = nextMap
+
+        // Sync individual Firebase subscriptions
+        syncFirebaseSubscriptions(partners)
+
+        // Update list immediately when directory data returns
+        const merged = getMergedDeliveryBoys(latestRealtimeNodeRef.current)
+        debugLog('📋 After directory merge, delivery boys count:', merged.length)
+        setDeliveryBoys(merged)
       }
     } catch (error) {
       debugError("Error fetching delivery partner directory:", error)
@@ -174,14 +305,6 @@ export default function DeliveryBoyViewMap() {
       const apiKey = await getGoogleMapsApiKey()
       setGoogleMapsApiKey(apiKey || "loaded")
       
-      let retries = 0
-      const maxRetries = 50
-      
-      while (!window.google && retries < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        retries++
-      }
-
       if (window.google && window.google.maps) {
         initializeMap(window.google)
         return
@@ -210,14 +333,20 @@ export default function DeliveryBoyViewMap() {
 
     const initialLocation = { lat: 20.5937, lng: 78.9629 }
 
-    const map = new google.maps.Map(mapRef.current, {
+    const g = google || window.google
+    if (!g || !g.maps) {
+      debugError("Google Maps object not found during initializeMap")
+      return
+    }
+
+    const map = new g.maps.Map(mapRef.current, {
       center: initialLocation,
       zoom: 5,
       mapTypeControl: true,
       mapTypeControlOptions: {
-        style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
-        position: google.maps.ControlPosition.TOP_RIGHT,
-        mapTypeIds: [google.maps.MapTypeId.ROADMAP, google.maps.MapTypeId.SATELLITE]
+        style: g.maps.MapTypeControlStyle?.HORIZONTAL_BAR || 1,
+        position: g.maps.ControlPosition?.TOP_RIGHT || 2,
+        mapTypeIds: [g.maps.MapTypeId?.ROADMAP || 'roadmap', g.maps.MapTypeId?.SATELLITE || 'satellite']
       },
       zoomControl: true,
       streetViewControl: false,
@@ -233,6 +362,9 @@ export default function DeliveryBoyViewMap() {
 
   // Draw all zones on the map
   const drawAllZonesOnMap = (google, map) => {
+    const g = google || window.google
+    if (!g || !g.maps) return
+
     if (!zones || zones.length === 0) {
       zonesPolygonsRef.current.forEach(polygon => {
         if (polygon) polygon.setMap(null)
@@ -256,7 +388,7 @@ export default function DeliveryBoyViewMap() {
       "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16",
     ]
 
-    const bounds = new google.maps.LatLngBounds()
+    const bounds = new g.maps.LatLngBounds()
 
     zones.forEach((zone, index) => {
       if (!zone.coordinates || zone.coordinates.length < 3) return
@@ -265,7 +397,7 @@ export default function DeliveryBoyViewMap() {
         const lat = typeof coord === 'object' ? (coord.latitude || coord.lat) : null
         const lng = typeof coord === 'object' ? (coord.longitude || coord.lng) : null
         if (lat === null || lng === null) return null
-        const latLng = new google.maps.LatLng(lat, lng)
+        const latLng = new g.maps.LatLng(lat, lng)
         bounds.extend(latLng)
         return latLng
       }).filter(Boolean)
@@ -274,7 +406,7 @@ export default function DeliveryBoyViewMap() {
 
       const color = colors[index % colors.length]
 
-      const polygon = new google.maps.Polygon({
+      const polygon = new g.maps.Polygon({
         paths: path,
         strokeColor: color,
         strokeOpacity: 0.8,
@@ -290,7 +422,7 @@ export default function DeliveryBoyViewMap() {
       polygon.setMap(map)
       zonesPolygonsRef.current.push(polygon)
 
-      const infoWindow = new google.maps.InfoWindow({
+      const infoWindow = new g.maps.InfoWindow({
         content: `
           <div style="padding: 12px; min-width: 200px;">
             <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">
@@ -327,178 +459,145 @@ export default function DeliveryBoyViewMap() {
       })
     })
 
-    if (zones.length > 0) {
+    if (zones.length > 0 && !hasFitBoundsRef.current) {
       map.fitBounds(bounds)
       const padding = { top: 50, right: 50, bottom: 50, left: 50 }
       map.fitBounds(bounds, padding)
+      hasFitBoundsRef.current = true
     }
   }
 
-  // Function to get rotated bike icon (similar to delivery app)
-  const getRotatedBikeIcon = (heading = 0) => {
-    // Round heading to nearest 5 degrees for caching
-    const roundedHeading = Math.round(heading / 5) * 5
-    const cacheKey = `${roundedHeading}`
-    
-    // Check cache first
-    if (rotatedIconCacheRef.current.has(cacheKey)) {
-      return Promise.resolve(rotatedIconCacheRef.current.get(cacheKey))
+  // Function to get rotated bike icon (similar to delivery app, using /MapRider.png via canvas)
+  const getRotatedBikeIcon = (heading = 0, isOnline = true) => {
+    const size = 60
+    const canvas = document.createElement("canvas")
+    canvas.width = size
+    canvas.height = size
+    const ctx = canvas.getContext("2d")
+
+    if (!ctx) return ""
+
+    ctx.clearRect(0, 0, size, size)
+
+    if (riderImageRef.current) {
+      ctx.save()
+      ctx.translate(size / 2, size / 2)
+      ctx.rotate((heading * Math.PI) / 180)
+      
+      try {
+        if (!isOnline) {
+          ctx.filter = "grayscale(100%) opacity(0.6)"
+        }
+      } catch (e) {
+        // Fallback for browsers that don't support ctx.filter
+      }
+
+      ctx.drawImage(riderImageRef.current, -size / 2, -size / 2, size, size)
+      ctx.restore()
+    } else {
+      // Fallback SVG representation until the image is fully loaded
+      ctx.save()
+      ctx.translate(size / 2, size / 2)
+      ctx.rotate((heading * Math.PI) / 180)
+      const strokeColor = isOnline ? "#ff8100" : "#94a3b8"
+      const fillColor = isOnline ? "#ff8100" : "#94a3b8"
+      const circleColor = isOnline ? "white" : "#f1f5f9"
+      
+      ctx.beginPath()
+      ctx.arc(0, 0, 28, 0, 2 * Math.PI)
+      ctx.fillStyle = circleColor
+      ctx.fill()
+      ctx.strokeStyle = strokeColor
+      ctx.lineWidth = 4
+      ctx.stroke()
+      ctx.restore()
     }
 
-    return new Promise((resolve) => {
-      const img = new Image()
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas')
-          const size = 50 // Icon size
-          canvas.width = size
-          canvas.height = size
-          const ctx = canvas.getContext('2d')
-          
-          // Clear canvas
-          ctx.clearRect(0, 0, size, size)
-          
-          // Move to center, rotate, then draw image
-          ctx.save()
-          ctx.translate(size / 2, size / 2)
-          ctx.rotate((roundedHeading * Math.PI) / 180) // Convert degrees to radians
-          ctx.drawImage(img, -size / 2, -size / 2, size, size)
-          ctx.restore()
-          
-          // Get data URL and cache it
-          const dataUrl = canvas.toDataURL()
-          rotatedIconCacheRef.current.set(cacheKey, dataUrl)
-          resolve(dataUrl)
-        } catch (error) {
-          debugWarn('?? Error rotating bike icon:', error)
-          // Fallback to original image if rotation fails
-          resolve(bikeLogo)
-        }
-      }
-      img.onerror = () => {
-        // Fallback to original image if loading fails
-        resolve(bikeLogo)
-      }
-      img.src = bikeLogo
-    })
+    return canvas.toDataURL("image/png")
   }
 
   // Draw delivery boy markers (bikes) on the map
   const drawDeliveryBoyMarkers = async (google, map) => {
+    const g = google || window.google
+    if (!g || !g.maps) return
+
+    debugLog('🎨 drawDeliveryBoyMarkers called with', deliveryBoys.length, 'boys')
     if (!deliveryBoys || deliveryBoys.length === 0) {
-      // Clear previous markers
       deliveryBoyMarkersRef.current.forEach(marker => {
         if (marker) marker.setMap(null)
       })
       deliveryBoyMarkersRef.current = []
+      markersMapRef.current.forEach(item => {
+        if (item.marker) item.marker.setMap(null)
+      })
+      markersMapRef.current.clear()
       return
     }
 
-    // Clear previous markers
-    deliveryBoyMarkersRef.current.forEach(marker => {
-      if (marker) marker.setMap(null)
-    })
-    deliveryBoyMarkersRef.current = []
+    // Keep track of active boy IDs in this update
+    const activeBoyIds = new Set()
 
-    // Track processed delivery boy IDs to prevent duplicates
-    const processedIds = new Set()
-
-    // Process all delivery boys and create markers
     for (const boy of deliveryBoys) {
-      // Get unique ID to prevent duplicate markers
       const fullData = boy.fullData || boy
       const boyId = boy._id || boy.id || boy.deliveryId || fullData?._id || fullData?.id || fullData?.deliveryId
       
-      if (!boyId) {
-        debugWarn("?? Skipping delivery boy without ID:", fullData.name || "Unknown")
-        continue
-      }
+      if (!boyId) continue
       
       const idString = boyId.toString()
+      activeBoyIds.add(idString)
       
-      // Skip if we've already processed this delivery boy
-      if (processedIds.has(idString)) {
-        debugWarn("?? Duplicate delivery boy detected, skipping:", fullData.name || "Unknown", idString)
-        continue
-      }
-      
-      processedIds.add(idString)
-      
-      // Try multiple sources for availability
-      const availability = boy.availability || fullData?.availability || (fullData && fullData.availability)
+      const availability = boy.availability || fullData?.availability
       const currentLocation = availability?.currentLocation
       
-      if (!currentLocation?.coordinates) {
-        debugWarn("?? No coordinates for delivery boy:", fullData.name || "Unknown")
-        continue
-      }
+      if (!currentLocation?.coordinates) continue
 
       const coords = currentLocation.coordinates
-      // Handle both [lng, lat] and [lat, lng] formats
       let lat, lng
       if (Array.isArray(coords) && coords.length >= 2) {
-        // Try [lng, lat] format first (GeoJSON standard)
         if (coords[0] > -180 && coords[0] < 180 && coords[1] > -90 && coords[1] < 90) {
           lng = coords[0]
           lat = coords[1]
         } else {
-          // Try [lat, lng] format
           lat = coords[0]
           lng = coords[1]
         }
       } else {
-        debugWarn("?? Invalid coordinates format:", coords)
         continue
       }
 
-      if (!lat || !lng || isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) {
-        debugWarn("?? Invalid lat/lng values:", { lat, lng })
-        continue
-      }
+      if (!lat || !lng || isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) continue
 
-      if (lat < -90 || lat > 90 || lng < -180 || lng > 180) {
-        debugWarn("?? Coordinates out of range:", { lat, lng })
-        continue
-      }
-
-      // Get heading if available
       const heading = currentLocation.heading || 0
-      
-      // Get name and phone from fullData
-      const boyName = fullData.name || "Delivery Boy"
+      const isOnline = availability?.isOnline !== false
+      const boyName = fullData.name || "Delivery Partner"
       const boyPhone = fullData.phone || "N/A"
-      
-      debugLog("?? Creating bike marker for:", {
-        name: boyName,
-        lat,
-        lng,
-        heading
-      })
-
-      // Get rotated bike icon
-      const rotatedIconUrl = await getRotatedBikeIcon(heading)
-
-      // Create bike icon using rotated bike logo image
-      const bikeIcon = {
-        url: rotatedIconUrl,
-        scaledSize: new google.maps.Size(50, 50), // Size of bike icon
-        anchor: new google.maps.Point(25, 25) // Center point
-      }
       const lastUpdate = availability?.lastLocationUpdate || currentLocation?.lastUpdate
 
-      // Create marker
-      const marker = new google.maps.Marker({
-        position: { lat, lng },
-        map: map,
-        icon: bikeIcon,
-        title: boyName,
-        zIndex: 1000, // Show above zones
-      })
+      const existing = markersMapRef.current.get(idString)
+      const latLng = new g.maps.LatLng(lat, lng)
 
-      // Create info window
-      const infoWindow = new google.maps.InfoWindow({
-        content: `
-          <div style="padding: 12px; min-width: 200px;">
+      if (existing) {
+        // Update position if it changed
+        const currentPos = existing.marker.getPosition()
+        if (!currentPos || currentPos.lat() !== lat || currentPos.lng() !== lng) {
+          existing.marker.setPosition(latLng)
+        }
+
+        // Update icon if heading or status changed
+        if (existing.heading !== heading || existing.isOnline !== isOnline) {
+          const rotatedIconUrl = getRotatedBikeIcon(heading, isOnline)
+          existing.marker.setIcon({
+            url: rotatedIconUrl,
+            scaledSize: new g.maps.Size(60, 60),
+            anchor: new g.maps.Point(30, 30)
+          })
+          existing.heading = heading
+          existing.isOnline = isOnline
+        }
+
+        // Update InfoWindow content
+        const newContent = `
+          <div style="padding: 12px; min-width: 200px; font-family: sans-serif;">
             <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">
               ${boyName}
             </h3>
@@ -508,7 +607,9 @@ export default function DeliveryBoyViewMap() {
               </div>
               <div style="margin-bottom: 4px;">
                 <strong>Status:</strong> 
-                <span style="color: #10b981; font-weight: 600;">Online</span>
+                <span style="color: ${isOnline ? '#10b981' : '#ef4444'}; font-weight: 600;">
+                  ${isOnline ? 'Online' : 'Offline'}
+                </span>
               </div>
               ${lastUpdate ? `
                 <div style="margin-top: 8px; font-size: 12px; color: #94a3b8;">
@@ -518,20 +619,76 @@ export default function DeliveryBoyViewMap() {
             </div>
           </div>
         `
-      })
-
-      // Add click listener to show info window
-      marker.addListener('click', () => {
-        infoWindowsRef.current.forEach(iw => {
-          if (iw && iw !== infoWindow) iw.close()
+        existing.infoWindow.setContent(newContent)
+      } else {
+        // Create new marker
+        const rotatedIconUrl = getRotatedBikeIcon(heading, isOnline)
+        const marker = new g.maps.Marker({
+          position: latLng,
+          map: map,
+          icon: {
+            url: rotatedIconUrl,
+            scaledSize: new g.maps.Size(60, 60),
+            anchor: new g.maps.Point(30, 30)
+          },
+          title: boyName,
+          zIndex: 1000
         })
-        infoWindow.open(map, marker)
-        infoWindowsRef.current.push(infoWindow)
-      })
 
-      deliveryBoyMarkersRef.current.push(marker)
+        const infoWindow = new g.maps.InfoWindow({
+          content: `
+            <div style="padding: 12px; min-width: 200px; font-family: sans-serif;">
+              <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">
+                ${boyName}
+              </h3>
+              <div style="font-size: 13px; color: #64748b; line-height: 1.6;">
+                <div style="margin-bottom: 4px;">
+                  <strong>Phone:</strong> ${boyPhone}
+                </div>
+                <div style="margin-bottom: 4px;">
+                  <strong>Status:</strong> 
+                  <span style="color: ${isOnline ? '#10b981' : '#ef4444'}; font-weight: 600;">
+                    ${isOnline ? 'Online' : 'Offline'}
+                  </span>
+                </div>
+                ${lastUpdate ? `
+                  <div style="margin-top: 8px; font-size: 12px; color: #94a3b8;">
+                    Last updated: ${new Date(lastUpdate).toLocaleTimeString()}
+                  </div>
+                ` : ''}
+              </div>
+            </div>
+          `
+        })
+
+        marker.addListener('click', () => {
+          infoWindowsRef.current.forEach(iw => {
+            if (iw && iw !== infoWindow) iw.close()
+          })
+          infoWindow.open(map, marker)
+          infoWindowsRef.current.push(infoWindow)
+        })
+
+        markersMapRef.current.set(idString, {
+          marker,
+          infoWindow,
+          heading,
+          isOnline
+        })
+      }
     }
+
+    // Clean up markers for delivery boys who are no longer active/in the list
+    markersMapRef.current.forEach((value, key) => {
+      if (!activeBoyIds.has(key)) {
+        value.marker.setMap(null)
+        markersMapRef.current.delete(key)
+      }
+    })
   }
+
+  const onlineCount = deliveryBoys.filter(b => b.availability?.isOnline).length
+  const offlineCount = deliveryBoys.length - onlineCount
 
   return (
     <div className="min-h-screen bg-slate-50">
@@ -624,12 +781,12 @@ export default function DeliveryBoyViewMap() {
                 )}
                 {deliveryBoys.length > 0 && (
                   <p>
-                    Click on any <span className="font-semibold text-green-600">green bike icon</span> to view delivery boy details. Online delivery boys: <strong>{deliveryBoys.length}</strong>
+                    Click on any <span className="font-semibold text-slate-800">bike icon</span> to view delivery boy details. Online: <strong>{onlineCount}</strong> | Offline: <strong>{offlineCount}</strong>
                   </p>
                 )}
                 {deliveryBoys.length === 0 && (
                   <p className="text-amber-600">
-                    No online delivery boys found. Delivery boys will appear when they go online.
+                    No active or registered delivery boys found on map.
                   </p>
                 )}
               </div>

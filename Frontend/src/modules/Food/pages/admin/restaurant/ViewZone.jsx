@@ -65,18 +65,8 @@ const coordinatesLength = useMemo(() => zone?.coordinates?.length || 0, [zone?.c
       const apiKey = await getGoogleMapsApiKey()
       setGoogleMapsApiKey(apiKey || "loaded")
       
-      // Wait for Google Maps to be loaded from main.jsx if it's loading
-      let retries = 0
-      const maxRetries = 50
-      
-      while (!window.google && retries < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        retries++
-      }
-
       if (window.google && window.google.maps) {
         debugLog("Google Maps already loaded, initializing map...")
-        // Wait a bit for DOM to be ready
         setTimeout(() => {
           initializeMap(window.google)
         }, 100)
@@ -93,7 +83,6 @@ const coordinatesLength = useMemo(() => zone?.coordinates?.length || 0, [zone?.c
 
         const google = await loader.load()
         debugLog("Google Maps loaded, initializing map...")
-        // Wait a bit for DOM to be ready
         setTimeout(() => {
           initializeMap(google)
         }, 100)
