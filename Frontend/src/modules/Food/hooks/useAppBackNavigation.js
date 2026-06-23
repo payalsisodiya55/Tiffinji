@@ -137,6 +137,15 @@ export default function useAppBackNavigation() {
   const location = useLocation()
 
   return useCallback(() => {
+    // If there is a real previous entry in the browser history stack, use it.
+    // React Router sets window.history.state.idx to 0 when the page is the
+    // first entry (e.g. opened via direct URL / hard refresh).
+    const historyIdx = window.history.state?.idx
+    if (typeof historyIdx === "number" && historyIdx > 0) {
+      navigate(-1)
+      return
+    }
+    // Fallback: no previous history – navigate to a sensible hardcoded route.
     navigate(resolveBackPath(location))
   }, [location, navigate])
 }
