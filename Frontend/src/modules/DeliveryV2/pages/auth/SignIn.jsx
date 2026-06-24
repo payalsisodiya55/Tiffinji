@@ -179,7 +179,7 @@ export default function DeliverySignIn() {
           <div className="mt-8 text-center">
             <p className="text-[11px] text-gray-400 font-medium leading-relaxed max-w-[320px] mx-auto">
               By continuing, you agree to Foodelo's <br />
-              <Link to="/food/delivery/profile/terms" className="text-gray-900 dark:text-white font-bold hover:text-[#7e3866] transition-colors">Terms of Service</Link>
+              <Link to="/food/delivery/profile/terms" className="text-gray-900 dark:text-white font-bold hover:text-[#7e3866] transition-colors">Terms & Conditions</Link>
               <span className="mx-1">&</span>
               <Link to="/food/delivery/profile/privacy" className="text-gray-900 dark:text-white font-bold hover:text-[#7e3866] transition-colors">Privacy Policy</Link>
             </p>
