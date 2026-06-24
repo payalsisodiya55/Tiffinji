@@ -75,13 +75,6 @@ export default function RestaurantOTP() {
     if (value && index < 3) {
       inputRefs.current[index + 1]?.focus()
     }
-
-    if (newOtp.every((digit) => digit !== "")) {
-      if (!hasSubmittedRef.current) {
-        hasSubmittedRef.current = true
-        handleVerify(newOtp.join(""))
-      }
-    }
   }
 
   const handleKeyDown = (index, e) => {
