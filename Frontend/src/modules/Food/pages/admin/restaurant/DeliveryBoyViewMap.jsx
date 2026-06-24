@@ -242,7 +242,12 @@ export default function DeliveryBoyViewMap() {
           setDeliveryBoys(merged)
         },
         (error) => {
-          debugError(`🚨 Firebase listener for ${boyId} FAILED:`, error?.message || error)
+          const errStr = String(error?.message || error || "");
+          if (errStr.includes("permission_denied") || errStr.includes("PERMISSION_DENIED")) {
+            debugLog(`ℹ️ Firebase direct listener for ${boyId} restricted (permission_denied). Falling back to HTTP polling.`)
+          } else {
+            debugError(`🚨 Firebase listener for ${boyId} FAILED:`, error?.message || error)
+          }
         }
       )
 

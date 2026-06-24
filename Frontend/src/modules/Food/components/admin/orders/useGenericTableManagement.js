@@ -79,7 +79,7 @@ export function useGenericTableManagement(data, title, searchFields = []) {
     setIsViewOrderOpen(true)
   }
 
-  const handlePrintOrder = async (order) => {
+  const handlePrintOrder = async (orderItem) => {
     try {
       // Dynamic import of jsPDF and autoTable for instant PDF download
       const { default: jsPDF } = await import('jspdf')
@@ -91,6 +91,25 @@ export function useGenericTableManagement(data, title, searchFields = []) {
         format: 'a4'
       })
 
+      // Resolve fields from originalOrder or fallback to the orderItem itself
+      const orig = orderItem.originalOrder || {};
+      
+      const orderId = orderItem.orderId || orig.orderId || orderItem.id || orig.id || 'N/A'
+      
+      const dateVal = orderItem.orderDate || orderItem.date || orig.date || (orig.createdAt ? new Date(orig.createdAt).toLocaleDateString() : new Date().toLocaleDateString())
+      const timeVal = orderItem.orderTime || orderItem.time || orig.time || (orig.createdAt ? new Date(orig.createdAt).toLocaleTimeString() : "")
+      const orderDate = timeVal ? `${dateVal}, ${timeVal}` : dateVal
+
+      const customerName = orderItem.customerName || orderItem.userName || orig.customerName || orig.userName || (orig.userId && typeof orig.userId === 'object' && orig.userId.name) || 'Unknown'
+      const customerPhone = orderItem.customerPhone || orderItem.userNumber || orig.customerPhone || orig.userNumber || (orig.userId && typeof orig.userId === 'object' && orig.userId.phone) || 'N/A'
+      
+      const restaurantName = orderItem.restaurant || orderItem.restaurantName || orig.restaurant || orig.restaurantName || (orig.restaurantId && typeof orig.restaurantId === 'object' && orig.restaurantId.restaurantName) || 'Unknown Restaurant'
+      
+      const items = orderItem.items || orig.items || orig.cart || []
+      const totalAmount = orderItem.totalAmount ?? orig.totalAmount ?? orig.orderAmount ?? 0
+      const paymentStatus = orderItem.paymentStatus || orig.paymentStatus || orig.paymentCollectionStatus || 'N/A'
+      const orderStatus = orderItem.orderStatus || orderItem.status || orig.orderStatus || orig.status || 'N/A'
+
       // Add title
       doc.setFontSize(18)
       doc.setTextColor(30, 30, 30)
@@ -99,18 +118,16 @@ export function useGenericTableManagement(data, title, searchFields = []) {
       // Order ID
       doc.setFontSize(12)
       doc.setTextColor(100, 100, 100)
-      const orderId = order.orderId || order.id || order.subscriptionId || 'N/A'
       doc.text(`Order ID: ${orderId}`, 105, 28, { align: 'center' })
       
       // Date
       doc.setFontSize(10)
-      const orderDate = order.date && order.time ? `${order.date}, ${order.time}` : (order.date || new Date().toLocaleDateString())
       doc.text(`Date: ${orderDate}`, 105, 34, { align: 'center' })
       
       let startY = 45
       
       // Customer Information
-      if (order.customerName || order.customerPhone) {
+      if (customerName || customerPhone) {
         doc.setFontSize(12)
         doc.setTextColor(30, 30, 30)
         doc.text('Customer Information', 14, startY)
@@ -118,19 +135,19 @@ export function useGenericTableManagement(data, title, searchFields = []) {
         
         doc.setFontSize(10)
         doc.setTextColor(60, 60, 60)
-        if (order.customerName) {
-          doc.text(`Name: ${order.customerName}`, 14, startY)
+        if (customerName) {
+          doc.text(`Name: ${customerName}`, 14, startY)
           startY += 6
         }
-        if (order.customerPhone) {
-          doc.text(`Phone: ${order.customerPhone}`, 14, startY)
+        if (customerPhone) {
+          doc.text(`Phone: ${customerPhone}`, 14, startY)
           startY += 6
         }
         startY += 5
       }
       
       // Restaurant Information
-      if (order.restaurant) {
+      if (restaurantName) {
         doc.setFontSize(12)
         doc.setTextColor(30, 30, 30)
         doc.text('Restaurant', 14, startY)
@@ -138,17 +155,17 @@ export function useGenericTableManagement(data, title, searchFields = []) {
         
         doc.setFontSize(10)
         doc.setTextColor(60, 60, 60)
-        doc.text(order.restaurant, 14, startY)
+        doc.text(restaurantName, 14, startY)
         startY += 10
       }
       
       // Order Items Table
-      if (order.items && Array.isArray(order.items) && order.items.length > 0) {
-        const tableData = order.items.map((item) => [
+      if (items && Array.isArray(items) && items.length > 0) {
+        const tableData = items.map((item) => [
           item.quantity || 1,
           item.name || item.itemName || item.title || 'Unknown Item',
-          `?${(item.price || 0).toFixed(2)}`,
-          `?${((item.quantity || 1) * (item.price || 0)).toFixed(2)}`
+          `INR ${(item.price || 0).toFixed(2)}`,
+          `INR ${((item.quantity || 1) * (item.price || 0)).toFixed(2)}`
         ])
         
         autoTable(doc, {
@@ -184,31 +201,68 @@ export function useGenericTableManagement(data, title, searchFields = []) {
         })
         
         startY = doc.lastAutoTable.finalY + 10
+      } else {
+        // Fallback row if there are no items
+        const tableData = [
+          [1, 'Order Total', `INR ${(totalAmount || 0).toFixed(2)}`, `INR ${(totalAmount || 0).toFixed(2)}`]
+        ]
+        autoTable(doc, {
+          startY: startY,
+          head: [['Qty', 'Item Name', 'Price', 'Total']],
+          body: tableData,
+          theme: 'striped',
+          headStyles: {
+            fillColor: [59, 130, 246],
+            textColor: 255,
+            fontStyle: 'bold',
+            fontSize: 10
+          },
+          bodyStyles: {
+            fontSize: 9,
+            textColor: [30, 30, 30]
+          },
+          alternateRowStyles: {
+            fillColor: [245, 247, 250]
+          },
+          styles: {
+            cellPadding: 4,
+            lineColor: [200, 200, 200],
+            lineWidth: 0.5
+          },
+          columnStyles: {
+            0: { cellWidth: 20, halign: 'center' },
+            1: { cellWidth: 80 },
+            2: { cellWidth: 35, halign: 'right' },
+            3: { cellWidth: 35, halign: 'right', fontStyle: 'bold' }
+          },
+          margin: { left: 14, right: 14 }
+        })
+        startY = doc.lastAutoTable.finalY + 10
       }
       
       // Total Amount
-      if (order.totalAmount) {
+      if (totalAmount) {
         doc.setFontSize(14)
         doc.setTextColor(30, 30, 30)
         doc.setFont(undefined, 'bold')
-        const totalAmount = typeof order.totalAmount === 'number' ? order.totalAmount.toFixed(2) : order.totalAmount
-        doc.text(`Total Amount: ?${totalAmount}`, 14, startY)
+        const totalAmountStr = typeof totalAmount === 'number' ? totalAmount.toFixed(2) : totalAmount
+        doc.text(`Total Amount: INR ${totalAmountStr}`, 14, startY)
         startY += 8
       }
       
       // Payment Status
-      if (order.paymentStatus) {
+      if (paymentStatus) {
         doc.setFontSize(10)
         doc.setTextColor(100, 100, 100)
         doc.setFont(undefined, 'normal')
-        doc.text(`Payment Status: ${order.paymentStatus}`, 14, startY)
+        doc.text(`Payment Status: ${paymentStatus}`, 14, startY)
         startY += 6
       }
       
       // Order Status
-      if (order.orderStatus) {
+      if (orderStatus) {
         doc.setFontSize(10)
-        doc.text(`Order Status: ${order.orderStatus}`, 14, startY)
+        doc.text(`Order Status: ${orderStatus}`, 14, startY)
       }
       
       // Save the PDF instantly
