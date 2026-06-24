@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import { ArrowLeft, Loader2 } from "lucide-react"
+import { ArrowLeft, Loader2, ShieldCheck, Timer, RefreshCw } from "lucide-react"
+import { motion, AnimatePresence } from "framer-motion"
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import { Input } from "@food/components/ui/input"
 import { Button } from "@food/components/ui/button"
@@ -29,6 +30,8 @@ export default function DeliveryOTP() {
   const [deviceToken, setDeviceToken] = useState(null)
   const [activePlatform, setActivePlatform] = useState("web")
   const inputRefs = useRef([])
+  const [focusedIndex, setFocusedIndex] = useState(null)
+  const isOtpComplete = otp.every((digit) => digit !== "")
 
   useEffect(() => {
     // Get auth data from sessionStorage (delivery module key)
@@ -477,192 +480,226 @@ export default function DeliveryOTP() {
   }
 
   return (
-    <AnimatedPage className="min-h-screen bg-white flex flex-col">
-      {/* Header */}
-      <div className="relative flex items-center justify-center py-4 px-4 border-b border-gray-200">
-        <button
+    <AnimatedPage className="min-h-screen bg-white dark:bg-[#0a0a0a] flex flex-col relative overflow-hidden font-['Poppins']">
+      {/* Decorative Background Elements */}
+      <div className="absolute top-0 left-0 w-full h-[600px] bg-gradient-to-b from-[#7e3866]/10 via-[#7e3866]/5 to-transparent pointer-events-none" />
+      <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] bg-[#7e3866]/5 rounded-full blur-[120px] pointer-events-none animate-pulse" />
+      <div className="absolute bottom-[-100px] left-[-100px] w-[400px] h-[400px] bg-[#7e3866]/5 rounded-full blur-[120px] pointer-events-none" />
+      
+      {/* Header / Back */}
+      <div className="relative z-20 px-6 py-8 flex items-center">
+        <motion.button
+          whileHover={{ x: -4 }}
+          whileTap={{ scale: 0.9 }}
           onClick={() => navigate("/food/delivery/login")}
-          className="absolute left-4 top-1/2 -translate-y-1/2"
-          aria-label="Go back"
+          className="p-3 bg-white dark:bg-[#1a1a1a] shadow-xl shadow-[#7e3866]/10 rounded-2xl text-[#7e3866] border border-[#7e3866]/5 outline-none"
         >
-          <ArrowLeft className="h-5 w-5 text-black" />
-        </button>
-        <h1 className="text-lg font-bold text-black">OTP Verification</h1>
+          <ArrowLeft className="w-5 h-5" />
+        </motion.button>
       </div>
 
-      {/* Main Content */}
-      <div className="flex flex-col justify-center px-6 pt-8 pb-12">
-        <div className="max-w-md mx-auto w-full space-y-8">
-          {/* Message */}
-          <div className="text-center space-y-2">
-            <p className="text-base text-black">
+      <div className="flex-1 flex flex-col items-center justify-center px-6 pb-20 relative z-10">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="w-full max-w-[440px]"
+        >
+          {/* Icon & Title */}
+          <div className="text-center mb-12">
+            <motion.div
+              initial={{ scale: 0 }}
+              animate={{ scale: 1 }}
+              transition={{ type: "spring", stiffness: 200, damping: 15 }}
+              className="w-20 h-20 bg-[#7e3866] rounded-[2rem] flex items-center justify-center mx-auto mb-6 shadow-2xl shadow-[#7e3866]/30 relative"
+            >
+              <ShieldCheck className="text-white w-10 h-10" />
+            </motion.div>
+            
+            <h1 className="text-4xl font-black text-[#7e3866] font-['Outfit'] tracking-tight mb-3">
+              Verify Account
+            </h1>
+            <div className="text-gray-500 dark:text-gray-400 font-medium">
               {showNameInput
                 ? "You're almost done! Please tell us your name to complete registration."
-                : "We have sent a verification code to"}
-            </p>
-            {!showNameInput && (
-              <div className="space-y-1">
-                <p className="text-base text-black font-medium">
-                  {getPhoneNumber()}
-                </p>
+                : "We have sent a 4-digit code to"}
+              {!showNameInput && (
+                <>
+                  <br />
+                  <span className="text-[#7e3866] font-bold">{getPhoneNumber()}</span>
+                  <br />
+                  <button
+                    type="button"
+                    onClick={() => navigate("/food/delivery/login")}
+                    className="text-xs text-[#7e3866] hover:text-[#6a2f56] font-semibold underline mt-1"
+                  >
+                    Edit
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+
+          {/* OTP Input Card */}
+          <div className="bg-white/80 dark:bg-[#1a1a1a]/80 backdrop-blur-2xl rounded-[3rem] p-10 shadow-[0_40px_80px_-20px_rgba(126,56,102,0.2)] border border-white/20 dark:border-gray-800">
+            
+            {/* Pending approval message */}
+            {pendingMessage && (
+              <div className={`rounded-2xl border p-5 text-center space-y-4 shadow-sm mb-6 ${isRejected ? "bg-red-50 border-red-100" : "bg-amber-50 border-amber-100"}`}>
+                <div className="space-y-2">
+                  <p className={`text-sm font-semibold ${isRejected ? "text-red-800" : "text-amber-800"}`}>
+                    {isRejected ? "Application Rejected" : "Pending Verification"}
+                  </p>
+                  <p className={`text-sm leading-relaxed ${isRejected ? "text-red-700" : "text-amber-700"}`}>
+                    {pendingMessage}
+                  </p>
+                  {isRejected && rejectionReason && (
+                    <div className="mt-2 p-3 bg-white/50 rounded-lg border border-red-200">
+                      <p className="text-xs font-medium text-red-600 uppercase tracking-wider mb-1">Reason</p>
+                      <p className="text-sm text-red-800 italic">"{rejectionReason}"</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex flex-col gap-2 pt-2">
+                  {isRejected && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const phone = authData?.phone
+                        const digits = String(phone || "").replace(/\D/g, "")
+                        sessionStorage.setItem("deliveryNeedsRegistration", "true")
+                        const details = {
+                          name: "",
+                          phone: digits.slice(-10),
+                          countryCode: "+91",
+                        }
+                        sessionStorage.setItem("deliverySignupDetails", JSON.stringify(details))
+                        navigate("/food/delivery/signup/details", { replace: true })
+                      }}
+                      className="w-full py-3 bg-red-600 text-white rounded-lg font-bold text-sm hover:bg-red-700 shadow-md transition-all active:scale-95"
+                    >
+                      Re-apply Now
+                    </button>
+                  )}
+                  
+                  <button
+                    type="button"
+                    onClick={() => navigate("/food/delivery/login", { replace: true })}
+                    className={`text-sm font-medium underline transition-colors ${isRejected ? "text-red-600 hover:text-red-800" : "text-amber-700 hover:text-amber-900"}`}
+                  >
+                    Back to login
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Error message */}
+            {error && (
+              <p className="text-sm text-red-500 text-center mb-6">
+                {error}
+              </p>
+            )}
+
+            {/* OTP Inputs */}
+            {!showNameInput && !pendingMessage && (
+              <>
+                <div className="grid grid-cols-4 gap-4 mb-10">
+                  {otp.map((digit, index) => (
+                    <div key={index} className="relative group">
+                      <input
+                        ref={(el) => (inputRefs.current[index] = el)}
+                        type="tel"
+                        maxLength={1}
+                        value={digit}
+                        onChange={(e) => handleChange(index, e.target.value)}
+                        onKeyDown={(e) => handleKeyDown(index, e)}
+                        onPaste={index === 0 ? handlePaste : undefined}
+                        onFocus={() => setFocusedIndex(index)}
+                        onBlur={() => setFocusedIndex(null)}
+                        disabled={isLoading}
+                        className={`w-full aspect-square bg-gray-100 dark:bg-gray-800/50 text-center text-3xl font-black text-[#7e3866] border-2 border-gray-200 dark:border-gray-700 rounded-2xl outline-none transition-all ${
+                          focusedIndex === index 
+                            ? "border-[#7e3866] bg-white dark:bg-gray-900 scale-105 shadow-[0_10px_30px_rgba(126,56,102,0.1)]" 
+                            : "hover:border-gray-300 dark:hover:border-gray-600"
+                        }`}
+                      />
+                      <div className={`absolute -bottom-1 left-1/2 -translate-x-1/2 w-8 h-1 rounded-full transition-all duration-300 ${focusedIndex === index ? "bg-[#7e3866] opacity-100" : "bg-gray-200 opacity-0"}`} />
+                    </div>
+                  ))}
+                </div>
+
                 <button
-                  type="button"
-                  onClick={() => navigate("/food/delivery/login")}
-                  className="text-xs text-green-600 hover:text-green-800 font-semibold underline block mx-auto"
+                  onClick={() => handleVerify()}
+                  disabled={isLoading || !isOtpComplete}
+                  className="w-full py-4.5 bg-[#7e3866] hover:bg-[#6a2f56] disabled:bg-gray-200 dark:disabled:bg-gray-800 disabled:text-gray-400 text-white rounded-2xl font-bold text-lg shadow-xl shadow-[#7e3866]/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2 mb-8"
                 >
-                  Edit number
+                  {isLoading ? <Loader2 className="w-6 h-6 animate-spin" /> : "Verify & Continue"}
+                </button>
+
+                {/* Resend Section */}
+                <div className="text-center">
+                  {resendTimer > 0 ? (
+                    <p className="text-sm text-gray-400 font-medium flex items-center justify-center gap-2 tracking-wide uppercase text-[10px] font-black">
+                      <Timer className="w-3.5 h-3.5 text-[#7e3866]" />
+                      Resend code in <span className="text-[#7e3866] font-bold">{resendTimer}s</span>
+                    </p>
+                  ) : (
+                    <button
+                      onClick={handleResend}
+                      disabled={isLoading}
+                      className="text-xs text-[#7e3866] font-black uppercase tracking-widest hover:underline underline-offset-4 flex items-center justify-center gap-2 mx-auto"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      Resend OTP Code
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Name Input */}
+            {showNameInput && (
+              <div className="space-y-6">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black text-[#7e3866] uppercase tracking-[0.2em] ml-1">
+                    Full Name
+                  </label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => {
+                      setName(e.target.value)
+                      if (nameError) setNameError("")
+                    }}
+                    disabled={isLoading}
+                    placeholder="Enter your name"
+                    className={`block w-full px-6 py-4 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white border-2 border-transparent focus:border-[#7e3866]/50 rounded-2xl outline-none transition-all placeholder:text-gray-300 font-bold text-lg shadow-sm ${
+                      nameError ? "border-red-500 focus:border-red-500" : ""
+                    }`}
+                  />
+                  {nameError && (
+                    <p className="text-xs text-red-500 ml-1">
+                      {nameError}
+                    </p>
+                  )}
+                </div>
+
+                <button
+                  onClick={handleSubmitName}
+                  disabled={isLoading}
+                  className="w-full py-4.5 bg-[#7e3866] hover:bg-[#6a2f56] disabled:bg-gray-200 dark:disabled:bg-gray-800 disabled:text-gray-400 text-white rounded-2xl font-bold text-lg shadow-xl shadow-[#7e3866]/20 transition-all active:scale-[0.98] flex items-center justify-center gap-2"
+                >
+                  {isLoading ? "Continuing..." : "Continue"}
                 </button>
               </div>
             )}
+
           </div>
 
-          {/* Pending approval message – already registered, waiting for admin */}
-          {pendingMessage && (
-            <div className={`rounded-xl border p-5 text-center space-y-4 shadow-sm ${isRejected ? "bg-red-50 border-red-100" : "bg-amber-50 border-amber-100"}`}>
-              <div className="space-y-2">
-                <p className={`text-sm font-semibold ${isRejected ? "text-red-800" : "text-amber-800"}`}>
-                  {isRejected ? "Application Rejected" : "Pending Verification"}
-                </p>
-                <p className={`text-sm leading-relaxed ${isRejected ? "text-red-700" : "text-amber-700"}`}>
-                  {pendingMessage}
-                </p>
-                {isRejected && rejectionReason && (
-                  <div className="mt-2 p-3 bg-white/50 rounded-lg border border-red-200">
-                    <p className="text-xs font-medium text-red-600 uppercase tracking-wider mb-1">Reason</p>
-                    <p className="text-sm text-red-800 italic">"{rejectionReason}"</p>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex flex-col gap-2 pt-2">
-                {isRejected ? (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const phone = authData?.phone
-                      const digits = String(phone || "").replace(/\D/g, "")
-                      sessionStorage.setItem("deliveryNeedsRegistration", "true")
-                      const details = {
-                        name: "",
-                        phone: digits.slice(-10),
-                        countryCode: "+91",
-                      }
-                      sessionStorage.setItem("deliverySignupDetails", JSON.stringify(details))
-                      navigate("/food/delivery/signup/details", { replace: true })
-                    }}
-                    className="w-full py-3 bg-red-600 text-white rounded-lg font-bold text-sm hover:bg-red-700 shadow-md transition-all active:scale-95"
-                  >
-                    Re-apply Now
-                  </button>
-                ) : null}
-                
-                <button
-                  type="button"
-                  onClick={() => navigate("/food/delivery/login", { replace: true })}
-                  className={`text-sm font-medium underline transition-colors ${isRejected ? "text-red-600 hover:text-red-800" : "text-amber-700 hover:text-amber-900"}`}
-                >
-                  Back to login
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Error message */}
-          {error && (
-            <p className="text-sm text-red-500 text-center">
-              {error}
-            </p>
-          )}
-
-          {/* OTP Input Fields */}
-          {!showNameInput && !pendingMessage && (
-            <>
-              <div className="flex justify-center gap-2">
-                {otp.map((digit, index) => (
-                  <Input
-                    key={index}
-                    ref={(el) => (inputRefs.current[index] = el)}
-                    type="text"
-                    inputMode="numeric"
-                    maxLength={1}
-                    value={digit}
-                    onChange={(e) => handleChange(index, e.target.value)}
-                    onKeyDown={(e) => handleKeyDown(index, e)}
-                    onPaste={index === 0 ? handlePaste : undefined}
-                    disabled={isLoading}
-                    autoComplete="off"
-                    autoFocus={false}
-                    className="w-12 h-12 text-center text-lg font-semibold p-0 border border-black rounded-md focus-visible:ring-0 focus-visible:border-black bg-white"
-                  />
-                ))}
-              </div>
-
-              {/* Resend Section */}
-              <div className="text-center space-y-1">
-                <p className="text-sm text-black">
-                  Didn't get the OTP?
-                </p>
-                {resendTimer > 0 ? (
-                  <p className="text-sm text-gray-500">
-                    Resend SMS in {resendTimer}s
-                  </p>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={handleResend}
-                    disabled={isLoading}
-                    className="text-sm text-gray-500 hover:text-gray-700 disabled:opacity-50"
-                  >
-                    Resend SMS
-                  </button>
-                )}
-              </div>
-            </>
-          )}
-
-          {/* Name Input (shown only after OTP verified and user is new) */}
-          {showNameInput && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <label className="block text-sm font-medium text-black text-left">
-                  Full name
-                </label>
-                <Input
-                  type="text"
-                  value={name}
-                  onChange={(e) => {
-                    setName(e.target.value)
-                    if (nameError) setNameError("")
-                  }}
-                  disabled={isLoading}
-                  placeholder="Enter your name"
-                  className={`h-11 border ${nameError ? "border-red-500" : "border-gray-300"
-                    }`}
-                />
-                {nameError && (
-                  <p className="text-xs text-red-500 text-left">
-                    {nameError}
-                  </p>
-                )}
-              </div>
-
-              <Button
-                onClick={handleSubmitName}
-                disabled={isLoading}
-                className="w-full h-11 bg-[#00B761] hover:bg-[#00A055] text-white font-semibold"
-              >
-                {isLoading ? "Continuing..." : "Continue"}
-              </Button>
-            </div>
-          )}
-
-          {/* Loading Spinner */}
-          {isLoading && !showNameInput && (
-            <div className="flex justify-center pt-4">
-              <Loader2 className="h-6 w-6 text-green-500 animate-spin" />
-            </div>
-          )}
-        </div>
+          <p className="mt-12 text-[10px] font-black text-gray-300 dark:text-gray-600 text-center uppercase tracking-[0.3em]">
+            Secure Verification &bull; Foodelo Partner
+          </p>
+        </motion.div>
       </div>
 
     </AnimatedPage>
