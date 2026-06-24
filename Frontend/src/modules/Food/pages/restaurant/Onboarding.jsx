@@ -448,7 +448,7 @@ const parseLocalYMDDate = (value) => {
   return new Date(year, month - 1, day)
 }
 
-function TimeSelector({ label, value, onChange }) {
+function TimeSelector({ label, value, onChange, onFieldExit }) {
   const timeValue = (() => {
     const normalized = normalizeTimeValue(value)
     if (!normalized) return null
@@ -462,14 +462,35 @@ function TimeSelector({ label, value, onChange }) {
       return
     }
 
+    let timeString = ""
     if (typeof newValue.format === "function") {
-      onChange(newValue.format("HH:mm"))
+      timeString = newValue.format("HH:mm")
+    } else {
+      timeString = timeToString(newValue?.toDate?.() || newValue)
+    }
+
+    if (timeString) {
+      onChange(timeString)
+    }
+  }
+
+  const handleAccept = (newValue) => {
+    if (!newValue || (typeof newValue.isValid === "function" && !newValue.isValid())) {
       return
     }
 
-    const timeString = timeToString(newValue?.toDate?.() || newValue)
+    let timeString = ""
+    if (typeof newValue.format === "function") {
+      timeString = newValue.format("HH:mm")
+    } else {
+      timeString = timeToString(newValue?.toDate?.() || newValue)
+    }
+
     if (timeString) {
       onChange(timeString)
+      if (onFieldExit) {
+        onFieldExit(timeString)
+      }
     }
   }
 
@@ -483,12 +504,22 @@ function TimeSelector({ label, value, onChange }) {
         ampm={true}
         value={timeValue}
         onChange={applyTimeValue}
-        onAccept={applyTimeValue}
+        onAccept={handleAccept}
+        onClose={() => {
+          if (onFieldExit) {
+            onFieldExit(value)
+          }
+        }}
         slotProps={{
           textField: {
             variant: "outlined",
             size: "small",
             placeholder: "Select time",
+            onBlur: () => {
+              if (onFieldExit) {
+                onFieldExit(value)
+              }
+            },
             sx: {
               "& .MuiOutlinedInput-root": {
                 height: "36px",
@@ -1222,6 +1253,26 @@ export default function RestaurantOnboarding() {
     return errors
   }
 
+  const handleTimingValidation = (updatedOpening = step2.openingTime, updatedClosing = step2.closingTime) => {
+    if (!updatedOpening || !updatedClosing) return
+
+    const openingMinutes = timeStringToMinutes(updatedOpening)
+    let closingMinutes = timeStringToMinutes(updatedClosing)
+
+    if (openingMinutes !== null && closingMinutes !== null) {
+      if (closingMinutes === 0 && openingMinutes !== 0) {
+        closingMinutes = 1440
+      }
+      if (openingMinutes === closingMinutes) {
+        toast.error("Opening time and closing time cannot be same", { id: "timing-error" })
+      } else if (closingMinutes < openingMinutes) {
+        toast.error("Closing time cannot be less than opening time", { id: "timing-error" })
+      } else {
+        toast.dismiss("timing-error")
+      }
+    }
+  }
+
   const validateStep2 = () => {
     const errors = []
 
@@ -1275,8 +1326,11 @@ export default function RestaurantOnboarding() {
       errors.push("Closing time is required")
     }
     const openingMinutes = timeStringToMinutes(step2.openingTime)
-    const closingMinutes = timeStringToMinutes(step2.closingTime)
+    let closingMinutes = timeStringToMinutes(step2.closingTime)
     if (openingMinutes !== null && closingMinutes !== null) {
+      if (closingMinutes === 0 && openingMinutes !== 0) {
+        closingMinutes = 1440
+      }
       if (openingMinutes === closingMinutes) {
         errors.push("Opening time and closing time cannot be same")
       } else if (closingMinutes < openingMinutes) {
@@ -2499,19 +2553,12 @@ export default function RestaurantOnboarding() {
               value={step2.openingTime || ""}
               onChange={(val) => {
                 const nextOpening = normalizeTimeValue(val) || ""
-                const openingMinutes = timeStringToMinutes(nextOpening)
-                const closingMinutes = timeStringToMinutes(step2.closingTime)
-                if (openingMinutes !== null && closingMinutes !== null) {
-                  if (openingMinutes === closingMinutes) {
-                    toast.error("Opening time and closing time cannot be same")
-                    return
-                  }
-                  if (closingMinutes < openingMinutes) {
-                    toast.error("Closing time cannot be less than opening time")
-                    return
-                  }
-                }
                 setStep2((prev) => ({ ...prev, openingTime: nextOpening }))
+                toast.dismiss("timing-error")
+              }}
+              onFieldExit={(val) => {
+                const nextOpening = normalizeTimeValue(val) || ""
+                handleTimingValidation(nextOpening, step2.closingTime)
               }}
             />
             <TimeSelector
@@ -2519,19 +2566,12 @@ export default function RestaurantOnboarding() {
               value={step2.closingTime || ""}
               onChange={(val) => {
                 const nextClosing = normalizeTimeValue(val) || ""
-                const openingMinutes = timeStringToMinutes(step2.openingTime)
-                const closingMinutes = timeStringToMinutes(nextClosing)
-                if (openingMinutes !== null && closingMinutes !== null) {
-                  if (openingMinutes === closingMinutes) {
-                    toast.error("Opening time and closing time cannot be same")
-                    return
-                  }
-                  if (closingMinutes < openingMinutes) {
-                    toast.error("Closing time cannot be less than opening time")
-                    return
-                  }
-                }
                 setStep2((prev) => ({ ...prev, closingTime: nextClosing }))
+                toast.dismiss("timing-error")
+              }}
+              onFieldExit={(val) => {
+                const nextClosing = normalizeTimeValue(val) || ""
+                handleTimingValidation(step2.openingTime, nextClosing)
               }}
             />
           </div>

@@ -458,6 +458,26 @@ export default function AddRestaurant() {
     return errors
   }
 
+  const handleTimingValidation = (updatedOpening = step2.openingTime, updatedClosing = step2.closingTime) => {
+    if (!updatedOpening || !updatedClosing) return
+
+    const openingMinutes = timeStringToMinutes(updatedOpening)
+    let closingMinutes = timeStringToMinutes(updatedClosing)
+
+    if (openingMinutes !== null && closingMinutes !== null) {
+      if (closingMinutes === 0 && openingMinutes !== 0) {
+        closingMinutes = 1440
+      }
+      if (openingMinutes === closingMinutes) {
+        toast.error("Opening time and closing time cannot be same", { id: "timing-error" })
+      } else if (closingMinutes < openingMinutes) {
+        toast.error("Closing time cannot be less than opening time", { id: "timing-error" })
+      } else {
+        toast.dismiss("timing-error")
+      }
+    }
+  }
+
   const validateStep2 = () => {
     const errors = []
     if (!step2.menuImages || step2.menuImages.length === 0) errors.push("At least one menu image is required")
@@ -471,8 +491,11 @@ export default function AddRestaurant() {
     if (!step2.openingTime?.trim()) errors.push("Opening time is required")
     if (!step2.closingTime?.trim()) errors.push("Closing time is required")
     const openingMinutes = timeStringToMinutes(step2.openingTime)
-    const closingMinutes = timeStringToMinutes(step2.closingTime)
+    let closingMinutes = timeStringToMinutes(step2.closingTime)
     if (openingMinutes !== null && closingMinutes !== null) {
+      if (closingMinutes === 0 && openingMinutes !== 0) {
+        closingMinutes = 1440
+      }
       if (openingMinutes === closingMinutes) {
         errors.push("Opening time and closing time cannot be same")
       } else if (closingMinutes < openingMinutes) {
@@ -1243,19 +1266,11 @@ export default function AddRestaurant() {
                 value={step2.openingTime || ""}
                 onChange={(e) => {
                   const nextOpening = e.target.value
-                  const closingMinutes = timeStringToMinutes(step2.closingTime)
-                  const openingMinutes = timeStringToMinutes(nextOpening)
-                  if (openingMinutes !== null && closingMinutes !== null) {
-                    if (openingMinutes === closingMinutes) {
-                      toast.error("Opening time and closing time cannot be same")
-                      return
-                    }
-                    if (closingMinutes < openingMinutes) {
-                      toast.error("Closing time cannot be less than opening time")
-                      return
-                    }
-                  }
                   setStep2({ ...step2, openingTime: nextOpening })
+                  toast.dismiss("timing-error")
+                }}
+                onBlur={() => {
+                  handleTimingValidation(step2.openingTime, step2.closingTime)
                 }}
                 autoComplete="off"
                 className="bg-white text-sm"
@@ -1268,19 +1283,11 @@ export default function AddRestaurant() {
                 value={step2.closingTime || ""}
                 onChange={(e) => {
                   const nextClosing = e.target.value
-                  const openingMinutes = timeStringToMinutes(step2.openingTime)
-                  const closingMinutes = timeStringToMinutes(nextClosing)
-                  if (openingMinutes !== null && closingMinutes !== null) {
-                    if (openingMinutes === closingMinutes) {
-                      toast.error("Opening time and closing time cannot be same")
-                      return
-                    }
-                    if (closingMinutes < openingMinutes) {
-                      toast.error("Closing time cannot be less than opening time")
-                      return
-                    }
-                  }
                   setStep2({ ...step2, closingTime: nextClosing })
+                  toast.dismiss("timing-error")
+                }}
+                onBlur={() => {
+                  handleTimingValidation(step2.openingTime, step2.closingTime)
                 }}
                 autoComplete="off"
                 className="bg-white text-sm"

@@ -807,8 +807,11 @@ export default function RestaurantsList() {
       const normalizedOpeningTime = normalizeTimeValue(detailsForm.openingTime.trim())
       const normalizedClosingTime = normalizeTimeValue(detailsForm.closingTime.trim())
       const openingMinutes = timeToMinutes(normalizedOpeningTime)
-      const closingMinutes = timeToMinutes(normalizedClosingTime)
+      let closingMinutes = timeToMinutes(normalizedClosingTime)
       if (openingMinutes !== null && closingMinutes !== null) {
+        if (closingMinutes === 0 && openingMinutes !== 0) {
+          closingMinutes = 1440
+        }
         if (openingMinutes === closingMinutes) {
           alert("Opening time and closing time cannot be same")
           return
