@@ -330,7 +330,13 @@ const transformOrderForTracking = (apiOrder, previousOrder = null, explicitResta
     id: apiOrder?.orderId || apiOrder?._id,
     mongoId: apiOrder?._id || null,
     orderId: apiOrder?.orderId || apiOrder?._id,
-    restaurant: apiOrder?.restaurantName || previousOrder?.restaurant || 'Restaurant',
+    restaurant: apiOrder?.restaurantName ||
+      apiOrder?.restaurantId?.restaurantName ||
+      apiOrder?.restaurantId?.name ||
+      apiOrder?.restaurant?.restaurantName ||
+      apiOrder?.restaurant?.name ||
+      previousOrder?.restaurant ||
+      'Restaurant',
     restaurantPhone:
       apiOrder?.restaurantPhone ||
       apiOrder?.restaurantId?.phone ||
@@ -556,13 +562,7 @@ export default function OrderTracking() {
       
       const updatedOrderData = response?.data?.data?.order || response?.data?.order
       if (updatedOrderData) {
-        setOrder(prev => ({
-          ...prev,
-          ...updatedOrderData,
-          ratings: updatedOrderData.ratings,
-          restaurantRating: updatedOrderData.ratings?.restaurant?.rating,
-          deliveryPartnerRating: updatedOrderData.ratings?.deliveryPartner?.rating
-        }))
+        setOrder(prev => transformOrderForTracking(updatedOrderData, prev))
       }
 
       toast.success("Thanks for your feedback!")

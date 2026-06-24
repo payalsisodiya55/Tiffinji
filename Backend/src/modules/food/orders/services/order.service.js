@@ -944,6 +944,17 @@ export async function submitOrderRatings(orderId, userId, dto) {
         restaurantRating: dto.restaurantRating,
         deliveryPartnerRating: hasDeliveryPartner ? dto.deliveryPartnerRating : null
     });
+
+    const populatedOrder = await FoodOrder.findById(order._id)
+      .populate(
+        "restaurantId",
+        "restaurantName ownerPhone profileImage area city location rating totalRatings primaryContactNumber",
+      )
+      .populate("dispatch.deliveryPartnerId", "name fullName phone phoneNumber rating totalRatings profileImage avatar")
+      .populate("userId", "name fullName phone email")
+      .lean();
+
+    return normalizeOrderForClient(populatedOrder);
 }
 
 export async function updateOrderInstructions(orderId, userId, instructions) {
