@@ -1,6 +1,6 @@
 import React, { useState } from "react"
 import { motion } from "framer-motion"
-import { Link, useNavigate } from "react-router-dom"
+import { Link, useNavigate, useLocation } from "react-router-dom"
 import {
   ArrowLeft,
   MessageCircle,
@@ -55,6 +55,22 @@ const supportOptions = [
 
 export default function PublicSupport() {
   const navigate = useNavigate()
+  const location = useLocation()
+  const searchParams = new URLSearchParams(location.search)
+  const fromParam = searchParams.get("from")
+
+  let homePath = "/"
+  if (location.pathname.startsWith("/restaurant/auth")) {
+    homePath = "/food/restaurant/login"
+  } else if (location.pathname.startsWith("/delivery/auth")) {
+    homePath = "/food/delivery/login"
+  } else if (location.pathname.startsWith("/user/auth")) {
+    if (fromParam === "admin") {
+      homePath = "/admin/login"
+    } else {
+      homePath = "/"
+    }
+  }
   const [step, setStep] = useState("options")
   const [selectedTopic, setSelectedTopic] = useState(null)
   const [formData, setFormData] = useState({
@@ -268,7 +284,7 @@ export default function PublicSupport() {
             <p className="text-gray-500 max-w-md mx-auto mb-10">
               Our support team has been notified. You will receive an update via email or phone within 24 hours.
             </p>
-            <Link to="/">
+            <Link to={homePath}>
               <Button className="bg-[#7e3866] hover:bg-[#6b2f57] px-10 h-12">
                 Return Home
               </Button>
