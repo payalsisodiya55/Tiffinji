@@ -104,6 +104,9 @@ export default function Coupons() {
     const value = Number(f.discountValue)
     if (!String(f.couponCode || "").trim()) e.couponCode = "Coupon code is required"
     if (!Number.isFinite(value) || value <= 0) e.discountValue = "Discount must be greater than 0"
+    if (pct && value > 100) {
+      e.discountValue = "Percentage discount cannot exceed 100%"
+    }
     if (pct && (f.maxDiscount === "" || f.maxDiscount === null || f.maxDiscount === undefined)) {
       e.maxDiscount = "Max discount is required for percentage coupons"
     }
@@ -130,6 +133,17 @@ export default function Coupons() {
       value = String(value || "").toUpperCase()
     }
     if (field === "discountType") {
+      if (value === "percentage") {
+        setFormData((prev) => {
+          const nextVal = Number(prev.discountValue) > 100 ? "100" : prev.discountValue
+          const next = { ...prev, discountType: value, discountValue: nextVal }
+          validateForm(next)
+          return next
+        })
+        if (submitError) setSubmitError("")
+        if (submitSuccess) setSubmitSuccess("")
+        return
+      }
       // When switching to flat-price, clear and disable maxDiscount
       if (value === "flat-price") {
         setFormData((prev) => {
@@ -140,6 +154,11 @@ export default function Coupons() {
         if (submitError) setSubmitError("")
         if (submitSuccess) setSubmitSuccess("")
         return
+      }
+    }
+    if (field === "discountValue" && formData.discountType === "percentage") {
+      if (Number(value) > 100) {
+        value = "100"
       }
     }
     const next = { ...formData, [field]: value }
@@ -352,6 +371,7 @@ export default function Coupons() {
                   <input
                     type="number"
                     min="1"
+                    max={formData.discountType === "percentage" ? "100" : undefined}
                     step="0.01"
                     value={formData.discountValue}
                     onChange={(e) => handleFormChange("discountValue", e.target.value)}

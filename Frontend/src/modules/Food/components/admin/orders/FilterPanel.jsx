@@ -21,6 +21,22 @@ export default function FilterPanel({
     setValidationError("")
   }, [isOpen])
 
+  useEffect(() => {
+    const fromDateVal = filters.fromDate ? new Date(filters.fromDate) : null
+    const toDateVal = filters.toDate ? new Date(filters.toDate) : null
+
+    if (fromDateVal && toDateVal && fromDateVal > toDateVal) {
+      setValidationError("The start date must be before the end date.")
+    } else {
+      setValidationError(prev => {
+        if (prev === "The start date must be before the end date.") {
+          return ""
+        }
+        return prev
+      })
+    }
+  }, [filters.fromDate, filters.toDate])
+
   const getTodayDateString = () => {
     const today = new Date()
     const yyyy = today.getFullYear()
@@ -63,7 +79,7 @@ export default function FilterPanel({
     }
 
     if (fromDateVal && toDateVal && fromDateVal > toDateVal) {
-      setValidationError("From Date cannot be later than To Date")
+      setValidationError("The start date must be before the end date.")
       return
     }
 

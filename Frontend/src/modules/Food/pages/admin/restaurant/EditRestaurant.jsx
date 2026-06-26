@@ -251,8 +251,8 @@ export default function EditRestaurant() {
         return {
           formattedAddress,
           area,
-          city,
-          state,
+          city: (city || "").replace(/[^A-Za-z\s]/g, ""),
+          state: (state || "").replace(/[^A-Za-z\s]/g, ""),
           pincode,
           latitude: Number.isFinite(lat) ? Number(lat.toFixed(6)) : "",
           longitude: Number.isFinite(lng) ? Number(lng.toFixed(6)) : "",

@@ -443,12 +443,12 @@ export default function AddRestaurant() {
 
     if (!city.trim()) {
       errors.push("City is required")
-    } else if (/[^A-Za-z0-9\s]/.test(city)) {
-      errors.push("City must not contain special characters")
+    } else if (/[^A-Za-z\s]/.test(city)) {
+      errors.push("City must contain characters only")
     }
 
-    if (state.trim() && /[^A-Za-z0-9\s]/.test(state)) {
-      errors.push("State must not contain special characters")
+    if (state.trim() && /[^A-Za-z\s]/.test(state)) {
+      errors.push("State must contain characters only")
     }
 
     if (pincode.trim() && !/^\d{6}$/.test(pincode.trim())) {
@@ -798,8 +798,8 @@ export default function AddRestaurant() {
         return {
           formattedAddress,
           area: String(area || "").replace(/[^A-Za-z0-9\s]/g, ""),
-          city: String(city || "").replace(/[^A-Za-z0-9\s]/g, ""),
-          state: String(state || "").replace(/[^A-Za-z0-9\s]/g, ""),
+          city: String(city || "").replace(/[^A-Za-z\s]/g, ""),
+          state: String(state || "").replace(/[^A-Za-z\s]/g, ""),
           pincode: String(pincode || "").replace(/\D/g, "").slice(0, 6),
           latitude: typeof lat === 'number' ? Number(lat.toFixed(6)) : "",
           longitude: typeof lng === 'number' ? Number(lng.toFixed(6)) : "",
@@ -1044,8 +1044,8 @@ export default function AddRestaurant() {
                         formattedAddress: display,
                         addressLine1: display,
                         area: (area || prev.location.area).replace(/[^A-Za-z0-9\s]/g, ""),
-                        city: (city || prev.location.city).replace(/[^A-Za-z0-9\s]/g, ""),
-                        state: (state || prev.location.state).replace(/[^A-Za-z0-9\s]/g, ""),
+                        city: (city || prev.location.city).replace(/[^A-Za-z\s]/g, ""),
+                        state: (state || prev.location.state).replace(/[^A-Za-z\s]/g, ""),
                         pincode: (pincode || prev.location.pincode).replace(/\D/g, "").slice(0, 6),
                         latitude: lat,
                         longitude: lng,
@@ -1109,7 +1109,7 @@ export default function AddRestaurant() {
           />
           <Input
             value={step1.location?.city || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, city: e.target.value.replace(/[^A-Za-z0-9\s]/g, "") } })}
+            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, city: e.target.value.replace(/[^A-Za-z\s]/g, "") } })}
             className="bg-white text-sm"
             placeholder="City*"
           />
@@ -1127,7 +1127,7 @@ export default function AddRestaurant() {
           />
           <Input
             value={step1.location?.state || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, state: e.target.value.replace(/[^A-Za-z0-9\s]/g, "") } })}
+            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, state: e.target.value.replace(/[^A-Za-z\s]/g, "") } })}
             className="bg-white text-sm"
             placeholder="State (optional)"
           />
