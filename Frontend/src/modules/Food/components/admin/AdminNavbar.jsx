@@ -53,6 +53,7 @@ const debugError = (...args) => {}
 export default function AdminNavbar({ onMenuClick }) {
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
+  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -489,7 +490,7 @@ export default function AdminNavbar({ onMenuClick }) {
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="cursor-pointer text-red-600 hover:bg-red-50 focus:bg-red-50"
-                  onClick={handleLogout}
+                  onClick={() => setLogoutConfirmOpen(true)}
                 >
                   <LogOut className="mr-2 w-4 h-4 text-red-600" />
                   <span className="text-red-600">Logout</span>
@@ -624,6 +625,41 @@ export default function AdminNavbar({ onMenuClick }) {
                 )}
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Logout Confirmation Dialog */}
+      <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
+        <DialogContent className="max-w-md p-6 bg-white border border-neutral-200 rounded-xl shadow-lg">
+          <DialogHeader className="pb-4">
+            <DialogTitle className="text-lg font-bold text-neutral-900">
+              Confirm Logout
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-neutral-600">
+              Are you sure you want to log out of the admin panel?
+            </p>
+            <div className="flex justify-end gap-3 pt-2">
+              <button
+                type="button"
+                onClick={() => setLogoutConfirmOpen(false)}
+                className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setLogoutConfirmOpen(false);
+                  handleLogout();
+                }}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-md shadow-red-500/10"
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
