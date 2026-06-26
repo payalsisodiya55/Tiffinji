@@ -578,12 +578,31 @@ export async function createDiningBooking(userId, payload = {}) {
         throw new ValidationError('Restaurant not found');
     }
 
-    const bookingId = `TB${Date.now().toString().slice(-8)}`;
-    
     const userPayload = payload.user || payload.userRef || {};
     const name = (userPayload.name || userPayload.fullName || 'Guest').trim();
     const phone = (userPayload.phone || userPayload.mobile || userPayload.phoneNumber || '').trim();
     const email = (userPayload.email || '').trim();
+
+    // Check for duplicate booking (same user phone, same restaurant, same date, same time slot, and not cancelled)
+    const bookingDate = new Date(payload.date || Date.now());
+    const startOfDay = new Date(bookingDate);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(bookingDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const existingBooking = await FoodDiningBooking.findOne({
+        restaurantId,
+        'user.phone': phone,
+        date: { $gte: startOfDay, $lte: endOfDay },
+        timeSlot: String(payload.timeSlot || '').trim(),
+        status: { $ne: 'cancelled' }
+    }).lean();
+
+    if (existingBooking) {
+        throw new ValidationError('You already have an active table booking at this restaurant for this date and time slot.');
+    }
+
+    const bookingId = `TB${Date.now().toString().slice(-8)}`;
 
     const booking = await FoodDiningBooking.create({
         bookingId,

@@ -1,11 +1,10 @@
-import { useMemo, useState } from "react"
+import { useMemo, useState, useEffect, useRef } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { ArrowLeft, Calendar, Users, MapPin, Ticket, ChevronRight, Edit2, ShieldCheck, Info, X } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import { diningAPI, authAPI } from "@food/api"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
-import { useEffect } from "react"
 import { toast } from "sonner"
 import Loader from "@food/components/Loader"
 const debugLog = (...args) => {}
@@ -39,6 +38,7 @@ export default function TableBookingConfirmation() {
     const [user, setUser] = useState(null)
     const [loading, setLoading] = useState(true)
     const [bookingInProgress, setBookingInProgress] = useState(false)
+    const bookingRef = useRef(false)
 
     useEffect(() => {
         if (!restaurant) {
@@ -68,7 +68,9 @@ export default function TableBookingConfirmation() {
     }, [restaurant, navigate])
 
     const handleBooking = async () => {
+        if (bookingRef.current) return
         try {
+            bookingRef.current = true
             setBookingInProgress(true)
             const restaurantId =
                 restaurant?._id ||
@@ -103,8 +105,9 @@ export default function TableBookingConfirmation() {
             }
         } catch (error) {
             debugError("Booking error:", error)
-            toast.error(error.response?.data?.message || "Failed to confirm booking")
+            toast.error(error.response?.data?.error || error.response?.data?.message || "Failed to confirm booking")
         } finally {
+            bookingRef.current = false
             setBookingInProgress(false)
         }
     }
@@ -442,7 +445,7 @@ export default function TableBookingConfirmation() {
                                 <input 
                                     type="text"
                                     value={tempUser.name}
-                                    onChange={(e) => setTempUser({ ...tempUser, name: e.target.value })}
+                                    onChange={(e) => setTempUser({ ...tempUser, name: e.target.value.replace(/[^A-Za-z\s]/g, "") })}
                                     className="w-full h-12 px-4 rounded-xl bg-slate-50 border border-slate-100 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-red-500/10 focus:border-red-500 transition-all"
                                     placeholder="Enter your name"
                                 />
@@ -452,7 +455,7 @@ export default function TableBookingConfirmation() {
                                 <input 
                                     type="tel"
                                     value={tempUser.phone}
-                                    onChange={(e) => setTempUser({ ...tempUser, phone: e.target.value })}
+                                    onChange={(e) => setTempUser({ ...tempUser, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
                                     className="w-full h-12 px-4 rounded-xl bg-slate-50 border border-slate-100 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-red-500/10 focus:border-red-500 transition-all"
                                     placeholder="Enter phone number"
                                 />
@@ -461,6 +464,14 @@ export default function TableBookingConfirmation() {
                                 <button onClick={() => setShowUserModal(false)} className="h-12 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm uppercase tracking-widest active:scale-95 transition-all">Cancel</button>
                                 <button 
                                     onClick={() => {
+                                        if (!tempUser.name.trim()) {
+                                            toast.error("Please enter a valid name")
+                                            return
+                                        }
+                                        if (tempUser.phone.length !== 10) {
+                                            toast.error("Please enter a valid 10-digit phone number")
+                                            return
+                                        }
                                         setUser({ ...user, name: tempUser.name, phone: tempUser.phone })
                                         setShowUserModal(false)
                                     }}

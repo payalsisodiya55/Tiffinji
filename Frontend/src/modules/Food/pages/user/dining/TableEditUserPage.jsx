@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ArrowLeft, User, Phone, Mail, CheckCircle2 } from 'lucide-react';
 import AnimatedPage from "@food/components/user/AnimatedPage";
+import { toast } from 'sonner';
 
 export default function TableEditUserPage() {
     const navigate = useNavigate();
@@ -12,6 +13,14 @@ export default function TableEditUserPage() {
     const [phone, setPhone] = useState(user?.phone || "");
 
     const handleSave = () => {
+        if (!name.trim()) {
+            toast.error("Please enter a valid full name");
+            return;
+        }
+        if (phone.length !== 10) {
+            toast.error("Please enter a valid 10-digit mobile number");
+            return;
+        }
         // Go back to confirmation with updated user
         navigate("/food/user/dining/book-confirmation", {
             state: {
@@ -59,7 +68,7 @@ export default function TableEditUserPage() {
                             <input 
                                 type="text"
                                 value={name}
-                                onChange={(e) => setName(e.target.value)}
+                                onChange={(e) => setName(e.target.value.replace(/[^A-Za-z\s]/g, ""))}
                                 placeholder="Enter your full name"
                                 className="w-full h-14 pl-12 pr-4 bg-white border border-slate-100 rounded-2xl font-bold text-slate-900 focus:outline-none focus:ring-4 focus:ring-red-500/5 focus:border-red-500 transition-all placeholder:text-slate-300 shadow-sm"
                             />
@@ -76,7 +85,7 @@ export default function TableEditUserPage() {
                             <input 
                                 type="tel"
                                 value={phone}
-                                onChange={(e) => setPhone(e.target.value)}
+                                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
                                 placeholder="Enter mobile number"
                                 className="w-full h-14 pl-12 pr-4 bg-white border border-slate-100 rounded-2xl font-bold text-slate-900 focus:outline-none focus:ring-4 focus:ring-red-500/5 focus:border-red-500 transition-all placeholder:text-slate-300 shadow-sm"
                             />
