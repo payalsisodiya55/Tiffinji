@@ -2483,15 +2483,15 @@ function RestaurantDetailsContent() {
 
             <div className="flex items-center justify-between gap-3">
               <div
-                className="flex items-center gap-1 text-sm text-gray-700 dark:text-gray-300 min-w-0"
+                className="flex items-start gap-1 text-sm text-gray-700 dark:text-gray-300 min-w-0"
               >
-                <MapPin className="h-4 w-4" />
-                <span className="truncate">
+                <MapPin className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span className="break-words whitespace-normal">
                   {restaurant?.distance || "1.2 km"} | {restaurant?.location || "Location"}
                 </span>
               </div>
               <span
-                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold text-white ${
+                className={`inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold text-white flex-shrink-0 ${
                   isRestaurantOffline ? "bg-rose-600" : "bg-emerald-600"
                 }`}
               >
