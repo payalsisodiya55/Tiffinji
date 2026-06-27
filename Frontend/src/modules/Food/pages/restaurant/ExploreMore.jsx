@@ -875,13 +875,6 @@ export default function ExploreMore() {
       >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3 flex-1">
-            <button
-              onClick={() => navigate("/food/restaurant")}
-              className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-              aria-label="Go back"
-            >
-              <ArrowLeft className="w-6 h-6 text-gray-900" />
-            </button>
             <h1 className="text-lg font-bold text-gray-900">Explore more</h1>
           </div>
           <div className="flex items-center gap-2">
