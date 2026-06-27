@@ -80,11 +80,135 @@ function ReviewModal({ booking, onClose, onSubmit }) {
     )
 }
 
+function BookingDetailModal({ booking, onClose }) {
+  if (!booking) return null;
+
+  const getStatusLabel = (status) => {
+    const s = String(status || "").toLowerCase()
+    if (s === "pending") return "Approval Reqd"
+    if (s === "accepted" || s === "confirmed") return "Confirmed"
+    if (s === "checked-in") return "Checked-in"
+    if (s === "completed") return "Completed"
+    if (s === "cancelled") return "Cancelled"
+    return String(status || "unknown")
+  }
+
+  const getStatusBadgeClass = (status) => {
+    const s = String(status || "").toLowerCase()
+    if (s === "pending") return "bg-amber-100 text-amber-700"
+    if (s === "accepted" || s === "confirmed") return "bg-green-100 text-green-700 font-bold"
+    if (s === "checked-in") return "bg-[#F9F9FB] text-[#7e3866]"
+    if (s === "completed") return "bg-blue-100 text-blue-700"
+    if (s === "cancelled") return "bg-red-100 text-red-700"
+    return "bg-slate-100 text-slate-750"
+  }
+
+  return (
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+      <div className="bg-white dark:bg-slate-900 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl animate-in zoom-in-95 duration-200 border dark:border-slate-800 flex flex-col">
+        {/* Header */}
+        <div className="p-5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+          <h3 className="text-lg font-bold text-slate-900 dark:text-white">Booking Details</h3>
+          <button onClick={onClose} className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors">
+            <X className="w-5 h-5 text-slate-400 dark:text-slate-500" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="p-6 space-y-6 overflow-y-auto max-h-[70vh]">
+          {/* Restaurant Banner Card */}
+          <div className="flex gap-4 items-center bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl">
+            <div className="w-16 h-16 rounded-xl overflow-hidden bg-slate-100 dark:bg-gray-800 flex-shrink-0">
+              <img
+                src={booking.restaurant?.image || booking.restaurant?.profileImage?.url || ""}
+                className="w-full h-full object-cover"
+                alt={booking.restaurant?.name}
+                onError={(e) => {
+                  e.currentTarget.style.display = 'none';
+                }}
+              />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h4 className="font-extrabold text-slate-900 dark:text-white text-base truncate">{booking.restaurant?.name}</h4>
+              <p className="text-xs text-slate-500 dark:text-slate-400 flex items-center gap-1 mt-1">
+                <MapPin className="w-3.5 h-3.5 flex-shrink-0 text-red-500" />
+                <span className="truncate">
+                  {typeof booking.restaurant?.location === 'string'
+                    ? booking.restaurant.location
+                    : (booking.restaurant?.location?.formattedAddress || booking.restaurant?.location?.address || `${booking.restaurant?.location?.city || ''}`)}
+                </span>
+              </p>
+            </div>
+          </div>
+
+          {/* Details Grid */}
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-2xl flex flex-col justify-center">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Booking Status</span>
+                <span className={`inline-block mt-1 w-max px-2.5 py-0.5 rounded-full text-xs font-bold ${getStatusBadgeClass(booking.status)}`}>
+                  {getStatusLabel(booking.status)}
+                </span>
+              </div>
+              <div className="bg-slate-50 dark:bg-slate-800/40 p-3.5 rounded-2xl flex flex-col justify-center">
+                <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold">Booking ID</span>
+                <span className="text-xs font-mono font-semibold mt-1 text-slate-700 dark:text-slate-300">
+                  {booking._id ? `#${booking._id.slice(-8).toUpperCase()}` : 'N/A'}
+                </span>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 dark:bg-slate-800/40 p-4 rounded-2xl space-y-3">
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-400 font-medium flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-[#7e3866]" /> Date
+                </span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {new Date(booking.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}
+                </span>
+              </div>
+              <div className="h-[1px] bg-slate-100 dark:bg-slate-800" />
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-400 font-medium flex items-center gap-1.5">
+                  <Clock className="w-4 h-4 text-[#7e3866]" /> Time Slot
+                </span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {booking.timeSlot}
+                </span>
+              </div>
+              <div className="h-[1px] bg-slate-100 dark:bg-slate-800" />
+              <div className="flex justify-between items-center text-sm">
+                <span className="text-slate-400 font-medium flex items-center gap-1.5">
+                  <Users className="w-4 h-4 text-[#7e3866]" /> Guest Count
+                </span>
+                <span className="font-semibold text-slate-800 dark:text-slate-200">
+                  {booking.guests} Guests
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Footer */}
+        <div className="p-5 border-t border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-850/50">
+          <Button
+            onClick={onClose}
+            className="w-full bg-[#7e3866] hover:bg-[#682c53] text-white font-bold h-12 rounded-2xl shadow-md transition-all active:scale-[0.98]"
+          >
+            Close Details
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function MyBookings() {
     const navigate = useNavigate()
     const [bookings, setBookings] = useState([])
     const [loading, setLoading] = useState(true)
     const [selectedBooking, setSelectedBooking] = useState(null)
+    const [viewingBookingDetail, setViewingBookingDetail] = useState(null)
 
     const getStatusLabel = (status) => {
         const key = String(status || "").toLowerCase()
@@ -142,7 +266,7 @@ export default function MyBookings() {
     return (
         <AnimatedPage className="bg-slate-50 dark:bg-[#0a0a0a] min-h-screen pb-10 transition-colors">
             <div className="bg-white dark:bg-[#0a0a0a] p-4 flex items-center shadow-sm sticky top-0 z-10 border-b dark:border-gray-800">
-                <button onClick={() => navigate("/")}>
+                <button onClick={() => navigate(-1)}>
                     <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-white cursor-pointer" />
                 </button>
                 <h1 className="ml-4 text-xl font-semibold text-gray-800 dark:text-white">My Table Bookings</h1>
@@ -151,7 +275,11 @@ export default function MyBookings() {
             <div className="p-4 space-y-4">
                 {bookings.length > 0 ? (
                     bookings.map((booking) => (
-                        <div key={booking._id} className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-gray-800 flex items-start gap-4">
+                        <div
+                            key={booking._id}
+                            onClick={() => setViewingBookingDetail(booking)}
+                            className="bg-white dark:bg-[#1a1a1a] rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-gray-800 flex items-start gap-4 cursor-pointer hover:border-[#7e3866]/30 transition-all active:scale-[0.99]"
+                        >
                             <div className="w-20 h-20 rounded-xl overflow-hidden flex-shrink-0 bg-slate-100 dark:bg-gray-800">
                                 <img
                                     src={booking.restaurant?.image || booking.restaurant?.profileImage?.url || ""}
@@ -178,7 +306,7 @@ export default function MyBookings() {
                                     </span>
                                 </p>
 
-                                <div className="flex items-center gap-4 mt-3">
+                                <div className="flex flex-wrap items-center gap-2 mt-3">
                                     <div className="flex items-center gap-1 text-[11px] font-bold text-gray-600 dark:text-gray-300 bg-slate-100 dark:bg-gray-800 px-2 py-0.5 rounded-lg">
                                         <Calendar className="w-3 h-3" />
                                         {new Date(booking.date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}
@@ -195,7 +323,10 @@ export default function MyBookings() {
 
                                 {booking.status === 'completed' && (
                                     <button
-                                        onClick={() => setSelectedBooking(booking)}
+                                        onClick={(e) => {
+                                            e.stopPropagation()
+                                            setSelectedBooking(booking)
+                                        }}
                                         className="mt-3 w-full py-2 bg-red-50 dark:bg-red-950/20 text-red-600 dark:text-red-400 text-[11px] font-bold rounded-lg border border-red-100 dark:border-red-900/30 hover:bg-red-100 transition-colors"
                                     >
                                         RATE & REVIEW
@@ -225,6 +356,13 @@ export default function MyBookings() {
                     booking={selectedBooking}
                     onClose={() => setSelectedBooking(null)}
                     onSubmit={handleReviewSubmit}
+                />
+            )}
+
+            {viewingBookingDetail && (
+                <BookingDetailModal
+                    booking={viewingBookingDetail}
+                    onClose={() => setViewingBookingDetail(null)}
                 />
             )}
         </AnimatedPage>
