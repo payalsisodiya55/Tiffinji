@@ -185,6 +185,17 @@ const normalizePhoneDigits = (value) => {
   return digits.slice(-10)
 }
 
+const formatDisplayPhone = (phone) => {
+  if (!phone) return ""
+  const trimmed = String(phone).trim()
+  if (trimmed.startsWith("+")) return trimmed
+  // For 11-13 digit numbers without a '+' (e.g. 919993911855), add a leading '+' prefix
+  if (/^\d{11,13}$/.test(trimmed)) {
+    return `+${trimmed}`
+  }
+  return trimmed
+}
+
 const normalizePincode = (value) => String(value || "").replace(/\D/g, "").slice(0, 6)
 
 const getVerifiedPhoneFromStoredRestaurant = () => {
@@ -588,6 +599,8 @@ export default function RestaurantOnboarding() {
   const [zones, setZones] = useState([])
   const [zonesLoading, setZonesLoading] = useState(false)
   const [isOnboardingHydrated, setIsOnboardingHydrated] = useState(false)
+  const [restaurantNameError, setRestaurantNameError] = useState("")
+  const [emailError, setEmailError] = useState("")
 
   const [step1, setStep1] = useState({
     restaurantName: "",
@@ -1195,12 +1208,48 @@ export default function RestaurantOnboarding() {
   }
 
   // Validation functions for each step
+  const validateRestaurantNameInput = (nameVal) => {
+    const trimmed = String(nameVal || "").trim()
+    if (!trimmed) {
+      setRestaurantNameError("")
+    } else if (trimmed.length > 80) {
+      setRestaurantNameError("Restaurant name cannot exceed 80 characters")
+    } else if (!/[a-zA-Z0-9]/.test(trimmed)) {
+      setRestaurantNameError("Restaurant name must contain at least one letter or number")
+    } else {
+      setRestaurantNameError("")
+    }
+  }
+
+  const validateEmailInput = (emailVal) => {
+    const trimmed = String(emailVal || "").trim()
+    if (!trimmed) {
+      setEmailError("")
+    } else if (!EMAIL_REGEX.test(trimmed)) {
+      setEmailError("Please enter a valid email address")
+    } else if (trimmed.toLowerCase().includes("@gnail.com") || trimmed.toLowerCase().includes("@gnil.com")) {
+      setEmailError("Invalid email domain. Did you mean '@gmail.com'?")
+    } else {
+      setEmailError("")
+    }
+  }
+
   const validateStep1 = () => {
     const errors = []
 
     if (!step1.restaurantName?.trim()) {
       errors.push("Restaurant name is required")
+      setRestaurantNameError("Restaurant name is required")
+    } else if (step1.restaurantName.trim().length > 80) {
+      errors.push("Restaurant name cannot exceed 80 characters")
+      setRestaurantNameError("Restaurant name cannot exceed 80 characters")
+    } else if (!/[a-zA-Z0-9]/.test(step1.restaurantName)) {
+      errors.push("Restaurant name must contain at least one letter or number")
+      setRestaurantNameError("Restaurant name must contain at least one letter or number")
+    } else {
+      setRestaurantNameError("")
     }
+
     if (typeof step1.pureVegRestaurant !== "boolean") {
       errors.push("Please select whether your restaurant is pure veg")
     }
@@ -1209,13 +1258,20 @@ export default function RestaurantOnboarding() {
     } else if (!OWNER_NAME_REGEX.test(step1.ownerName.trim())) {
       errors.push("Owner name must contain only letters")
     }
+
     if (!step1.ownerEmail?.trim()) {
       errors.push("Owner email is required")
+      setEmailError("Owner email is required")
     } else if (!EMAIL_REGEX.test(step1.ownerEmail.trim())) {
       errors.push("Please enter a valid email address")
+      setEmailError("Please enter a valid email address")
     } else if (step1.ownerEmail.toLowerCase().includes("@gnail.com") || step1.ownerEmail.toLowerCase().includes("@gnil.com")) {
       errors.push("Invalid email domain. Did you mean '@gmail.com'?")
+      setEmailError("Invalid email domain. Did you mean '@gmail.com'?")
+    } else {
+      setEmailError("")
     }
+
     if (!step1.ownerPhone?.trim()) {
       errors.push("Owner phone number is required")
     } else if (!/^\d{10}$/.test(normalizePhoneDigits(step1.ownerPhone))) {
@@ -1702,11 +1758,22 @@ export default function RestaurantOnboarding() {
             <Label className="text-xs text-gray-700">Restaurant name*</Label>
             <Input
               value={step1.restaurantName || ""}
-              onChange={(e) => setStep1({ ...step1, restaurantName: formatNameToCapital(e.target.value) })}
-              className="mt-1 bg-white text-sm"
+              onChange={(e) => {
+                const val = formatNameToCapital(e.target.value)
+                setStep1({ ...step1, restaurantName: val })
+                validateRestaurantNameInput(val)
+              }}
+              onBlur={(e) => {
+                validateRestaurantNameInput(e.target.value)
+              }}
+              className={`mt-1 bg-white text-sm ${restaurantNameError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
               placeholder="Customers will see this name"
               disabled={!isEditing}
+              maxLength={80}
             />
+            {restaurantNameError && (
+              <p className="text-red-500 text-xs mt-1 font-medium">{restaurantNameError}</p>
+            )}
           </div>
           <div>
             <Label className="text-xs text-gray-700">Pure veg restaurant?*</Label>
@@ -1767,16 +1834,26 @@ export default function RestaurantOnboarding() {
             <Input
               type="email"
               value={step1.ownerEmail || ""}
-              onChange={(e) => setStep1({ ...step1, ownerEmail: normalizeEmail(e.target.value) })}
-              className="mt-1 bg-white text-sm"
+              onChange={(e) => {
+                const val = normalizeEmail(e.target.value)
+                setStep1({ ...step1, ownerEmail: val })
+                validateEmailInput(val)
+              }}
+              onBlur={(e) => {
+                validateEmailInput(e.target.value)
+              }}
+              className={`mt-1 bg-white text-sm ${emailError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
               placeholder="ritu@gmail.com"
               disabled={!isEditing}
             />
+            {emailError && (
+              <p className="text-red-500 text-xs mt-1 font-medium">{emailError}</p>
+            )}
           </div>
           <div>
             <Label className="text-xs text-gray-700">Phone number*</Label>
             <Input
-              value={step1.ownerPhone || ""}
+              value={formatDisplayPhone(step1.ownerPhone) || ""}
               onChange={(e) => {
                 const val = e.target.value.replace(/\D/g, "").slice(0, 10)
                 setStep1({ ...step1, ownerPhone: val })
@@ -1795,7 +1872,7 @@ export default function RestaurantOnboarding() {
         <div>
           <Label className="text-xs text-gray-700">Primary contact number*</Label>
           <Input
-            value={step1.primaryContactNumber || ""}
+            value={formatDisplayPhone(step1.primaryContactNumber) || ""}
             onChange={(e) => {
               const val = e.target.value.replace(/\D/g, "").slice(0, 10)
               setStep1({ ...step1, primaryContactNumber: val })
