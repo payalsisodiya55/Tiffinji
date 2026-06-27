@@ -559,6 +559,23 @@ function TimeSelector({ label, value, onChange, onFieldExit }) {
   )
 }
 
+const findMatchingZoneName = (text, zonesList) => {
+  if (!text) return null
+  const cleanedText = String(text).toLowerCase()
+  for (const z of zonesList) {
+    const name = String(z?.name || z?.zoneName || z?.serviceLocation || "").trim()
+    if (!name) continue
+    const cleanedName = name.toLowerCase()
+    if (cleanedText.includes(cleanedName) || cleanedName.includes(cleanedText)) {
+      return name
+    }
+    if (cleanedText.includes("इन्दौर") || cleanedText.includes("इंदौर")) {
+      if (cleanedName === "indore") return name
+    }
+  }
+  return null
+}
+
 export default function RestaurantOnboarding() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
@@ -601,6 +618,10 @@ export default function RestaurantOnboarding() {
   const [isOnboardingHydrated, setIsOnboardingHydrated] = useState(false)
   const [restaurantNameError, setRestaurantNameError] = useState("")
   const [emailError, setEmailError] = useState("")
+  const [panNumberError, setPanNumberError] = useState("")
+  const [gstNumberError, setGstNumberError] = useState("")
+  const [fssaiNumberError, setFssaiNumberError] = useState("")
+  const [ifscCodeError, setIfscCodeError] = useState("")
 
   const [step1, setStep1] = useState({
     restaurantName: "",
@@ -1234,6 +1255,50 @@ export default function RestaurantOnboarding() {
     }
   }
 
+  const validatePanInput = (val) => {
+    const trimmed = String(val || "").trim().toUpperCase()
+    if (!trimmed) {
+      setPanNumberError("")
+    } else if (!PAN_NUMBER_REGEX.test(trimmed)) {
+      setPanNumberError("PAN number must be valid (e.g., ABCDE1234F)")
+    } else {
+      setPanNumberError("")
+    }
+  }
+
+  const validateGstInput = (val) => {
+    const trimmed = String(val || "").trim().toUpperCase()
+    if (!trimmed) {
+      setGstNumberError("")
+    } else if (!GST_NUMBER_REGEX.test(trimmed)) {
+      setGstNumberError("GST number must be a valid 15-character GSTIN")
+    } else {
+      setGstNumberError("")
+    }
+  }
+
+  const validateFssaiInput = (val) => {
+    const trimmed = String(val || "").trim()
+    if (!trimmed) {
+      setFssaiNumberError("")
+    } else if (!FSSAI_NUMBER_REGEX.test(trimmed)) {
+      setFssaiNumberError("FSSAI number must contain exactly 14 digits")
+    } else {
+      setFssaiNumberError("")
+    }
+  }
+
+  const validateIfscInput = (val) => {
+    const trimmed = String(val || "").trim().toUpperCase()
+    if (!trimmed) {
+      setIfscCodeError("")
+    } else if (!IFSC_CODE_REGEX.test(trimmed)) {
+      setIfscCodeError("IFSC code must contain exactly 11 alphanumeric characters")
+    } else {
+      setIfscCodeError("")
+    }
+  }
+
   const validateStep1 = () => {
     const errors = []
 
@@ -1408,8 +1473,12 @@ export default function RestaurantOnboarding() {
 
     if (!step3.panNumber?.trim()) {
       errors.push("PAN number is required")
+      setPanNumberError("PAN number is required")
     } else if (!PAN_NUMBER_REGEX.test(step3.panNumber.trim().toUpperCase())) {
       errors.push("PAN number must be valid (e.g., ABCDE1234F)")
+      setPanNumberError("PAN number must be valid (e.g., ABCDE1234F)")
+    } else {
+      setPanNumberError("")
     }
     if (!step3.nameOnPan?.trim()) {
       errors.push("Name on PAN is required")
@@ -1429,8 +1498,12 @@ export default function RestaurantOnboarding() {
 
     if (!step3.fssaiNumber?.trim()) {
       errors.push("FSSAI number is required")
+      setFssaiNumberError("FSSAI number is required")
     } else if (!FSSAI_NUMBER_REGEX.test(step3.fssaiNumber.trim())) {
       errors.push("FSSAI number must contain exactly 14 digits")
+      setFssaiNumberError("FSSAI number must contain exactly 14 digits")
+    } else {
+      setFssaiNumberError("")
     }
     if (!step3.fssaiExpiry?.trim()) {
       errors.push("FSSAI expiry date is required")
@@ -1454,8 +1527,12 @@ export default function RestaurantOnboarding() {
     if (step3.gstRegistered) {
       if (!step3.gstNumber?.trim()) {
         errors.push("GST number is required when GST registered")
+        setGstNumberError("GST number is required when GST registered")
       } else if (!GST_NUMBER_REGEX.test(step3.gstNumber.trim().toUpperCase())) {
         errors.push("GST number must be a valid 15-character GSTIN")
+        setGstNumberError("GST number must be a valid 15-character GSTIN")
+      } else {
+        setGstNumberError("")
       }
       if (!step3.gstLegalName?.trim()) {
         errors.push("GST legal name is required when GST registered")
@@ -1477,6 +1554,8 @@ export default function RestaurantOnboarding() {
           errors.push("Please upload a valid GST image")
         }
       }
+    } else {
+      setGstNumberError("")
     }
 
     if (!step3.accountNumber?.trim()) {
@@ -1494,8 +1573,12 @@ export default function RestaurantOnboarding() {
     }
     if (!step3.ifscCode?.trim()) {
       errors.push("IFSC code is required")
+      setIfscCodeError("IFSC code is required")
     } else if (!IFSC_CODE_REGEX.test(step3.ifscCode.trim().toUpperCase())) {
       errors.push("IFSC code must contain exactly 11 alphanumeric characters")
+      setIfscCodeError("IFSC code must contain exactly 11 alphanumeric characters")
+    } else {
+      setIfscCodeError("")
     }
     if (!step3.accountHolderName?.trim()) {
       errors.push("Account holder name is required")
@@ -1929,9 +2012,36 @@ export default function RestaurantOnboarding() {
                     onClick={() => {
                       const { lat, lng, display, addr } = s
                       const area = addr.suburb || addr.neighbourhood || addr.city_district || addr.locality || ""
-                      const city = addr.city || addr.town || addr.village || ""
+
+                      // Extract city — Nominatim district-level results may lack addr.city
+                      let city = addr.city || addr.town || addr.village || ""
+                      if (!city) {
+                        // Try state_district after removing "ज़िला"/"जिला"/"District" suffix
+                        const district = addr.state_district || addr.county || ""
+                        if (district) {
+                          city = district.replace(/\s*(ज़िला|जिला|District|district|Dist\.?)\s*/gi, "").trim()
+                        }
+                      }
+                      if (!city) {
+                        // Use first comma-separated part of display text (e.g. "Indore" from "Indore, इन्दौर ज़िला, ...")
+                        const firstPart = (display || "").split(",")[0].trim()
+                        // Only use if it looks like a name (not a number/pincode)
+                        if (firstPart && !/^\d+$/.test(firstPart)) {
+                          city = firstPart
+                        }
+                      }
+
+                      // Extract pincode — Nominatim district-level results may lack addr.postcode
+                      let pincode = addr.postcode || ""
+                      if (!pincode) {
+                        // Extract 6-digit Indian pincode from display text
+                        const pincodeMatch = (display || "").match(/\b\d{6}\b/)
+                        if (pincodeMatch) {
+                          pincode = pincodeMatch[0]
+                        }
+                      }
+
                       const state = addr.state || ""
-                      const pincode = addr.postcode || ""
 
                       setStep1((prev) => ({
                         ...prev,
@@ -2308,25 +2418,143 @@ export default function RestaurantOnboarding() {
     zoneDetectTimerRef.current = setTimeout(async () => {
       lastZoneDetectKeyRef.current = key
       try {
+        // 1. Detect zone via backend polygon endpoint
         const res = await zoneAPI.detectZone(lat, lng)
         const payload = res?.data?.data
+        let detectedZoneId = ""
+        let zoneData = null
 
         if (res?.data?.success && payload) {
           if (payload.status === "IN_SERVICE" && payload.zoneId) {
-            setStep1((prev) =>
-              prev.zoneId === payload.zoneId ? prev : { ...prev, zoneId: payload.zoneId },
-            )
-            lastOutOfZoneToastKeyRef.current = null
-          } else {
-            if (lastOutOfZoneToastKeyRef.current !== key) {
-              toast.error("Selected location is outside all service zones")
-              lastOutOfZoneToastKeyRef.current = key
-            }
-            setStep1((prev) => (prev.zoneId ? { ...prev, zoneId: "" } : prev))
+            detectedZoneId = payload.zoneId
+            zoneData = payload.zone
           }
         }
+
+        // 2. Fallback zone detection by name matching (from address text already selected)
+        const addressText = String(locationSearchValue || step1.location?.formattedAddress || "").toLowerCase()
+        if (!detectedZoneId) {
+          const matchedZone = zones.find((z) => {
+            const zName = String(z?.name || z?.zoneName || z?.serviceLocation || "").toLowerCase()
+            return zName && addressText.includes(zName)
+          })
+          if (matchedZone) {
+            detectedZoneId = String(matchedZone._id || matchedZone.id || "")
+            zoneData = matchedZone
+          }
+        }
+
+        if (detectedZoneId) {
+          lastOutOfZoneToastKeyRef.current = null
+        } else {
+          if (lastOutOfZoneToastKeyRef.current !== key) {
+            toast.error("Selected location is outside all service zones")
+            lastOutOfZoneToastKeyRef.current = key
+          }
+        }
+
+        // 3. Only fill city/pincode if missing from autocomplete — never overwrite
+        const existingCity = String(step1.location?.city || "").trim()
+        const existingPincode = String(step1.location?.pincode || "").trim()
+        const fullAddressText = String(locationSearchValue || step1.location?.formattedAddress || "")
+
+        // 3a. Try extracting from the address text FIRST (most reliable for user-selected addresses)
+        let extractedCity = ""
+        let extractedPincode = ""
+        if (!existingCity || !existingPincode) {
+          // Extract pincode (6-digit Indian pincode) from address text
+          if (!existingPincode) {
+            const pincodeMatch = fullAddressText.match(/\b\d{6}\b/)
+            if (pincodeMatch) extractedPincode = pincodeMatch[0]
+          }
+          // Extract city from first comma-separated part of address text
+          if (!existingCity) {
+            const firstPart = fullAddressText.split(",")[0].trim()
+            if (firstPart && !/^\d+$/.test(firstPart)) {
+              extractedCity = firstPart
+            }
+            // Also try matching to a known zone name
+            if (!extractedCity && zoneData) {
+              extractedCity = zoneData.name || zoneData.serviceLocation || zoneData.zoneName || ""
+            }
+          }
+        }
+
+        // 3b. Only run reverse geocoding if text extraction ALSO failed
+        let geocoded = null
+        const stillNeedsCity = !existingCity && !extractedCity
+        const stillNeedsPincode = !existingPincode && !extractedPincode
+
+        if (stillNeedsCity || stillNeedsPincode) {
+          // Try Google Geocoder first if loaded
+          if (window.google?.maps?.Geocoder) {
+            try {
+              const geocoder = new window.google.maps.Geocoder()
+              const results = await new Promise((resolve, reject) => {
+                geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+                  if (status === "OK") resolve(results)
+                  else reject(new Error(status))
+                })
+              })
+              if (results && results[0]) {
+                const comps = results[0].address_components || []
+                const getComp = (types) => comps.find((c) => types.some((t) => c.types?.includes(t)))?.long_name || ""
+                geocoded = {
+                  city: getComp(["locality"]) || getComp(["administrative_area_level_3"]) || getComp(["administrative_area_level_2"]),
+                  pincode: getComp(["postal_code"]),
+                  state: getComp(["administrative_area_level_1"]),
+                  area: getComp(["sublocality_level_1", "sublocality", "neighborhood"]) || getComp(["locality"])
+                }
+              }
+            } catch (e) {
+              debugError("Google Geocoding failed:", e)
+            }
+          }
+
+          // Fallback to Nominatim only if Google Geocoder failed or was not available
+          if (!geocoded) {
+            try {
+              const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10`
+              const response = await fetch(url, { headers: { Accept: "application/json", "User-Agent": "Tiffinji-App" } })
+              const data = await response.json()
+              if (data && data.address) {
+                const addr = data.address
+                // zoom=10 gives city-level results, avoiding granular village names
+                geocoded = {
+                  city: addr.city || addr.town || addr.county || addr.state_district || "",
+                  pincode: addr.postcode || "",
+                  state: addr.state || "",
+                  area: addr.suburb || addr.neighbourhood || addr.city_district || ""
+                }
+              }
+            } catch (e) {
+              debugError("Nominatim geocoding failed:", e)
+            }
+          }
+        }
+
+        // Build final values with priority: existing > text-extracted > geocoded
+        const finalCity = extractedCity || geocoded?.city || ""
+        const finalPincode = extractedPincode || geocoded?.pincode || ""
+        const finalState = geocoded?.state || ""
+        const finalArea = geocoded?.area || ""
+
+        // Update state — ALWAYS prefer already-set autocomplete values over everything else
+        setStep1((prev) => ({
+          ...prev,
+          zoneId: detectedZoneId,
+          location: {
+            ...prev.location,
+            // Only fill in if the field was empty — never overwrite autocomplete results
+            city: prev.location.city || finalCity || "",
+            pincode: prev.location.pincode || finalPincode || "",
+            state: prev.location.state || finalState || "",
+            area: prev.location.area || finalArea || "",
+          }
+        }))
+
       } catch (err) {
-        debugError("Zone detect failed:", err)
+        debugError("Zone detect/reverse geocode failed:", err)
       }
     }, 350)
 
@@ -2703,10 +2931,18 @@ export default function RestaurantOnboarding() {
             <Label className="text-xs text-gray-700">PAN number</Label>
             <Input
               value={step3.panNumber || ""}
-              onChange={(e) => setStep3({ ...step3, panNumber: normalizePAN(e.target.value) })}
-              className="mt-1 bg-white text-sm"
+              onChange={(e) => {
+                const val = normalizePAN(e.target.value)
+                setStep3({ ...step3, panNumber: val })
+                validatePanInput(val)
+              }}
+              onBlur={(e) => validatePanInput(e.target.value)}
+              className={`mt-1 bg-white text-sm ${panNumberError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
               placeholder="ABCDE1234F"
             />
+            {panNumberError && (
+              <p className="text-red-500 text-xs mt-1 font-medium">{panNumberError}</p>
+            )}
           </div>
           <div>
             <Label className="text-xs text-gray-700">PAN Card Holder Name</Label>
@@ -2802,12 +3038,22 @@ export default function RestaurantOnboarding() {
         </div>
         {step3.gstRegistered && (
           <div className="space-y-3">
-            <Input
-              value={step3.gstNumber || ""}
-              onChange={(e) => setStep3({ ...step3, gstNumber: normalizeGST(e.target.value) })}
-              className="bg-white text-sm"
-              placeholder="GST number (15 characters)"
-            />
+            <div>
+              <Input
+                value={step3.gstNumber || ""}
+                onChange={(e) => {
+                  const val = normalizeGST(e.target.value)
+                  setStep3({ ...step3, gstNumber: val })
+                  validateGstInput(val)
+                }}
+                onBlur={(e) => validateGstInput(e.target.value)}
+                className={`bg-white text-sm ${gstNumberError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                placeholder="GST number (15 characters)"
+              />
+              {gstNumberError && (
+                <p className="text-red-500 text-xs mt-1 font-medium">{gstNumberError}</p>
+              )}
+            </div>
             <Input
               value={step3.gstLegalName || ""}
               onChange={(e) =>
@@ -2884,14 +3130,22 @@ export default function RestaurantOnboarding() {
       <section className="bg-white p-4 sm:p-6 rounded-md space-y-4">
         <h2 className="text-lg font-semibold text-black">FSSAI details</h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            value={step3.fssaiNumber || ""}
-            onChange={(e) =>
-              setStep3({ ...step3, fssaiNumber: e.target.value.replace(/\D/g, "").slice(0, 14) })
-            }
-            className="bg-white text-sm"
-            placeholder="FSSAI number (14 digits)"
-          />
+          <div>
+            <Input
+              value={step3.fssaiNumber || ""}
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, "").slice(0, 14)
+                setStep3({ ...step3, fssaiNumber: val })
+                validateFssaiInput(val)
+              }}
+              onBlur={(e) => validateFssaiInput(e.target.value)}
+              className={`bg-white text-sm ${fssaiNumberError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+              placeholder="FSSAI number (14 digits)"
+            />
+            {fssaiNumberError && (
+              <p className="text-red-500 text-xs mt-1 font-medium">{fssaiNumberError}</p>
+            )}
+          </div>
           <div>
             <Label className="text-xs text-gray-700 mb-1 block">FSSAI expiry date</Label>
             <Popover open={isFssaiCalendarOpen} onOpenChange={setIsFssaiCalendarOpen}>
@@ -3007,12 +3261,22 @@ export default function RestaurantOnboarding() {
           />
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input
-            value={step3.ifscCode || ""}
-            onChange={(e) => setStep3({ ...step3, ifscCode: normalizeIFSC(e.target.value) })}
-            className="bg-white text-sm"
-            placeholder="IFSC code"
-          />
+          <div>
+            <Input
+              value={step3.ifscCode || ""}
+              onChange={(e) => {
+                const val = normalizeIFSC(e.target.value)
+                setStep3({ ...step3, ifscCode: val })
+                validateIfscInput(val)
+              }}
+              onBlur={(e) => validateIfscInput(e.target.value)}
+              className={`bg-white text-sm ${ifscCodeError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+              placeholder="IFSC code"
+            />
+            {ifscCodeError && (
+              <p className="text-red-500 text-xs mt-1 font-medium">{ifscCodeError}</p>
+            )}
+          </div>
           <Select
             value={step3.accountType || ""}
             onValueChange={(value) => setStep3({ ...step3, accountType: value })}
