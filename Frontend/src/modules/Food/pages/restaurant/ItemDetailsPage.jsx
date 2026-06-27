@@ -57,6 +57,7 @@ export default function ItemDetailsPage() {
   const defaultCategory = location.state?.category || "Select category"
   const defaultCategoryId = location.state?.categoryId || ""
   const fileInputRef = useRef(null)
+  const scrollContentRef = useRef(null)
 
   // Initialize state with empty values - will be populated from API
   const [itemData, setItemData] = useState(null) // Store the full item data for saving
@@ -303,29 +304,7 @@ export default function ItemDetailsPage() {
     fetchCategories()
   }, [category, defaultCategory, defaultCategoryId, isNewItem, selectedCategoryId])
 
-  // Keep focused form fields visible above mobile keyboard
-  useEffect(() => {
-    const ensureFieldVisible = (target) => {
-      if (!target) return
-      const isFormField = target.matches?.('input, textarea, select, [contenteditable="true"]')
-      if (!isFormField) return
-
-      window.setTimeout(() => {
-        target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" })
-      }, 120)
-    }
-
-    const handleFocusIn = (event) => {
-      ensureFieldVisible(event.target)
-    }
-
-    document.addEventListener("focusin", handleFocusIn, true)
-    return () => {
-      document.removeEventListener("focusin", handleFocusIn, true)
-    }
-  }, [])
-
-  // Track virtual keyboard height and push footer above keyboard
+  // Track virtual keyboard height and push layout above keyboard
   useEffect(() => {
     const viewport = window.visualViewport
     if (!viewport) return
@@ -342,6 +321,43 @@ export default function ItemDetailsPage() {
     return () => {
       viewport.removeEventListener("resize", updateKeyboardInset)
       viewport.removeEventListener("scroll", updateKeyboardInset)
+    }
+  }, [])
+
+  // Scroll focused field above keyboard inside the scrollable content container
+  useEffect(() => {
+    const ensureFieldVisible = (target) => {
+      if (!target) return
+      const isFormField = target.matches?.('input, textarea, select, [contenteditable="true"]')
+      if (!isFormField) return
+
+      window.setTimeout(() => {
+        const container = scrollContentRef.current
+        if (!container) {
+          target.scrollIntoView({ behavior: "smooth", block: "nearest" })
+          return
+        }
+        // Get the bounding rects relative to the container
+        const containerRect = container.getBoundingClientRect()
+        const fieldRect = target.getBoundingClientRect()
+        // Desired gap above the keyboard — 24px breathing room
+        const gap = 24
+        // If field bottom is below the container bottom, scroll it into view
+        if (fieldRect.bottom > containerRect.bottom - gap) {
+          const scrollBy = fieldRect.bottom - containerRect.bottom + gap
+          container.scrollBy({ top: scrollBy, behavior: "smooth" })
+        } else if (fieldRect.top < containerRect.top) {
+          const scrollBy = fieldRect.top - containerRect.top - gap
+          container.scrollBy({ top: scrollBy, behavior: "smooth" })
+        }
+      }, 150)
+    }
+
+    const handleFocusIn = (event) => ensureFieldVisible(event.target)
+
+    document.addEventListener("focusin", handleFocusIn, true)
+    return () => {
+      document.removeEventListener("focusin", handleFocusIn, true)
     }
   }, [])
 
@@ -818,7 +834,10 @@ export default function ItemDetailsPage() {
   }
 
   return (
-    <div className="h-screen bg-white flex flex-col overflow-hidden">
+    <div
+      className="bg-white flex flex-col overflow-hidden"
+      style={{ height: keyboardInset > 0 ? `calc(100vh - ${keyboardInset}px)` : "100dvh" }}
+    >
       <style>{`
         [data-slot="switch"][data-state="checked"] {
           background-color: #16a34a !important;
@@ -841,8 +860,8 @@ export default function ItemDetailsPage() {
       </div>
 
 
-      {/* Content */}
-      <div className="flex-1 overflow-y-auto" style={{ paddingBottom: "24px" }}>
+      {/* Content — scrollable region that shrinks when keyboard opens */}
+      <div ref={scrollContentRef} className="flex-1 overflow-y-auto" style={{ paddingBottom: "24px" }}>
         {!isNewItem && currentApprovalStatus === "rejected" && currentRejectionReason ? (
           <div className="px-4 pt-4">
             <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
