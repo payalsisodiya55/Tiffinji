@@ -1059,13 +1059,13 @@ export default function PageNavbar({
             ) : (
               <div className="flex flex-col items-center min-w-0">
                 <div className="flex items-center justify-center gap-1">
-                  <span className={`text-sm sm:text-base font-bold ${textColorClass} truncate max-w-[140px] sm:max-w-[200px]`}>
+                  <span className={`inline-block text-sm sm:text-base font-bold ${textColorClass} truncate max-w-[110px] sm:max-w-[200px]`}>
                     {displayArea}
                   </span>
                   <ChevronDown className={`h-3 w-3 sm:h-4 sm:w-4 ${textColorClass} flex-shrink-0`} strokeWidth={2.5} />
                 </div>
                 {displayAddress && (
-                  <span className={`text-[10px] sm:text-xs font-medium ${textColorClass}/70 truncate max-w-[140px] sm:max-w-[200px] text-center`}>
+                  <span className={`inline-block text-[10px] sm:text-xs font-medium ${textColorClass}/70 truncate max-w-[110px] sm:max-w-[200px] text-center`}>
                     {displayAddress}
                   </span>
                 )}

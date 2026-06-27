@@ -132,6 +132,31 @@ function RestaurantDetailsContent() {
   const [visibleItemCount, setVisibleItemCount] = useState(50)
   const dishCardRefs = useRef({})
 
+  const [dragLimits, setDragLimits] = useState({ left: -280, right: 8, top: -600, bottom: 60 })
+
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const updateLimits = () => {
+      const H = window.innerHeight
+      const W = window.innerWidth
+      const maxLeft = -(W - 24 - 100 - 16)
+      const maxRight = 8
+      const maxTop = -(H - 80 - 48 - 80)
+      const maxBottom = 60
+      
+      setDragLimits({
+        left: maxLeft < 0 ? maxLeft : -280,
+        right: maxRight,
+        top: maxTop < 0 ? maxTop : -600,
+        bottom: maxBottom
+      })
+    }
+
+    updateLimits()
+    window.addEventListener("resize", updateLimits)
+    return () => window.removeEventListener("resize", updateLimits)
+  }, [])
+
   const getLineItemIdForDish = (item, variant = null) =>
     buildCartLineId(item?.id || item?._id || "", variant?.id || variant?._id || "")
 
@@ -2944,10 +2969,12 @@ function RestaurantDetailsContent() {
         createPortal(
           <motion.div
             drag
+            dragConstraints={dragLimits}
+            dragElastic={0.1}
             dragMomentum={false}
             whileDrag={{ scale: 1.1, zIndex: 100 }}
             whileHover={{ scale: 1.05 }}
-            className="fixed bottom-24 right-6 z-[60] pointer-events-auto sm:bottom-8 cursor-grab active:cursor-grabbing"
+            className="fixed bottom-20 right-6 z-[60] pointer-events-auto sm:bottom-8 cursor-grab active:cursor-grabbing"
           >
             <Button
               className="bg-[#7e3866] hover:bg-[#55254b] text-white flex items-center gap-2 shadow-[0_12px_40px_rgba(126,56,102,0.4)] border border-white/20 px-6 py-3.5 h-auto rounded-full font-bold transform transition-all duration-300 active:scale-95 group"
