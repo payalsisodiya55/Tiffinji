@@ -322,24 +322,30 @@ export default function PublicSupport() {
 
         {/* Contact Info Footer */}
         <div className="mt-20 grid grid-cols-1 md:grid-cols-3 gap-8 border-t pt-12 dark:border-gray-800">
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-gray-50 dark:bg-[#1a1a1a] rounded-xl">
+          <a
+            href={`tel:${settings.supportPhone}`}
+            className="flex items-start gap-4 group cursor-pointer hover:bg-gray-50 dark:hover:bg-[#1a1a1a] rounded-2xl p-3 -m-3 transition-colors"
+          >
+            <div className="p-3 bg-gray-50 dark:bg-[#1a1a1a] rounded-xl group-hover:bg-[#7e3866]/10 transition-colors">
               <Phone className="h-6 w-6 text-[#7e3866]" />
             </div>
             <div>
-              <h4 className="font-bold mb-1">Call Us</h4>
-              <p className="text-sm text-gray-500">{settings.supportPhone}</p>
+              <h4 className="font-bold mb-1 group-hover:text-[#7e3866] transition-colors">Call Us</h4>
+              <p className="text-sm text-gray-500 group-hover:text-[#7e3866]/70 transition-colors">{settings.supportPhone}</p>
             </div>
-          </div>
-          <div className="flex items-start gap-4">
-            <div className="p-3 bg-gray-50 dark:bg-[#1a1a1a] rounded-xl">
+          </a>
+          <a
+            href={`mailto:${settings.supportEmail}`}
+            className="flex items-start gap-4 group cursor-pointer hover:bg-gray-50 dark:hover:bg-[#1a1a1a] rounded-2xl p-3 -m-3 transition-colors"
+          >
+            <div className="p-3 bg-gray-50 dark:bg-[#1a1a1a] rounded-xl group-hover:bg-[#7e3866]/10 transition-colors">
               <Mail className="h-6 w-6 text-[#7e3866]" />
             </div>
             <div>
-              <h4 className="font-bold mb-1">Email Us</h4>
-              <p className="text-sm text-gray-500">{settings.supportEmail}</p>
+              <h4 className="font-bold mb-1 group-hover:text-[#7e3866] transition-colors">Email Us</h4>
+              <p className="text-sm text-gray-500 group-hover:text-[#7e3866]/70 transition-colors">{settings.supportEmail}</p>
             </div>
-          </div>
+          </a>
           <div className="flex items-start gap-4">
             <div className="p-3 bg-gray-50 dark:bg-[#1a1a1a] rounded-xl">
               <Clock className="h-6 w-6 text-[#7e3866]" />
