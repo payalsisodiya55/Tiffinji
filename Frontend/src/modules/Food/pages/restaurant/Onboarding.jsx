@@ -1903,7 +1903,6 @@ export default function RestaurantOnboarding() {
           </p>
 
           <div className="relative">
-            <Label className="text-xs text-gray-700">Search location</Label>
             <div className="relative">
               <Input
                 ref={locationSearchInputRef}
