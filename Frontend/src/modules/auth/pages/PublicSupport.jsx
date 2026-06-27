@@ -81,6 +81,7 @@ export default function PublicSupport() {
     message: ""
   })
   const [loading, setLoading] = useState(false)
+  const [phoneError, setPhoneError] = useState("")
   const [settings, setSettings] = useState({
     supportEmail: "rbfoodscorp@gmail.com",
     supportPhone: "9940837039",
@@ -102,8 +103,20 @@ export default function PublicSupport() {
       .catch(() => null)
   }, [])
 
+  const validatePhone = (val) => {
+    const cleaned = String(val || "").replace(/\D/g, "")
+    if (!cleaned) {
+      setPhoneError("")
+    } else if (cleaned.length < 10) {
+      setPhoneError("Phone number must be exactly 10 digits")
+    } else {
+      setPhoneError("")
+    }
+  }
+
   const handleTopicSelect = (topic) => {
     setSelectedTopic(topic)
+    setPhoneError("")
     setFormData({
       name: "",
       email: "",
@@ -116,6 +129,13 @@ export default function PublicSupport() {
 
   const handleSubmit = async (e) => {
     e.preventDefault()
+    const cleanedPhone = String(formData.phone || "").replace(/\D/g, "")
+    if (cleanedPhone.length < 10) {
+      setPhoneError("Phone number must be exactly 10 digits")
+      toast.error("Phone number must be exactly 10 digits")
+      return
+    }
+
     setLoading(true)
 
     // Simulate API call
@@ -217,9 +237,17 @@ export default function PublicSupport() {
                       placeholder="Enter 10-digit number"
                       maxLength={10}
                       value={formData.phone}
-                      onChange={e => setFormData({ ...formData, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
-                      className="bg-white dark:bg-[#0a0a0a]"
+                      onChange={e => {
+                        const val = e.target.value.replace(/\D/g, "").slice(0, 10)
+                        setFormData({ ...formData, phone: val })
+                        validatePhone(val)
+                      }}
+                      onBlur={e => validatePhone(e.target.value)}
+                      className={`bg-white dark:bg-[#0a0a0a] ${phoneError ? "border-red-500 focus-visible:ring-red-500" : ""}`}
                     />
+                    {phoneError && (
+                      <p className="text-red-500 text-xs mt-1 font-medium">{phoneError}</p>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-2">
