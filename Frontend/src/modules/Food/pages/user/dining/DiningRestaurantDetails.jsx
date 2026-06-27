@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { restaurantAPI, diningAPI } from "@food/api"
 import { useProfile } from "@food/context/ProfileContext"
+import { isModuleAuthenticated } from "@food/utils/auth"
 import { getMenuFromResponse } from "@food/utils/menuItems"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
@@ -422,7 +423,15 @@ export default function DiningRestaurantDetails() {
           <div className="px-3 pb-1 pt-3">
             <div className="w-full">
               <button
-                onClick={() => canBookTable && setIsBookingSheetOpen(true)}
+                onClick={() => {
+                  if (!canBookTable) return
+                  if (!isModuleAuthenticated('user')) {
+                    toast.error("Please login to book a table")
+                    navigate("/user/auth/login", { state: { from: location.pathname } })
+                    return
+                  }
+                  setIsBookingSheetOpen(true)
+                }}
                 disabled={!canBookTable}
                 className={`flex h-[52px] w-full items-center justify-center gap-2 rounded-full border px-3 text-[15px] font-medium shadow-[0_10px_24px_rgba(15,23,42,0.05)] transition-all ${
                   canBookTable
@@ -579,7 +588,15 @@ export default function DiningRestaurantDetails() {
       <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#ebe5da] dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 p-4 backdrop-blur-xl transition-colors">
         <div className="mx-auto max-w-md">
           <Button
-            onClick={() => canBookTable && setIsBookingSheetOpen(true)}
+            onClick={() => {
+              if (!canBookTable) return
+              if (!isModuleAuthenticated('user')) {
+                toast.error("Please login to book a table")
+                navigate("/user/auth/login", { state: { from: location.pathname } })
+                return
+              }
+              setIsBookingSheetOpen(true)
+            }}
             disabled={!canBookTable}
             className={`h-12 w-full rounded-2xl border text-[17px] font-medium transition-all ${
               canBookTable

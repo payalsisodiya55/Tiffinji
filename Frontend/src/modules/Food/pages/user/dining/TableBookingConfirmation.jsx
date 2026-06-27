@@ -4,6 +4,7 @@ import { ArrowLeft, Calendar, Users, MapPin, Ticket, ChevronRight, Edit2, Shield
 import { Button } from "@food/components/ui/button"
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import { diningAPI, authAPI } from "@food/api"
+import { isModuleAuthenticated } from "@food/utils/auth"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { toast } from "sonner"
 import Loader from "@food/components/Loader"
@@ -41,6 +42,12 @@ export default function TableBookingConfirmation() {
     const bookingRef = useRef(false)
 
     useEffect(() => {
+        if (!isModuleAuthenticated('user')) {
+            toast.error("Please login to proceed")
+            navigate("/user/auth/login", { state: { from: location.pathname } })
+            return
+        }
+
         if (!restaurant) {
             navigate("/food/user/dining")
             return
@@ -55,11 +62,20 @@ export default function TableBookingConfirmation() {
                         response?.data?.data ||
                         response?.data?.user ||
                         null
+                    if (!userData) {
+                        toast.error("Please login to proceed")
+                        navigate("/user/auth/login", { state: { from: location.pathname } })
+                        return
+                    }
                     setUser(userData)
+                } else {
+                    toast.error("Please login to proceed")
+                    navigate("/user/auth/login", { state: { from: location.pathname } })
                 }
             } catch (error) {
                 debugError("Error fetching user:", error)
-                // If not logged in, navigate to sign-in but the ProtectedRoute should handle this
+                toast.error("Please login to proceed")
+                navigate("/user/auth/login", { state: { from: location.pathname } })
             } finally {
                 setLoading(false)
             }
@@ -270,8 +286,8 @@ export default function TableBookingConfirmation() {
                     </p>
                      <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800 flex items-center justify-between transition-colors">
                         <div className="text-left">
-                            <p className="font-bold text-gray-900 dark:text-slate-100">{user?.name || "Shailu"}</p>
-                            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">{user?.phone || user?.email || "8090512291"}</p>
+                            <p className="font-bold text-gray-900 dark:text-slate-100">{user?.name || ""}</p>
+                            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">{user?.phone || user?.email || ""}</p>
                         </div>
                         <button 
                             type="button"
