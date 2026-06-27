@@ -926,26 +926,53 @@ export default function Under250() {
               />
             </div>
 
-            <div
-              className="flex h-full w-full transition-transform duration-500 ease-out"
-              style={{ transform: `translateX(-${currentBannerIndex * 100}%)` }}
-            >
-              {bannerImages.map((bannerImage, index) => (
-                <div key={`${bannerImage}-${index}`} className="relative h-full w-full shrink-0">
+            <div className="relative w-full h-full overflow-hidden">
+              <AnimatePresence initial={false} mode="popLayout">
+                <motion.div
+                  key={currentBannerIndex}
+                  initial={{ x: "100%" }}
+                  animate={{ x: 0 }}
+                  exit={{ x: "-100%" }}
+                  transition={{ duration: 0.5, ease: "easeInOut" }}
+                  className="absolute inset-0 w-full h-full"
+                >
                   <OptimizedImage
-                    src={bannerImage}
-                    alt={`Under 250 Banner ${index + 1}`}
+                    src={bannerImages[currentBannerIndex]}
+                    alt={`Under 250 Banner ${currentBannerIndex + 1}`}
                     className="w-full h-full"
                     objectFit="cover"
-                    priority={index === 0}
+                    priority={true}
                     sizes="100vw"
                   />
                   {/* Subtle Gradient Overlay for depth */}
                   <div className="absolute inset-x-0 bottom-0 h-1/2 bg-gradient-to-t from-black/20 to-transparent pointer-events-none" />
-                </div>
-              ))}
+                </motion.div>
+              </AnimatePresence>
             </div>
-            {/* Indicators removed as requested */}
+
+            {/* Dots Indicators */}
+            {bannerImages.length > 1 && (
+              <div className="absolute bottom-4 left-0 right-0 z-30 flex justify-center gap-1.5 pointer-events-auto">
+                {bannerImages.map((_, dotIndex) => (
+                  <button
+                    key={dotIndex}
+                    type="button"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      setCurrentBannerIndex(dotIndex)
+                      resetBannerAutoSlide()
+                    }}
+                    className={`h-1.5 rounded-full transition-all duration-300 ${
+                      currentBannerIndex === dotIndex
+                        ? "w-4 bg-white shadow-sm"
+                        : "w-1.5 bg-white/40 hover:bg-white/60"
+                    }`}
+                    aria-label={`Go to slide ${dotIndex + 1}`}
+                  />
+                ))}
+              </div>
+            )}
           </div>
         )}
         {bannerImages.length === 0 && !loadingBanner && (

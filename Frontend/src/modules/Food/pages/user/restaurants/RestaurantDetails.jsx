@@ -120,6 +120,7 @@ function RestaurantDetailsContent() {
   const [searchQuery, setSearchQuery] = useState("")
   const [availabilityTick, setAvailabilityTick] = useState(Date.now())
   const [showMenuOptionsSheet, setShowMenuOptionsSheet] = useState(false)
+  const [showRestaurantInfoSheet, setShowRestaurantInfoSheet] = useState(false)
   const [showShareModal, setShowShareModal] = useState(false)
   const [sharePayload, setSharePayload] = useState(null)
   const [expandedAddButtons, setExpandedAddButtons] = useState(new Set())
@@ -206,6 +207,40 @@ function RestaurantDetailsContent() {
   useEffect(() => {
     setSelectedMenuCategory("all")
   }, [slug])
+
+  // Prevent background scrolling when any modal/sheet is open
+  useEffect(() => {
+    const isAnySheetOpen =
+      showFilterSheet ||
+      showLocationSheet ||
+      showScheduleSheet ||
+      showOffersSheet ||
+      showMenuSheet ||
+      showMenuOptionsSheet ||
+      showManageCollections ||
+      showItemDetail ||
+      showRestaurantInfoSheet
+
+    if (isAnySheetOpen) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = ""
+    }
+
+    return () => {
+      document.body.style.overflow = ""
+    }
+  }, [
+    showFilterSheet,
+    showLocationSheet,
+    showScheduleSheet,
+    showOffersSheet,
+    showMenuSheet,
+    showMenuOptionsSheet,
+    showManageCollections,
+    showItemDetail,
+    showRestaurantInfoSheet
+  ])
 
   // Fetch restaurant data from API
   useEffect(() => {
@@ -2463,7 +2498,13 @@ function RestaurantDetailsContent() {
                   <h1 className="text-2xl font-bold text-gray-900 dark:text-white truncate">
                     {restaurant?.name || "Unknown Restaurant"}
                   </h1>
-                  <Info className="h-5 w-5 text-gray-400" />
+                  <button
+                    onClick={() => setShowRestaurantInfoSheet(true)}
+                    className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors flex items-center justify-center cursor-pointer"
+                    aria-label="Restaurant Info"
+                  >
+                    <Info className="h-5 w-5 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300" />
+                  </button>
                 </div>
                 <div className="mt-1 flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300">
                   <Utensils className="h-4 w-4" />
@@ -4011,6 +4052,141 @@ function RestaurantDetailsContent() {
           </AnimatePresence>,
           document.body
         )}
+
+      {/* Restaurant Info Bottom Sheet - Rendered via Portal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showRestaurantInfoSheet && (
+              <>
+                {/* Backdrop */}
+                <motion.div
+                  className="fixed inset-0 bg-black/40 z-[9999]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  transition={{ duration: 0.15 }}
+                  onClick={() => setShowRestaurantInfoSheet(false)}
+                />
+
+                {/* Info Bottom Sheet */}
+                <motion.div
+                  className="fixed left-0 right-0 bottom-0 md:left-1/2 md:right-auto md:-translate-x-1/2 md:bottom-auto md:top-1/2 md:-translate-y-1/2 z-[10000] bg-white dark:bg-[#1a1a1a] rounded-t-3xl md:rounded-3xl shadow-2xl max-h-[85vh] md:max-h-[90vh] w-full md:max-w-md flex flex-col"
+                  initial={{ y: "100%" }}
+                  animate={{ y: 0 }}
+                  exit={{ y: "100%" }}
+                  transition={{ duration: 0.2, type: "spring", damping: 30, stiffness: 400 }}
+                  style={{ willChange: "transform" }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {/* Header */}
+                  <div className="px-6 pt-6 pb-4 border-b border-gray-150 dark:border-gray-800 flex items-center justify-between">
+                    <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                      Restaurant Information
+                    </h2>
+                    <button
+                      onClick={() => setShowRestaurantInfoSheet(false)}
+                      className="p-1 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+                    >
+                      <X className="h-5 w-5 text-gray-500 dark:text-gray-400" />
+                    </button>
+                  </div>
+
+                  {/* Scrollable Content */}
+                  <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
+                    {/* Name & Cuisine */}
+                    <div>
+                      <h3 className="text-2xl font-extrabold text-gray-900 dark:text-white">
+                        {restaurant?.name}
+                      </h3>
+                      <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                        {restaurant?.topCategory || restaurant?.cuisine || "Multi-cuisine"}
+                      </p>
+                    </div>
+
+                    {/* Operational Timings */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                        Operational Hours & Days
+                      </h4>
+                      <div className="flex items-start gap-3 bg-gray-50 dark:bg-gray-900/50 p-3.5 rounded-2xl">
+                        <Clock className="h-5 w-5 text-[#7e3866] mt-0.5" />
+                        <div>
+                          <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                            {restaurant?.deliveryTimings?.openingTime && restaurant?.deliveryTimings?.closingTime
+                              ? `${restaurant.deliveryTimings.openingTime} - ${restaurant.deliveryTimings.closingTime}`
+                              : "Timings not available"}
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                            Open Days: {Array.isArray(restaurant?.openDays) && restaurant.openDays.length > 0 
+                              ? restaurant.openDays.join(", ") 
+                              : "All Days"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Address details */}
+                    <div className="space-y-2">
+                      <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                        Address & Location
+                      </h4>
+                      <div className="flex items-start gap-3 bg-gray-50 dark:bg-gray-900/50 p-3.5 rounded-2xl">
+                        <MapPin className="h-5 w-5 text-[#7e3866] mt-0.5" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium text-gray-800 dark:text-gray-200 leading-relaxed">
+                            {restaurant?.location || "Location details not available"}
+                          </p>
+                          {restaurant?.distance && (
+                            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1 font-semibold">
+                              Distance: {restaurant.distance}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* FSSAI License */}
+                    {restaurant?.onboarding?.step3?.fssai?.registrationNumber && (
+                      <div className="space-y-2">
+                        <h4 className="text-xs font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">
+                          FSSAI License
+                        </h4>
+                        <div className="flex items-center gap-4 bg-gray-50 dark:bg-gray-900/50 p-3.5 rounded-2xl">
+                          <img
+                            src={fssaiLogo}
+                            alt="FSSAI"
+                            className="h-7 object-contain"
+                          />
+                          <div>
+                            <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                              License Number
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-400 font-mono mt-0.5">
+                              {restaurant.onboarding.step3.fssai.registrationNumber}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Footer Action Bar */}
+                  <div className="border-t border-gray-150 dark:border-gray-800 px-6 py-4 bg-gray-50 dark:bg-gray-900/20">
+                    <Button
+                      className="w-full bg-red-600 hover:bg-red-700 text-white py-3 rounded-xl font-bold transition-all shadow-md"
+                      onClick={() => setShowRestaurantInfoSheet(false)}
+                    >
+                      Close Details
+                    </Button>
+                  </div>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )
+      }
 
       {/* Share Modal */}
       {typeof window !== "undefined" &&
