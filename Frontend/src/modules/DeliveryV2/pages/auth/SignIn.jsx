@@ -135,7 +135,7 @@ export default function DeliverySignIn() {
                 <label className="text-[10px] font-black text-[#7e3866] uppercase tracking-[0.2em] ml-1">Mobile Number</label>
                 <div className="relative group">
                   <div className="absolute inset-y-0 left-5 flex items-center pointer-events-none">
-                    <span className="text-sm font-bold text-[#7e3866] border-r border-gray-200 dark:border-gray-800 pr-3">+91</span>
+                    <span className="text-lg font-bold text-[#7e3866] border-r border-gray-200 dark:border-gray-800 pr-3">+91</span>
                   </div>
                   <input
                     type="tel"

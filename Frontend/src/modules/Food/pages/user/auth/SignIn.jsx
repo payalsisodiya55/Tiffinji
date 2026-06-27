@@ -154,7 +154,7 @@ export default function SignIn() {
           <form id="user-signin-form" onSubmit={handleSubmit} className="space-y-5">
             <div className="space-y-2">
               <div className="relative flex items-center">
-                <div className="flex items-center px-4 h-12 md:h-14 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-900 dark:text-white rounded-lg border-r-0 rounded-r-none font-medium">
+                <div className="flex items-center px-4 h-12 md:h-14 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#2a2a2a] text-gray-900 dark:text-white rounded-lg border-r-0 rounded-r-none font-medium text-lg">
                   <span>+91</span>
                 </div>
                 <Input
