@@ -470,8 +470,6 @@ export default function AddRestaurant() {
       }
       if (openingMinutes === closingMinutes) {
         toast.error("Opening time and closing time cannot be same", { id: "timing-error" })
-      } else if (closingMinutes < openingMinutes) {
-        toast.error("Closing time cannot be less than opening time", { id: "timing-error" })
       } else {
         toast.dismiss("timing-error")
       }
@@ -498,8 +496,6 @@ export default function AddRestaurant() {
       }
       if (openingMinutes === closingMinutes) {
         errors.push("Opening time and closing time cannot be same")
-      } else if (closingMinutes < openingMinutes) {
-        errors.push("Closing time cannot be less than opening time")
       }
     }
     if (!step2.openDays || step2.openDays.length === 0) errors.push("Please select at least one open day")
