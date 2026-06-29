@@ -798,6 +798,22 @@ export default function Inventory() {
   const categoryRefs = useRef({})
   const addonImageInputRef = useRef(null)
 
+  // Prevent background scroll when any popup is open
+  useEffect(() => {
+    const isAnyPopupOpen = isAddPopupOpen || filterOpen || togglePopupOpen || showCalendar || showTimePicker
+    if (isAnyPopupOpen) {
+      document.body.style.overflow = "hidden"
+      document.documentElement.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = ""
+      document.documentElement.style.overflow = ""
+    }
+    return () => {
+      document.body.style.overflow = ""
+      document.documentElement.style.overflow = ""
+    }
+  }, [isAddPopupOpen, filterOpen, togglePopupOpen, showCalendar, showTimePicker])
+
   // Swipe gesture refs
   const touchStartX = useRef(0)
   const touchStartY = useRef(0)
