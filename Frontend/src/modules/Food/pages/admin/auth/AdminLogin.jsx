@@ -126,7 +126,7 @@ export default function AdminLogin() {
                       value={email}
                       onChange={(e) => setEmail(e.target.value.toLowerCase())}
                       className="block w-full pl-12 pr-6 py-4 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white border-2 border-transparent focus:border-[#7e3866]/50 rounded-2xl outline-none transition-all placeholder:text-gray-300 font-bold"
-                      placeholder="admin@foodelo.com"
+                      placeholder="admin@example.com"
                     />
                   </div>
                 </div>
