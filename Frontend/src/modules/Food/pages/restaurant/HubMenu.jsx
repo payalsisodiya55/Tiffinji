@@ -524,19 +524,23 @@ export default function HubMenu() {
       return
     }
 
+    const filesToUpload = Array.from(addonImageFiles.values())
+    const existingImageUrls = addonImages.filter(img => 
+      typeof img === 'string' && 
+      (img.startsWith('http://') || img.startsWith('https://')) && 
+      !img.startsWith('blob:')
+    )
+
+    if (filesToUpload.length === 0 && existingImageUrls.length === 0) {
+      toast.error("Please upload an add-on image")
+      return
+    }
+
     try {
       setUploadingAddonImages(true)
 
       // Upload new images to Cloudinary
       const uploadedImageUrls = []
-      
-      const existingImageUrls = addonImages.filter(img => 
-        typeof img === 'string' && 
-        (img.startsWith('http://') || img.startsWith('https://')) && 
-        !img.startsWith('blob:')
-      )
-      
-      const filesToUpload = Array.from(addonImageFiles.values())
       
       if (filesToUpload.length > 0) {
         toast.info(`Uploading ${filesToUpload.length} image(s)...`)

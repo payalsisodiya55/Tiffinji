@@ -1292,6 +1292,10 @@ export default function Inventory() {
       toast.error("Please enter a valid price")
       return
     }
+    if (!addonImageFile) {
+      toast.error("Please upload an add-on image")
+      return
+    }
     setSavingAddon(true)
     try {
       let imageUrl = ""
