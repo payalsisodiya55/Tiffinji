@@ -71,6 +71,7 @@ export default function ZoneSetup() {
   const [currentZone, setCurrentZone] = useState(null)
   const [isInZone, setIsInZone] = useState(false)
   const [checkingZone, setCheckingZone] = useState(false)
+  const [searchFocused, setSearchFocused] = useState(false)
   const polygonRefs = useRef([])
 
   useEffect(() => {
@@ -590,22 +591,24 @@ export default function ZoneSetup() {
 
         {/* Search Bar */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-          <div className="flex items-center gap-3">
-            <div className="flex-1 relative">
+          <div className={`flex gap-3 transition-all duration-300 ${searchFocused ? "flex-col" : "flex-row items-center"}`}>
+            <div className={`relative transition-all duration-300 ${searchFocused ? "w-full" : "flex-1"}`}>
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 ref={autocompleteInputRef}
                 type="text"
                 value={locationSearch}
                 onChange={(e) => setLocationSearch(e.target.value)}
+                onFocus={() => setSearchFocused(true)}
+                onBlur={() => setSearchFocused(false)}
                 placeholder="Search for your restaurant location..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300"
               />
             </div>
             <button
               onClick={handleSaveLocation}
               disabled={!selectedLocation || saving}
-              className="flex items-center gap-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className={`flex items-center gap-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed ${searchFocused ? "w-full justify-center" : "shrink-0"}`}
             >
               {saving ? (
                 <>
