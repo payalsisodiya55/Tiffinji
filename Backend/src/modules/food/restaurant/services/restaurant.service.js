@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { FoodZone } from '../../admin/models/zone.model.js';
 import { FoodOffer } from '../../admin/models/offer.model.js';
 import { FoodDiningRestaurant } from '../../dining/models/diningRestaurant.model.js';
+import { FoodItem } from '../../admin/models/food.model.js';
 
 const normalizeName = (value) =>
     String(value || '')
@@ -1285,6 +1286,10 @@ export const listApprovedRestaurants = async (query = {}) => {
         }
         filter.$and = [...(filter.$and || []), { $or: zoneOr }];
     }
+
+    // Only show restaurants that have at least one approved menu item.
+    const restaurantIdsWithMenu = await FoodItem.distinct('restaurantId', { approvalStatus: 'approved' });
+    filter._id = { $in: restaurantIdsWithMenu };
 
     const lat = toFiniteNumber(query.lat);
     const lng = toFiniteNumber(query.lng);
