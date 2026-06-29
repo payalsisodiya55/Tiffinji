@@ -1507,16 +1507,61 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState("food");
 
 
+  // Helper to enforce mutual exclusion of same-type filters
+  const getMutuallyExcludedFilters = (filterId, currentFilters) => {
+    const nextFilters = new Set(currentFilters);
+    if (nextFilters.has(filterId)) {
+      nextFilters.delete(filterId);
+    } else {
+      // 1. Delivery Time
+      if (filterId === "delivery-under-30") {
+        nextFilters.delete("delivery-under-45");
+      } else if (filterId === "delivery-under-45") {
+        nextFilters.delete("delivery-under-30");
+      }
+      
+      // 2. Distance
+      if (filterId === "distance-under-1km") {
+        nextFilters.delete("distance-under-2km");
+      } else if (filterId === "distance-under-2km") {
+        nextFilters.delete("distance-under-1km");
+      }
+
+      // 3. Ratings
+      if (filterId === "rating-35-plus") {
+        nextFilters.delete("rating-4-plus");
+        nextFilters.delete("rating-45-plus");
+      } else if (filterId === "rating-4-plus") {
+        nextFilters.delete("rating-35-plus");
+        nextFilters.delete("rating-45-plus");
+      } else if (filterId === "rating-45-plus") {
+        nextFilters.delete("rating-35-plus");
+        nextFilters.delete("rating-4-plus");
+      }
+
+      // 4. Price/Budget
+      if (filterId === "price-under-200") {
+        nextFilters.delete("price-under-500");
+      } else if (filterId === "price-under-500") {
+        nextFilters.delete("price-under-200");
+      }
+
+      // 5. Trust/Top Rated
+      if (filterId === "top-rated") {
+        nextFilters.delete("trusted");
+      } else if (filterId === "trusted") {
+        nextFilters.delete("top-rated");
+      }
+
+      nextFilters.add(filterId);
+    }
+    return nextFilters;
+  };
+
   // Simple filter toggle function
   const toggleFilter = (filterId) => {
     setActiveFilters((prev) => {
-      const newSet = new Set(prev);
-      if (newSet.has(filterId)) {
-        newSet.delete(filterId);
-      } else {
-        newSet.add(filterId);
-      }
-      return newSet;
+      return getMutuallyExcludedFilters(filterId, prev);
     });
   };
 
@@ -3109,12 +3154,7 @@ export default function Home() {
                           key={filter.id}
                           type="button"
                           onClick={() => {
-                            const nextFilters = new Set(activeFilters);
-                            if (nextFilters.has(filter.id)) {
-                              nextFilters.delete(filter.id);
-                            } else {
-                              nextFilters.add(filter.id);
-                            }
+                            const nextFilters = getMutuallyExcludedFilters(filter.id, activeFilters);
                             setActiveFilters(nextFilters);
                             void applyFiltersAndRefetch(
                               nextFilters,

@@ -1112,6 +1112,45 @@ export default function CategoryPage() {
       if (newSet.has(filterId)) {
         newSet.delete(filterId)
       } else {
+        // Enforce mutual exclusions
+        // 1. Time
+        if (filterId === 'under-30-mins') {
+          newSet.delete('delivery-under-45')
+        } else if (filterId === 'delivery-under-45') {
+          newSet.delete('under-30-mins')
+        }
+        
+        // 2. Distance
+        if (filterId === 'distance-under-1km') {
+          newSet.delete('distance-under-2km')
+        } else if (filterId === 'distance-under-2km') {
+          newSet.delete('distance-under-1km')
+        }
+
+        // 3. Rating
+        if (filterId === 'rating-35-plus') {
+          newSet.delete('rating-4-plus')
+          newSet.delete('rating-45-plus')
+        } else if (filterId === 'rating-4-plus') {
+          newSet.delete('rating-35-plus')
+          newSet.delete('rating-45-plus')
+        } else if (filterId === 'rating-45-plus') {
+          newSet.delete('rating-35-plus')
+          newSet.delete('rating-4-plus')
+        }
+
+        // 4. Price
+        if (filterId === 'price-under-200') {
+          newSet.delete('under-250')
+          newSet.delete('price-under-500')
+        } else if (filterId === 'under-250') {
+          newSet.delete('price-under-200')
+          newSet.delete('price-under-500')
+        } else if (filterId === 'price-under-500') {
+          newSet.delete('price-under-200')
+          newSet.delete('under-250')
+        }
+
         newSet.add(filterId)
       }
       return newSet
