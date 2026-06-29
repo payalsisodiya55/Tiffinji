@@ -170,13 +170,13 @@ export default function SearchOverlay({ isOpen, onClose, searchValue, onSearchCh
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
           <form onSubmit={handleSearchSubmit} className="flex items-center gap-4">
             <div className="flex-1 relative">
-              <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 h-5 w-5 text-[#7e3866] dark:text-[#a05485] z-10" strokeWidth={2.5} />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 text-[#7e3866] dark:text-[#a05485] z-10" strokeWidth={2.5} />
               <Input
                 ref={inputRef}
                 value={searchValue}
                 onChange={(e) => onSearchChange(e.target.value)}
                 placeholder="Search dishes or restaurants"
-                className="pl-14 pr-16 h-13 w-full bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-[#7e3866]/20 focus:border-[#7e3866] dark:focus:border-[#7e3866] rounded-2xl text-base dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-sm transition-all duration-200"
+                className="pl-10 pr-14 h-12 w-full bg-white dark:bg-[#1a1a1a] border-gray-200 dark:border-gray-800 focus:ring-2 focus:ring-[#7e3866]/20 focus:border-[#7e3866] dark:focus:border-[#7e3866] rounded-2xl text-sm dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500 shadow-sm transition-all duration-200"
               />
               <div className="absolute right-4 top-1/2 transform -translate-y-1/2 flex items-center gap-3">
                 <div className="h-6 w-[1px] bg-gray-200 dark:bg-gray-700" />
