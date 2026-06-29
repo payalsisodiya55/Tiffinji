@@ -1087,6 +1087,7 @@ export default function OrdersMain() {
 
   // Pending counts for tabs
   const [pendingBookingsCount, setPendingBookingsCount] = useState(0);
+  const pendingBookingsCountRef = useRef(0);
   const [pendingOrdersCount, setPendingOrdersCount] = useState(0);
   const [pendingDiningRequest, setPendingDiningRequest] = useState(null);
 
@@ -1106,13 +1107,14 @@ export default function OrdersMain() {
             const pending = bookings.filter(b => String(b.status).toLowerCase() === 'pending').length;
             
             // If new pending booking found, maybe show toast
-            if (pending > pendingBookingsCount) {
+            if (pending > pendingBookingsCountRef.current) {
               toast.info(`New table booking request! Check the "Table Booking" tab.`);
               // Optional: Play sound
               if (audioRef.current && !isMutedRef.current) {
                 audioRef.current.play().catch(() => {});
               }
             }
+            pendingBookingsCountRef.current = pending;
             setPendingBookingsCount(pending);
           }
 

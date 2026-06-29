@@ -357,15 +357,15 @@ export default function RestaurantNavbar({
     <div className="w-full bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between relative">
       {/* Search Overlay */}
       {isSearchActive && (
-        <div className="absolute inset-0 bg-white z-50 flex items-center px-4 gap-3">
+        <div className="absolute inset-0 bg-white z-50 flex items-center px-2.5 sm:px-4 gap-1.5 sm:gap-3">
           <div className="flex-1 relative flex items-center">
-            <Search className="absolute left-0 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-1.5 w-5 h-5 text-gray-400" />
             <input
               type="text"
               value={searchValue}
               onChange={handleSearchChange}
               placeholder="Search by order ID or dish name"
-              className="w-full pl-8 pr-4 py-2 text-gray-900 placeholder-gray-500 font-medium focus:outline-none"
+              className="w-full pl-8 pr-2 py-2 text-[13px] sm:text-[15px] text-gray-900 placeholder-gray-500 font-medium focus:outline-none"
               autoFocus
             />
           </div>
@@ -382,19 +382,14 @@ export default function RestaurantNavbar({
       {/* Left Side - Restaurant Info */}
       <div className="flex-1 min-w-0 pr-4 flex items-center gap-3">
         {logoUrl && (
-          <img src={logoUrl} alt="Logo" className="h-10 w-10 object-contain rounded-lg" />
+          <img src={logoUrl} alt="Logo" className="h-10 w-10 object-contain rounded-lg shrink-0" />
         )}
         <div className="min-w-0">
-          {/* Restaurant Name & Company */}
+          {/* Restaurant Name */}
           <div className="flex items-baseline gap-1.5 min-w-0">
             <h1 className="text-[15px] font-bold text-gray-900 truncate">
               {loading ? "Loading..." : (restaurantName || "Restaurant")}
             </h1>
-            {companyName && !loading && (
-              <span className="text-[9px] text-gray-400 font-bold uppercase tracking-tight shrink-0">
-                {companyName}
-              </span>
-            )}
           </div>
           {!loading && location && location.trim() !== "" && (
             <div className="flex items-center gap-1 mt-0.5 opacity-80">
@@ -408,18 +403,18 @@ export default function RestaurantNavbar({
       </div>
 
       {/* Right Side - Interactive Elements */}
-      <div className="flex items-center">
+      <div className="flex items-center shrink-0">
         {/* Offline/Online Status Tag */}
         {showOfflineOnlineTag && (
           <button
             onClick={handleStatusClick}
-            className={`flex items-center gap-1.5 px-2 py-1 border rounded-full hover:opacity-80 transition-all ${
+            className={`flex items-center gap-1.5 px-2 py-1 border rounded-full hover:opacity-80 transition-all shrink-0 ${
               status === "Online" 
                 ? "bg-green-50 border-green-300" 
                 : "bg-gray-100 border-gray-300"
             }`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full ${
+            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
               status === "Online" ? "bg-green-500" : "bg-gray-500"
             }`}></span>
             <span className={`text-sm font-medium ${
@@ -437,7 +432,7 @@ export default function RestaurantNavbar({
         {showSearch && (
           <button
             onClick={handleSearchClick}
-            className="p-2 ml-1 hover:bg-gray-100 rounded-full transition-colors"
+            className="p-2 ml-1 hover:bg-gray-100 rounded-full transition-colors shrink-0"
             aria-label="Search"
           >
             <Search className="w-5 h-5 text-gray-700" />
@@ -448,7 +443,7 @@ export default function RestaurantNavbar({
         {showNotifications && (
             <button
               onClick={handleNotificationsClick}
-              className="relative p-2 ml-1 hover:bg-gray-100 rounded-full transition-colors"
+              className="relative p-2 ml-1 hover:bg-gray-100 rounded-full transition-colors shrink-0"
               aria-label="Notifications"
             >
               <Bell className="w-5 h-5 text-gray-700" />
@@ -461,7 +456,7 @@ export default function RestaurantNavbar({
         {/* Support/Help Icon */}
         <button
           onClick={() => navigate("/food/restaurant/help-centre/support")}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
+          className="p-2 hover:bg-gray-100 rounded-full transition-colors shrink-0"
           aria-label="Support"
         >
           <HelpCircle className="w-5 h-5 text-gray-700" />
