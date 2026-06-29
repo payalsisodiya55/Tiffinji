@@ -86,6 +86,14 @@ export default function RestaurantSupport() {
       toast.error("Issue type is required")
       return
     }
+    if (!form.subject.trim()) {
+      toast.error("Subject is required")
+      return
+    }
+    if (!form.description.trim()) {
+      toast.error("Description is required")
+      return
+    }
     try {
       setSubmitting(true)
       await restaurantAPI.createSupportTicket({
@@ -180,7 +188,7 @@ export default function RestaurantSupport() {
           <input
             value={form.subject}
             onChange={(e) => setForm((prev) => ({ ...prev, subject: e.target.value }))}
-            placeholder="Short subject"
+            placeholder="Short subject (required)"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             maxLength={180}
           />
@@ -194,7 +202,7 @@ export default function RestaurantSupport() {
           <textarea
             value={form.description}
             onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-            placeholder="Describe your issue"
+            placeholder="Describe your issue (required)"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-24 resize-none"
             maxLength={1000}
           />
