@@ -251,7 +251,7 @@ export default function UnifiedOTPFastLogin() {
   const primaryColor = "#7e3866" // Rebranded Plum color
 
   return (
-    <div className="min-h-screen bg-white dark:bg-[#0a0a0a] flex flex-col relative overflow-hidden font-['Poppins']">
+    <div className="min-h-screen bg-white dark:bg-[#0a0a0a] flex flex-col relative overflow-x-hidden overflow-y-auto font-['Poppins']">
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-0 w-full h-[600px] bg-gradient-to-b from-[#7e3866]/10 via-[#7e3866]/5 to-transparent pointer-events-none" />
       <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] bg-[#7e3866]/5 rounded-full blur-[120px] pointer-events-none animate-pulse" />
@@ -339,6 +339,16 @@ export default function UnifiedOTPFastLogin() {
                         setPhoneNumber(val);
                         sessionStorage.setItem("userLoginPhone", val);
                       }}
+                      onFocus={(e) => {
+                        setTimeout(() => {
+                          e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }, 300);
+                      }}
+                      onClick={(e) => {
+                        setTimeout(() => {
+                          e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }, 300);
+                      }}
                       maxLength={10}
                       className="block w-full pl-16 pr-6 py-4 bg-gray-50 dark:bg-gray-900/50 text-gray-900 dark:text-white border-2 border-transparent focus:border-[#7e3866]/50 rounded-2xl outline-none transition-all placeholder:text-gray-300 font-bold text-lg shadow-sm"
                       placeholder="Phone number"
@@ -394,6 +404,16 @@ export default function UnifiedOTPFastLogin() {
                           if (index < 3 && val) {
                             document.getElementById(`otp-${index + 1}`)?.focus();
                           }
+                        }}
+                        onFocus={(e) => {
+                          setTimeout(() => {
+                            e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }, 300);
+                        }}
+                        onClick={(e) => {
+                          setTimeout(() => {
+                            e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+                          }, 300);
                         }}
                         onKeyDown={(e) => {
                           if (e.key === "Backspace") {
@@ -502,6 +522,16 @@ export default function UnifiedOTPFastLogin() {
                   id="name"
                   value={newName}
                   onChange={(e) => setNewName(e.target.value.replace(/[^a-zA-Z\s]/g, "").slice(0, 50))}
+                  onFocus={(e) => {
+                    setTimeout(() => {
+                      e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }, 300);
+                  }}
+                  onClick={(e) => {
+                    setTimeout(() => {
+                      e.target.scrollIntoView({ behavior: "smooth", block: "center" });
+                    }, 300);
+                  }}
                   maxLength={50}
                   placeholder="Enter your name"
                   className="pl-4 h-14 bg-gray-50 dark:bg-gray-800 border-gray-100 dark:border-gray-700 rounded-2xl focus:ring-2 focus:ring-[#7e3866] transition-all group-hover:border-[#7e3866]/30"
