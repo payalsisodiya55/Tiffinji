@@ -895,10 +895,21 @@ export default function Home() {
   }, [landingCategories, normalizeImageUrl, slugifyCategory]);
 
   const displayCategories = useMemo(() => {
-    if (realCategories.length > 0) return realCategories;
-    if (menuCategories.length > 0) return menuCategories;
-    return normalizedLandingCategories;
-  }, [menuCategories, realCategories, normalizedLandingCategories]);
+    let baseCategories = [];
+    if (realCategories.length > 0) baseCategories = realCategories;
+    else if (menuCategories.length > 0) baseCategories = menuCategories;
+    else baseCategories = normalizedLandingCategories;
+
+    if (vegMode) {
+      const nonVegKeywords = ["non-veg", "nonveg", "both", "chicken", "mutton", "egg", "fish", "meat", "seafood"];
+      return baseCategories.filter((cat) => {
+        const nameLower = String(cat.name || "").toLowerCase();
+        const slugLower = String(cat.slug || "").toLowerCase();
+        return !nonVegKeywords.some(keyword => nameLower.includes(keyword) || slugLower.includes(keyword));
+      });
+    }
+    return baseCategories;
+  }, [menuCategories, realCategories, normalizedLandingCategories, vegMode]);
 
   // Swipe functionality for hero banner carousel
   const touchStartX = useRef(0);

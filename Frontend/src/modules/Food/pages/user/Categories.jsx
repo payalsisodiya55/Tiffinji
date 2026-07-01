@@ -9,6 +9,7 @@ import { useLocation } from "@food/hooks/useLocation";
 import { useZone } from "@food/hooks/useZone";
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation";
 import { API_BASE_URL } from "@food/api/config";
+import { useProfile } from "@food/context/ProfileContext";
 
 export default function Categories() {
   const navigate = useNavigate();
@@ -18,6 +19,14 @@ export default function Categories() {
   const [searchQuery, setSearchQuery] = useState("");
   const { location } = useLocation();
   const { zoneId } = useZone(location);
+
+  let profileContext = null;
+  try {
+    profileContext = useProfile();
+  } catch (error) {
+    profileContext = { vegMode: false };
+  }
+  const vegMode = profileContext?.vegMode || false;
 
   const BACKEND_ORIGIN = useMemo(() => API_BASE_URL.replace(/\/api\/?$/, ""), []);
 
