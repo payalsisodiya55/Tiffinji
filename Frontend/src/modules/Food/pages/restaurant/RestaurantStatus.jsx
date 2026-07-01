@@ -388,9 +388,19 @@ export default function RestaurantStatus() {
             <div className="flex-1">
               <p className="text-base font-bold text-gray-900 mb-1.5">Delivery status</p>
               <div className="flex items-center gap-2">
-                <div className={`w-2 h-2 rounded-full ${deliveryStatus ? 'bg-green-500' : 'bg-gray-600'}`}></div>
+                <div className={`w-2 h-2 rounded-full ${deliveryStatus && isWithinTimings && !isDayClosed ? 'bg-green-500' : 'bg-gray-600'}`}></div>
                 <p className="text-sm text-gray-500">
-                  {deliveryStatus ? 'Receiving orders' : 'Not receiving orders'}
+                  {loading ? 'Loading...' : (
+                    deliveryStatus && isWithinTimings && !isDayClosed 
+                      ? 'Receiving orders' 
+                      : !deliveryStatus 
+                        ? 'Not receiving orders' 
+                        : isWithinTimings === null
+                          ? 'Checking timings...'
+                          : isDayClosed 
+                            ? 'Not receiving orders (Today is Off)' 
+                            : 'Not receiving orders (Outside timings)'
+                  )}
                 </p>
               </div>
             </div>
