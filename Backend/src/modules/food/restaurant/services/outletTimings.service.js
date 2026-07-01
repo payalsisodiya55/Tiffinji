@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodRestaurantOutletTimings } from '../models/outletTimings.model.js';
+import { FoodRestaurant } from '../models/restaurant.model.js';
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -34,7 +35,27 @@ const defaultTimings = () =>
         closingTime: '22:00'
     }));
 
-const toClientShape = (doc) => {
+const defaultTimingsFromRestaurant = (restaurant) => {
+    const openingTime = restaurant?.openingTime || '09:00';
+    const closingTime = restaurant?.closingTime || '22:00';
+    
+    const openDays = Array.isArray(restaurant?.openDays) ? restaurant.openDays : [];
+    const openDaysSet = new Set(
+        openDays.map((d) => normalizeDay(d)).filter(Boolean)
+    );
+
+    return DAY_NAMES.map((day) => {
+        const isOpen = openDaysSet.size === 0 ? true : openDaysSet.has(day);
+        return {
+            day,
+            isOpen,
+            openingTime: isOpen ? openingTime : '',
+            closingTime: isOpen ? closingTime : ''
+        };
+    });
+};
+
+const toClientShape = (doc, defaultOpen = '09:00', defaultClose = '22:00') => {
     const timings = Array.isArray(doc?.timings) ? doc.timings : [];
     const map = {};
     for (const day of DAY_NAMES) {
@@ -42,8 +63,8 @@ const toClientShape = (doc) => {
         const isOpen = found ? found.isOpen !== false : true;
         map[day] = {
             isOpen,
-            openingTime: isOpen ? normalizeTime(found?.openingTime, '09:00') : '',
-            closingTime: isOpen ? normalizeTime(found?.closingTime, '22:00') : ''
+            openingTime: isOpen ? normalizeTime(found?.openingTime, defaultOpen) : '',
+            closingTime: isOpen ? normalizeTime(found?.closingTime, defaultClose) : ''
         };
     }
     return map;
@@ -54,7 +75,13 @@ export async function getOutletTimingsForRestaurant(restaurantId) {
         throw new ValidationError('Invalid restaurant id');
     }
     const doc = await FoodRestaurantOutletTimings.findOne({ restaurantId }).select('timings updatedAt').lean();
-    if (!doc) return { outletTimings: toClientShape({ timings: defaultTimings() }) };
+    if (!doc) {
+        const restaurant = await FoodRestaurant.findById(restaurantId).select('openingTime closingTime openDays').lean();
+        const defaultOpen = restaurant?.openingTime || '09:00';
+        const defaultClose = restaurant?.closingTime || '22:00';
+        const timings = defaultTimingsFromRestaurant(restaurant);
+        return { outletTimings: toClientShape({ timings }, defaultOpen, defaultClose) };
+    }
     return { outletTimings: toClientShape(doc) };
 }
 
