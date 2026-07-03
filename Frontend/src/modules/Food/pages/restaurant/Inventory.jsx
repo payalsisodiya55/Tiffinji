@@ -24,6 +24,8 @@ import { useNavigate } from "react-router-dom"
 import { restaurantAPI, uploadAPI } from "@food/api"
 import { toast } from "sonner"
 import { downloadFile } from "@/shared/utils/downloadUtils"
+import { ImageSourcePicker } from "@food/components/ImageSourcePicker"
+import { isFlutterBridgeAvailable } from "@food/utils/imageUploadUtils"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -993,6 +995,7 @@ export default function Inventory() {
   const [addonImageFile, setAddonImageFile] = useState(null)
   const [addonImagePreview, setAddonImagePreview] = useState("")
   const [savingAddon, setSavingAddon] = useState(false)
+  const [isAddonPhotoPickerOpen, setIsAddonPhotoPickerOpen] = useState(false)
   const [recommendedMap, setRecommendedMap] = useState(() => {
     try {
       if (typeof window === "undefined") return {}
@@ -1275,18 +1278,15 @@ export default function Inventory() {
     localStorage.removeItem(INVENTORY_ADDON_FORM_KEY)
   }
 
-  const handleAddonImageSelect = (e) => {
-    const file = e.target.files?.[0]
+  const handleAddonFileSelect = (file) => {
     if (!file) return
     const allowed = ["image/png", "image/jpeg", "image/jpg", "image/webp", "image/heic", "image/heif"]
     if (!allowed.includes(file.type)) {
       toast.error("Invalid image type. Please use PNG, JPG, JPEG, WEBP, HEIC, or HEIF.")
-      e.target.value = ""
       return
     }
     if (file.size > 5 * 1024 * 1024) {
       toast.error("Image must be under 5MB.")
-      e.target.value = ""
       return
     }
     if (addonImagePreview && addonImagePreview.startsWith("blob:")) {
@@ -1295,7 +1295,22 @@ export default function Inventory() {
     const preview = URL.createObjectURL(file)
     setAddonImageFile(file)
     setAddonImagePreview(preview)
-    e.target.value = ""
+    if (addonImageInputRef.current) {
+      addonImageInputRef.current.value = ""
+    }
+  }
+
+  const handleAddonImageSelect = (e) => {
+    const file = e.target.files?.[0]
+    handleAddonFileSelect(file)
+  }
+
+  const handleAddonCameraClick = () => {
+    if (isFlutterBridgeAvailable()) {
+      setIsAddonPhotoPickerOpen(true)
+    } else {
+      addonImageInputRef.current?.click()
+    }
   }
 
   const handleSaveAddon = async () => {
@@ -2256,7 +2271,7 @@ export default function Inventory() {
                       />
                       <button
                         type="button"
-                        onClick={() => addonImageInputRef.current?.click()}
+                        onClick={handleAddonCameraClick}
                         className="w-full rounded-md border border-gray-300 bg-gray-50 px-3 py-3 text-left transition-colors hover:bg-gray-100"
                       >
                         <span className="flex items-center gap-2 text-sm font-medium text-gray-900">
@@ -3143,6 +3158,17 @@ export default function Inventory() {
 
       {/* Bottom Navigation */}
       <BottomNavOrders />
+
+      {/* Add-on Photo Picker */}
+      <ImageSourcePicker
+        isOpen={isAddonPhotoPickerOpen}
+        onClose={() => setIsAddonPhotoPickerOpen(false)}
+        onFileSelect={handleAddonFileSelect}
+        title="Add-on Image"
+        description="Choose how to upload your add-on image"
+        fileNamePrefix="addon-photo"
+        galleryInputRef={addonImageInputRef}
+      />
     </div>
   )
 }
