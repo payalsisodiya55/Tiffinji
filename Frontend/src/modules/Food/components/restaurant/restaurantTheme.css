@@ -143,3 +143,9 @@
   border-color: color-mix(in srgb, var(--rt-primary) 55%, #ffffff) !important;
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--rt-primary) 15%, transparent) !important;
 }
+
+.restaurant-theme input.focus-none:focus {
+  border-color: transparent !important;
+  box-shadow: none !important;
+  outline: none !important;
+}

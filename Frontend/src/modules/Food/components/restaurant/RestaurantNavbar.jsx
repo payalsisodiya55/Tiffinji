@@ -406,7 +406,7 @@ export default function RestaurantNavbar({
               value={searchValue}
               onChange={handleSearchChange}
               placeholder="Search by order ID or dish name"
-              className="w-full pl-8 pr-2 py-2 text-[13px] sm:text-[15px] text-gray-900 placeholder-gray-500 font-medium focus:outline-none"
+              className="w-full pl-8 pr-2 py-2 text-[13px] sm:text-[15px] text-gray-900 placeholder-gray-500 font-medium focus:outline-none focus-none"
               autoFocus
             />
           </div>
