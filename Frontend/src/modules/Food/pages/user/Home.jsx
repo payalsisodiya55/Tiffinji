@@ -2038,28 +2038,31 @@ export default function Home() {
   }, []); // placeholders is a constant, no need for dependency
 
   const handleRestaurantFavoriteToggle = useCallback(
-    (event, restaurant, restaurantSlug, favorite) => {
+    (event, restaurant, restaurantSlug) => {
       event.preventDefault();
       event.stopPropagation();
-      if (favorite) {
+      const isFav = isFavorite(restaurantSlug);
+      if (isFav) {
         setSelectedRestaurantSlug(restaurantSlug);
         setShowManageCollections(true);
       } else {
         addFavorite({
           slug: restaurantSlug,
-          name: restaurant.name,
+          name: restaurant.name || restaurant.restaurantName,
           cuisine: restaurant.cuisine,
           rating: restaurant.rating,
           deliveryTime: restaurant.deliveryTime,
           distance: restaurant.distance,
           priceRange: restaurant.priceRange,
-          image: restaurant.image,
+          image: restaurant.image || restaurant.profileImage,
         });
+        setSelectedRestaurantSlug(restaurantSlug);
+        setShowManageCollections(true);
         setShowToast(true);
         setTimeout(() => setShowToast(false), 3000);
       }
     },
-    [addFavorite],
+    [addFavorite, isFavorite],
   );
 
   if (shouldShowOutOfZoneHome) {
@@ -3785,7 +3788,26 @@ export default function Home() {
                         className="w-full flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
-                          // Don't close modal on click, let checkbox handle it
+                          if (selectedRestaurantSlug) {
+                            const isFav = isFavorite(selectedRestaurantSlug);
+                            if (isFav) {
+                              removeFavorite(selectedRestaurantSlug);
+                            } else {
+                              const restaurant = restaurantsData.find(r => r.slug === selectedRestaurantSlug || r.id === selectedRestaurantSlug || r.restaurantId === selectedRestaurantSlug);
+                              if (restaurant) {
+                                addFavorite({
+                                  slug: selectedRestaurantSlug,
+                                  name: restaurant.name || restaurant.restaurantName,
+                                  cuisine: restaurant.cuisine,
+                                  rating: restaurant.rating,
+                                  deliveryTime: restaurant.deliveryTime,
+                                  distance: restaurant.distance,
+                                  priceRange: restaurant.priceRange,
+                                  image: restaurant.image || restaurant.profileImage,
+                                });
+                              }
+                            }
+                          }
                         }}>
                         <div className="h-12 w-12 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
                           <Bookmark className="h-6 w-6 text-red-500 fill-red-500" />
@@ -3800,19 +3822,28 @@ export default function Home() {
                                 <Checkbox
                                   checked={isFavorite(selectedRestaurantSlug)}
                                   onCheckedChange={(checked) => {
-                                    if (!checked) {
-                                      removeFavorite(selectedRestaurantSlug);
-                                      setSelectedRestaurantSlug(null);
-                                      setShowManageCollections(false);
+                                    if (selectedRestaurantSlug) {
+                                      if (checked) {
+                                        const restaurant = restaurantsData.find(r => r.slug === selectedRestaurantSlug || r.id === selectedRestaurantSlug || r.restaurantId === selectedRestaurantSlug);
+                                        if (restaurant) {
+                                          addFavorite({
+                                            slug: selectedRestaurantSlug,
+                                            name: restaurant.name || restaurant.restaurantName,
+                                            cuisine: restaurant.cuisine,
+                                            rating: restaurant.rating,
+                                            deliveryTime: restaurant.deliveryTime,
+                                            distance: restaurant.distance,
+                                            priceRange: restaurant.priceRange,
+                                            image: restaurant.image || restaurant.profileImage,
+                                          });
+                                        }
+                                      } else {
+                                        removeFavorite(selectedRestaurantSlug);
+                                      }
                                     }
                                   }}
                                   className="h-5 w-5 rounded border-2 border-red-500 data-[state=checked]:bg-red-500 data-[state=checked]:border-red-500"
                                 />
-                              </div>
-                            )}
-                            {!selectedRestaurantSlug && (
-                              <div className="h-5 w-5 rounded border-2 border-red-500 bg-red-500 flex items-center justify-center">
-                                <Check className="h-3 w-3 text-white" />
                               </div>
                             )}
                           </div>
@@ -3822,20 +3853,6 @@ export default function Home() {
                           </p>
                         </div>
                       </div>
-
-                      {/* Create new Collection */}
-                      <button
-                        className="w-full flex items-start gap-3 p-3 hover:bg-gray-50 rounded-lg transition-colors"
-                        onClick={() => setShowManageCollections(false)}>
-                        <div className="h-12 w-12 rounded-lg bg-pink-100 flex items-center justify-center flex-shrink-0">
-                          <Plus className="h-6 w-6 text-red-500" />
-                        </div>
-                        <div className="flex-1 text-left">
-                          <span className="text-base font-medium text-gray-900">
-                            Create new Collection
-                          </span>
-                        </div>
-                      </button>
                     </div>
 
                     {/* Done Button */}

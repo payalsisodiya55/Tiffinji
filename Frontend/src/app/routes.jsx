@@ -16,7 +16,8 @@ const PageLoader = () => {
     if (
       path.includes('/terms') ||
       path.includes('/privacy') ||
-      path.includes('/support')
+      path.includes('/support') ||
+      path.includes('/splash')
     ) {
       return null
     }

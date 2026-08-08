@@ -8,7 +8,7 @@ dotenv.config();
 
 async function run() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/foodelo');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/Tiffinji');
     const requests = await FoodDiningRequest.find({}).sort({ createdAt: -1 }).limit(5).lean();
     const restaurants = await FoodRestaurant.find({ restaurantNameNormalized: 'raddison' }).select('restaurantName diningSettings').lean();
     const data = {

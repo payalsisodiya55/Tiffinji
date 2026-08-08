@@ -226,6 +226,8 @@ export default function OutletInfo() {
       const payload = {}
       if (editSection === 'restaurantName') {
         payload.restaurantName = editFormData.restaurantName || editFormData.name
+      } else if (editSection === 'offer') {
+        payload.offer = editFormData.offer
       } else if (editSection === 'basic') {
         payload.ownerName = editFormData.ownerName
         payload.primaryContactNumber = editFormData.primaryContactNumber
@@ -413,6 +415,19 @@ export default function OutletInfo() {
             <p className="text-base font-black text-gray-900 mt-0.5">{restaurantName || "N/A"}</p>
           </div>
 
+          {/* Card 1b: Offer details */}
+          <div className="bg-white rounded-3xl p-4 shadow-[0_2px_8px_rgba(0,0,0,0.03)] border border-gray-100/50">
+            <div className="flex flex-col mb-1">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <p className="text-[13px] text-gray-500 font-semibold">Offer banner text</p>
+                </div>
+                <button onClick={() => handleEditClick('offer')} className="text-[#2563EB] text-sm font-bold hover:underline">Edit</button>
+              </div>
+            </div>
+            <p className="text-base font-black text-[#E91E63] mt-0.5">{restaurantData?.offer || "N/A"}</p>
+          </div>
+
           {/* Card 2: Basic Details */}
           <div className="bg-white rounded-3xl p-5 shadow-[0_2px_8px_rgba(0,0,0,0.03)] border border-gray-100/50">
             <div className="flex flex-col mb-4.5">
@@ -536,7 +551,7 @@ export default function OutletInfo() {
         <DialogContent className="w-[calc(100vw-32px)] max-w-[425px] rounded-[24px] p-0 overflow-hidden bg-white shadow-2xl border-0 gap-0 mx-auto">
           <DialogHeader className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
             <DialogTitle className="text-[19px] font-black text-gray-900 tracking-tight text-left">
-              Edit {editSection === 'restaurantName' ? 'Restaurant Name' : editSection === 'basic' ? 'Basic Details' : editSection === 'compliance' ? 'Compliance Details' : 'Bank Details'}
+              Edit {editSection === 'restaurantName' ? 'Restaurant Name' : editSection === 'offer' ? 'Offer Details' : editSection === 'basic' ? 'Basic Details' : editSection === 'compliance' ? 'Compliance Details' : 'Bank Details'}
             </DialogTitle>
           </DialogHeader>
           
@@ -545,6 +560,12 @@ export default function OutletInfo() {
               <div>
                 <label className="text-[13px] font-bold text-gray-700 mb-1.5 block tracking-wide">Restaurant Name</label>
                 <input className="w-full h-12 rounded-xl bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#E91E63]/20 focus:border-[#E91E63] transition-all text-[15px] text-gray-900 px-4 placeholder:text-gray-400" value={editFormData.restaurantName || editFormData.name || ''} onChange={e => setEditFormData({...editFormData, restaurantName: e.target.value})} placeholder="Enter restaurant name" />
+              </div>
+            )}
+            {editSection === 'offer' && (
+              <div>
+                <label className="text-[13px] font-bold text-gray-700 mb-1.5 block tracking-wide">Offer Text</label>
+                <input className="w-full h-12 rounded-xl bg-gray-50 border border-gray-200 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#E91E63]/20 focus:border-[#E91E63] transition-all text-[15px] text-gray-900 px-4 placeholder:text-gray-400" value={editFormData.offer || ''} onChange={e => setEditFormData({...editFormData, offer: e.target.value})} placeholder="e.g. WEEKEND FEAST • UP TO 50% OFF" />
               </div>
             )}
             {editSection === 'basic' && (

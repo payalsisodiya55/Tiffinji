@@ -178,6 +178,7 @@ const toRestaurantProfile = (doc) => {
             Number.isFinite(Number(doc.estimatedDeliveryTimeMinutes))
                 ? Number(doc.estimatedDeliveryTimeMinutes)
                 : null,
+        offer: doc.offer || '',
         diningSettings: {
             isEnabled: doc.diningSettings?.isEnabled !== false,
             maxGuests: Math.max(1, parseInt(doc.diningSettings?.maxGuests, 10) || 6),
@@ -855,6 +856,9 @@ export const updateRestaurantProfile = async (restaurantId, body = {}) => {
         const estimatedDeliveryTimeText = String(body.estimatedDeliveryTime || '').trim();
         update.estimatedDeliveryTime = estimatedDeliveryTimeText;
         update.estimatedDeliveryTimeMinutes = parseEstimatedDeliveryMinutes(estimatedDeliveryTimeText) ?? undefined;
+    }
+    if (body.offer !== undefined) {
+        update.offer = String(body.offer || '').trim();
     }
 
     const openingMinutes = body.openingTime !== undefined ? timeToMinutes(update.openingTime) : null;

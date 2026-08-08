@@ -55,7 +55,15 @@ function RouteTransitionLoader() {
     }
 
     if (prevPathnameRef.current !== location.pathname) {
+      const fromPath = prevPathnameRef.current
+      const toPath = location.pathname
       prevPathnameRef.current = location.pathname
+
+      // Do not trigger transition animation when entering/leaving splash screen
+      if (fromPath?.includes("/splash") || toPath?.includes("/splash")) {
+        return
+      }
+
       setLoading(true)
       const timer = setTimeout(() => {
         setLoading(false)

@@ -8,15 +8,15 @@ dotenv.config();
 
 async function sync() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/foodelo');
-    
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/Tiffinji');
+
     const categories = await FoodDiningCategory.find({}).lean();
     console.log(`Found ${categories.length} categories.`);
 
     for (const category of categories) {
       if (category.restaurantIds && category.restaurantIds.length > 0) {
         console.log(`Processing category: ${category.name} (${category.slug}) with ${category.restaurantIds.length} restaurants.`);
-        
+
         for (const restaurantId of category.restaurantIds) {
           const diningDoc = await FoodDiningRestaurant.findOne({ restaurantId });
           if (diningDoc) {
@@ -41,7 +41,7 @@ async function sync() {
         }
       }
     }
-    
+
     console.log('Sync completed.');
     await mongoose.disconnect();
   } catch (err) {

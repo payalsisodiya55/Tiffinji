@@ -72,28 +72,8 @@ export default function Splash() {
         </motion.div>
       </div>
 
-      {/* Bottom Area - Loading & Skip */}
+      {/* Bottom Area - Skip */}
       <div className="flex flex-col items-center gap-8 z-10">
-        {/* Modern Dot Loader */}
-        <div className="flex gap-2">
-          {[0, 1, 2].map((index) => (
-            <motion.div
-              key={index}
-              className="w-2.5 h-2.5 rounded-full bg-[#ff9f1c]"
-              animate={{
-                y: [0, -6, 0],
-                opacity: [0.5, 1, 0.5],
-              }}
-              transition={{
-                duration: 0.8,
-                repeat: Infinity,
-                delay: index * 0.15,
-                ease: "easeInOut",
-              }}
-            />
-          ))}
-        </div>
-
         {/* Skip button for quick manual entry */}
         <motion.button
           initial={{ opacity: 0 }}

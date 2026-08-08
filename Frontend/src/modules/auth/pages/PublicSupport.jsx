@@ -14,7 +14,7 @@ import { adminAPI } from "@food/api"
 export default function PublicSupport() {
   const navigate = useNavigate()
   const [settings, setSettings] = useState({
-    supportEmail: "switcheatsofficial@gmail.com",
+    supportEmail: "Tiffinjiofficial@gmail.com",
     supportPhone: "8919142335",
     supportHours: "Merchant support is available from 8 AM to 12 AM, 7 days a week."
   })
@@ -25,7 +25,7 @@ export default function PublicSupport() {
         const data = res?.data?.data || res?.data
         if (data) {
           setSettings({
-            supportEmail: data.supportEmail || "switcheatsofficial@gmail.com",
+            supportEmail: data.supportEmail || "Tiffinjiofficial@gmail.com",
             supportPhone: data.supportPhone || "8919142335",
             supportHours: data.supportHours || "Merchant support is available from 8 AM to 12 AM, 7 days a week."
           })
@@ -63,10 +63,10 @@ export default function PublicSupport() {
       </div>
 
       <div className="max-w-md mx-auto px-4 py-6">
-        
+
         {/* Contact Cards */}
         <div className="space-y-4 mb-8">
-          
+
           {/* Email Support Card */}
           <div className="bg-white rounded-2xl p-6 flex flex-col items-center text-center shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-gray-50">
             <div className="w-12 h-12 border-2 border-[#DC2626] rounded-xl flex items-center justify-center mb-4 bg-red-50/50">
@@ -119,7 +119,7 @@ export default function PublicSupport() {
 
         {/* Info Cards */}
         <div className="space-y-3 mb-12">
-          
+
           <div className="bg-white rounded-xl p-4 flex gap-4 shadow-[0_2px_10px_-4px_rgba(0,0,0,0.05)] border border-gray-50">
             <div className="flex-shrink-0 mt-0.5">
               <Clock className="h-[18px] w-[18px] text-[#DC2626]" />
@@ -145,7 +145,7 @@ export default function PublicSupport() {
         {/* Footer */}
         <div className="text-center pb-8">
           <p className="text-[9px] font-bold text-gray-400 tracking-widest uppercase mb-1">Last Updated: June 2, 2026</p>
-          <p className="text-[9px] font-bold text-gray-400 tracking-widest uppercase">&copy; 2026 Switcheats. All Rights Reserved.</p>
+          <p className="text-[9px] font-bold text-gray-400 tracking-widest uppercase">&copy; 2026 Tiffinji. All Rights Reserved.</p>
         </div>
 
       </div>

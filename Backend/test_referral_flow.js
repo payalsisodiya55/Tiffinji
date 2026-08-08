@@ -19,7 +19,7 @@ function assert(condition, message) {
 }
 
 async function runTests() {
-  const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/foodelo';
+  const uri = process.env.MONGODB_URI || 'mongodb://localhost:27017/Tiffinji';
   console.log('Connecting to MongoDB:', uri);
   await mongoose.connect(uri);
 
@@ -54,7 +54,7 @@ async function runTests() {
 
     // --- TEST 1: User Referral Flow ---
     console.log('\n--- Running Test 1: User Referral Flow ---');
-    
+
     // Create Referrer User
     referrerUser = await FoodUser.create({
       phone: '+919999999999',
@@ -90,7 +90,7 @@ async function runTests() {
 
     refereeUser = result.user;
     console.log('Returned referee user:', refereeUser);
-    
+
     assert(refereeUser !== null, 'Referee user should be created');
     assert(String(refereeUser.referredBy) === String(referrerUser._id), 'Referee referredBy should match referrer ID');
 

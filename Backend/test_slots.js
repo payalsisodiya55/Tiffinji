@@ -91,13 +91,13 @@ const getMealPeriod = (slot) => {
 
 async function run() {
   try {
-    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/foodelo');
+    await mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/Tiffinji');
     const restaurant = await FoodRestaurant.findOne({ restaurantNameNormalized: 'raddison' }).lean();
     const timings = await FoodRestaurantOutletTimings.findOne({ restaurantId: restaurant._id }).lean();
-    
+
     const dayName = "Wednesday"; // Today
     const todayTiming = timings?.timings?.find(t => t.day === dayName) || { isOpen: true, openingTime: "09:00", closingTime: "22:00" };
-    
+
     const slots = buildSlots(todayTiming);
     const analyzedSlots = slots.map(s => ({
       slot: s,
