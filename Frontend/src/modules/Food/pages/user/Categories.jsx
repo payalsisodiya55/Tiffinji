@@ -5,11 +5,9 @@ import { motion } from "framer-motion";
 import { adminAPI } from "@food/api";
 import { foodImages } from "@food/constants/images";
 import OptimizedImage from "@food/components/OptimizedImage";
-import { useLocation } from "@food/hooks/useLocation";
-import { useZone } from "@food/hooks/useZone";
+import { useAppLocation } from "@food/hooks/useAppLocation"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation";
 import { API_BASE_URL } from "@food/api/config";
-import { useProfile } from "@food/context/ProfileContext";
 
 export default function Categories() {
   const navigate = useNavigate();
@@ -17,18 +15,9 @@ export default function Categories() {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
-  const { location } = useLocation();
-  const { zoneId } = useZone(location);
+  const { location, zoneId } = useAppLocation();
 
-  let profileContext = null;
-  try {
-    profileContext = useProfile();
-  } catch (error) {
-    profileContext = { vegMode: false };
-  }
-  const vegMode = profileContext?.vegMode || false;
-
-  const BACKEND_ORIGIN = useMemo(() => API_BASE_URL.replace(/\/api\/?$/, ""), []);
+  const BACKEND_ORIGIN = useMemo(() => API_BASE_URL.replace(/\/api(?:\/v\d+)?\/?$/, ""), []);
 
   const normalizeImageUrl = (imageUrl) => {
     if (typeof imageUrl !== "string") return "";
@@ -97,13 +86,13 @@ export default function Categories() {
       {/* Search Bar */}
       <div className="px-4 py-6">
         <div className="relative group">
-          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-neutral-400 dark:text-gray-500 group-focus-within:text-[#7e3866] transition-colors" />
+          <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-neutral-400 dark:text-gray-500 group-focus-within:text-primary transition-colors" />
           <input
             type="text"
             placeholder="Search specialties, cuisines..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-12 pr-4 py-4 bg-neutral-50 dark:bg-gray-900 border border-neutral-100 dark:border-gray-800 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-[#7e3866]/5 focus:border-[#7e3866] transition-all placeholder:text-neutral-400 dark:placeholder:text-gray-600 dark:text-white"
+            className="w-full pl-12 pr-4 py-4 bg-neutral-50 dark:bg-gray-900 border border-neutral-100 dark:border-gray-800 rounded-2xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-primary/5 focus:border-primary transition-all placeholder:text-neutral-400 dark:placeholder:text-gray-600 dark:text-white"
           />
         </div>
       </div>

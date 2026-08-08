@@ -10,6 +10,7 @@ import {
 } from '@react-google-maps/api';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { zoneAPI } from '@food/api';
+import { useGoogleMapsApiKey } from '@food/utils/googleMapsApiKey';
 
 const mapContainerStyle = {
   width: '100%',
@@ -42,11 +43,16 @@ const LIBRARIES = ['places', 'geometry'];
 
 export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineReceived, zoom = 12 }) => {
   const { riderLocation, activeOrder, tripStatus } = useDeliveryStore();
+  const googleMapsApiKey = useGoogleMapsApiKey();
   
-  const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries: LIBRARIES
-  });
+  const { isLoaded, loadError } = useJsApiLoader(
+    {
+      id: 'delivery-live-map',
+      googleMapsApiKey: googleMapsApiKey || '__pending__',
+      libraries: LIBRARIES,
+    },
+    [googleMapsApiKey]
+  );
 
   const [directions, setDirections] = useState(null);
   const [baselineDirections, setBaselineDirections] = useState(null);
@@ -106,9 +112,31 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
 
   useEffect(() => { if (map) map.setZoom(zoom); }, [zoom, map]);
 
+  const isOffCurrentRoute = useMemo(() => {
+    if (!directions || !parsedRiderLocation || !window.google?.maps?.geometry) return false;
+    const fullPath = directions.routes?.[0]?.overview_path;
+    if (!fullPath?.length) return false;
+
+    const riderLatLng = new window.google.maps.LatLng(
+      parsedRiderLocation.lat,
+      parsedRiderLocation.lng,
+    );
+    let minDistance = Infinity;
+    for (let i = 0; i < fullPath.length; i += 1) {
+      const distance = window.google.maps.geometry.spherical.computeDistanceBetween(
+        riderLatLng,
+        fullPath[i],
+      );
+      if (distance < minDistance) minDistance = distance;
+    }
+    return minDistance > 100;
+  }, [directions, parsedRiderLocation]);
+
   const shouldUpdateRoute = useMemo(() => {
     const now = Date.now();
     if (!directions) return true;
+    if (isOffCurrentRoute) return true;
+
     let throttleMs = 20000;
     if (parsedRiderLocation && targetLocation && window.google) {
       try {
@@ -121,7 +149,7 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
       } catch (e) {}
     }
     return (now - lastDirectionsAt) >= throttleMs;
-  }, [lastDirectionsAt, directions, parsedRiderLocation, targetLocation]);
+  }, [lastDirectionsAt, directions, parsedRiderLocation, targetLocation, isOffCurrentRoute]);
 
   useEffect(() => {
     if (directions && onPathReceived) {
@@ -140,7 +168,9 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
     if (status === 'OK' && result) {
       setDirections(result);
       setLastDirectionsAt(Date.now());
-      const encodedPolyline = result.routes[0]?.overview_polyline;
+      const rawPolyline = result.routes?.[0]?.overview_polyline;
+      const encodedPolyline =
+        typeof rawPolyline === 'string' ? rawPolyline : rawPolyline?.points || '';
       if (encodedPolyline && onPolylineReceived) onPolylineReceived(encodedPolyline);
     }
   }, [onPolylineReceived]);
@@ -188,12 +218,16 @@ export const LiveMap = ({ onMapClick, onMapLoad, onPathReceived, onPolylineRecei
     if (now - lastBoundsUpdateRef.current < 12000) return;
     lastBoundsUpdateRef.current = now;
 
-    const bounds = new window.google.maps.LatLngBounds();
-    if (restaurantPoint) bounds.extend(restaurantPoint);
-    if (customerPoint) bounds.extend(customerPoint);
-    if (parsedRiderLocation) bounds.extend(parsedRiderLocation);
+    if (!hasAnchors && parsedRiderLocation) {
+      map.panTo(parsedRiderLocation);
+    } else {
+      const bounds = new window.google.maps.LatLngBounds();
+      if (restaurantPoint) bounds.extend(restaurantPoint);
+      if (customerPoint) bounds.extend(customerPoint);
+      if (parsedRiderLocation) bounds.extend(parsedRiderLocation);
 
-    map.fitBounds(bounds, { top: 70, right: 70, bottom: 120, left: 70 });
+      map.fitBounds(bounds, { top: 70, right: 70, bottom: 120, left: 70 });
+    }
 
     if (parsedRiderLocation) {
       lastCenteredPosRef.current = parsedRiderLocation;

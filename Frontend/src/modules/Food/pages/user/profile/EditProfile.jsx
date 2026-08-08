@@ -27,6 +27,10 @@ import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { ImageSourcePicker } from "@food/components/ImageSourcePicker"
 import { isFlutterBridgeAvailable } from "@food/utils/imageUploadUtils"
 import { EMAIL_REGEX } from "@/shared/utils/emailValidation"
+import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider'
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs'
+import { DatePicker } from '@mui/x-date-pickers/DatePicker'
+import dayjs from 'dayjs'
 const debugLog = (...args) => { }
 const debugWarn = (...args) => { }
 const debugError = (...args) => { }
@@ -72,6 +76,16 @@ const buildFormDataFromProfile = (profile = {}) => ({
   name: profile.name || "",
   mobile: normalizePhoneToTenDigits(profile.mobile || profile.phone || ""),
   email: profile.email || "",
+  dateOfBirth: profile.dateOfBirth
+    ? (typeof profile.dateOfBirth === 'string'
+      ? dayjs(profile.dateOfBirth)
+      : dayjs(profile.dateOfBirth))
+    : null,
+  anniversary: profile.anniversary
+    ? (typeof profile.anniversary === 'string'
+      ? dayjs(profile.anniversary)
+      : dayjs(profile.anniversary))
+    : null,
   gender: profile.gender || "",
 })
 
@@ -124,6 +138,7 @@ export default function EditProfile() {
   const [fieldErrors, setFieldErrors] = useState({
     mobile: "",
     email: "",
+    dateOfBirth: "",
   })
   const fileInputRef = useRef(null)
   const hydratedFromDraftRef = useRef(Boolean(draftProfile))
@@ -151,6 +166,8 @@ export default function EditProfile() {
       mobile: formData.mobile,
       email: formData.email,
       profileImage,
+      dateOfBirth: formData.dateOfBirth ? formData.dateOfBirth.format('YYYY-MM-DD') : null,
+      anniversary: formData.anniversary ? formData.anniversary.format('YYYY-MM-DD') : null,
       gender: formData.gender || "",
     })
   }, [formData, profileImage])
@@ -166,7 +183,7 @@ export default function EditProfile() {
   }, [formData, initialData])
 
   const validateEmail = (value) => {
-    if (!value) return ""
+    if (!value) return "Email is required"
     return EMAIL_REGEX.test(value) ? "" : "Please enter a valid email"
   }
 
@@ -175,18 +192,25 @@ export default function EditProfile() {
     return /^\d{10}$/.test(value) ? "" : "Mobile number must be 10 digits"
   }
 
+  const validateDateOfBirth = (value) => {
+    if (!value) return ""
+    const dob = dayjs(value)
+    if (!dob.isValid()) return "Please select a valid date of birth"
+    return dob.isAfter(dayjs(), "day") ? "Date of birth cannot be in the future" : ""
+  }
+
   const handleChange = (field, value) => {
     let normalizedValue = value
     let errorMessage = ""
 
-    if (field === "name") {
-      normalizedValue = String(value || "").replace(/[^a-zA-Z\s]/g, "")
-    } else if (field === "mobile") {
+    if (field === "mobile") {
       normalizedValue = String(value || "").replace(/\D/g, "").slice(0, 10)
       errorMessage = validateMobile(normalizedValue)
     } else if (field === "email") {
       normalizedValue = String(value || "").trim()
       errorMessage = validateEmail(normalizedValue)
+    } else if (field === "dateOfBirth") {
+      errorMessage = validateDateOfBirth(normalizedValue)
     }
 
     setFormData((prev) => ({
@@ -194,7 +218,7 @@ export default function EditProfile() {
       [field]: normalizedValue
     }))
 
-    if (field === "mobile" || field === "email") {
+    if (field === "mobile" || field === "email" || field === "dateOfBirth") {
       setFieldErrors((prev) => ({
         ...prev,
         [field]: errorMessage
@@ -248,6 +272,8 @@ export default function EditProfile() {
           phone: formData.mobile,
           mobile: formData.mobile,
           email: formData.email,
+          dateOfBirth: formData.dateOfBirth ? formData.dateOfBirth.format('YYYY-MM-DD') : null,
+          anniversary: formData.anniversary ? formData.anniversary.format('YYYY-MM-DD') : null,
           gender: formData.gender || "",
           profileImage: imageUrl,
         }
@@ -291,6 +317,7 @@ export default function EditProfile() {
     const nextErrors = {
       mobile: validateMobile(formData.mobile),
       email: validateEmail(formData.email),
+      dateOfBirth: validateDateOfBirth(formData.dateOfBirth),
     }
     setFieldErrors(nextErrors)
     return !Object.values(nextErrors).some(Boolean)
@@ -310,6 +337,8 @@ export default function EditProfile() {
       const updateData = {
         name: formData.name,
         email: formData.email || undefined,
+        dateOfBirth: formData.dateOfBirth ? formData.dateOfBirth.format('YYYY-MM-DD') : undefined,
+        anniversary: formData.anniversary ? formData.anniversary.format('YYYY-MM-DD') : undefined,
         gender: formData.gender || undefined,
         profileImage: profileImage || undefined, // Include profileImage in update
       }
@@ -328,12 +357,13 @@ export default function EditProfile() {
 
         // Save to localStorage with complete data
         saveProfileToStorage({
-          ...updatedUser,
           name: updatedUser.name || formData.name,
           phone: updatedUser.phone || formData.mobile,
           mobile: updatedUser.phone || formData.mobile,
           email: updatedUser.email || formData.email,
           profileImage: updatedUser.profileImage || profileImage,
+          dateOfBirth: updatedUser.dateOfBirth || formData.dateOfBirth?.format('YYYY-MM-DD'),
+          anniversary: updatedUser.anniversary || formData.anniversary?.format('YYYY-MM-DD'),
           gender: updatedUser.gender || formData.gender,
         })
         clearEditProfileDraft()
@@ -399,7 +429,7 @@ export default function EditProfile() {
             <button
               onClick={handleProfileImageAction}
               disabled={isUploadingImage}
-              className="absolute bottom-0 right-0 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:bg-[#55254b] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="absolute bottom-0 right-0 w-8 h-8 bg-primary rounded-full flex items-center justify-center shadow-lg border-2 border-white hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isUploadingImage ? (
                 <Loader2 className="h-4 w-4 text-white animate-spin" />
@@ -486,6 +516,104 @@ export default function EditProfile() {
               )}
             </div>
 
+            {/* Date of Birth Field */}
+            <div className="space-y-1.5 text-gray-900 dark:text-white [&_input]:dark:!text-white [&_input::placeholder]:dark:!text-white [&_.MuiSvgIcon-root]:dark:!text-white">
+              <Label htmlFor="dateOfBirth" className="text-sm font-medium text-gray-700 dark:text-white">
+                Date of birth
+              </Label>
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <DatePicker
+                  value={formData.dateOfBirth}
+                  onChange={(newValue) => handleChange('dateOfBirth', newValue)}
+                  maxDate={dayjs()}
+                  slotProps={{
+                    textField: {
+                      className: "w-full",
+                      sx: {
+                        '& .MuiOutlinedInput-root': {
+                          height: '48px',
+                          borderRadius: '8px',
+                          color: 'inherit',
+                          '& fieldset': {
+                            borderColor: '#d1d5db',
+                          },
+                          '&:hover fieldset': {
+                            borderColor: '#9ca3af',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#7e3866',
+                            borderWidth: '1px',
+                          },
+                          '& .MuiSvgIcon-root': {
+                            color: 'inherit',
+                          },
+                        },
+                        '& .MuiInputBase-input': {
+                          padding: '12px 14px',
+                          fontSize: '16px',
+                          color: 'inherit',
+                          '&::placeholder': {
+                            color: 'inherit',
+                            opacity: 0.5,
+                          }
+                        },
+                      },
+                    },
+                  }}
+                />
+              </LocalizationProvider>
+              {fieldErrors.dateOfBirth && (
+                <p className="text-xs text-red-600">{fieldErrors.dateOfBirth}</p>
+              )}
+            </div>
+
+            {/* Anniversary Field */}
+            <div className="space-y-1.5 text-gray-900 dark:text-white [&_input]:dark:!text-white [&_input::placeholder]:dark:!text-white [&_.MuiSvgIcon-root]:dark:!text-white">
+              <Label htmlFor="anniversary" className="text-sm font-medium text-gray-700 dark:text-white">
+                Anniversary <span className="text-gray-400 dark:text-gray-500 font-normal">(Optional)</span>
+              </Label>
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <DatePicker
+                  value={formData.anniversary}
+                  onChange={(newValue) => handleChange('anniversary', newValue)}
+                  slotProps={{
+                    textField: {
+                      className: "w-full",
+                      sx: {
+                        '& .MuiOutlinedInput-root': {
+                          height: '48px',
+                          borderRadius: '8px',
+                          color: 'inherit',
+                          '& fieldset': {
+                            borderColor: '#d1d5db',
+                          },
+                          '&:hover fieldset': {
+                            borderColor: '#9ca3af',
+                          },
+                          '&.Mui-focused fieldset': {
+                            borderColor: '#7e3866',
+                            borderWidth: '1px',
+                          },
+                          '& .MuiSvgIcon-root': {
+                            color: 'inherit',
+                          },
+                        },
+                        '& .MuiInputBase-input': {
+                          padding: '12px 14px',
+                          fontSize: '16px',
+                          color: 'inherit',
+                          '&::placeholder': {
+                            color: 'inherit',
+                            opacity: 0.5,
+                          }
+                        },
+                      },
+                    },
+                  }}
+                />
+              </LocalizationProvider>
+            </div>
+
             {/* Gender Field */}
             <div className="space-y-1.5">
               <Label htmlFor="gender" className="text-sm font-medium text-gray-700 dark:text-white">
@@ -515,8 +643,8 @@ export default function EditProfile() {
           onClick={handleUpdate}
           disabled={!hasChanges || isSaving || isUploadingImage}
           className={`w-full h-14 rounded-xl font-semibold text-base transition-all mb-2 ${hasChanges && !isSaving && !isUploadingImage
-            ? 'bg-primary hover:bg-[#55254b] text-white'
-            : 'bg-gray-200 dark:bg-zinc-800 text-gray-400 dark:text-zinc-500 cursor-not-allowed'
+            ? 'bg-primary hover:bg-secondary text-white'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
             }`}
         >
           {isSaving ? (

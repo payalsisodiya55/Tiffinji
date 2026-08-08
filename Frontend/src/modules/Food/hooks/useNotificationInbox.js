@@ -28,6 +28,16 @@ export default function useNotificationInbox(module, options = {}) {
   const fetchInbox = useCallback(async () => {
     if (!module) return;
 
+    // Don't call protected notification API if no token is saved
+    const tokenKey = module === 'user' ? 'food_user_token' : module === 'restaurant' ? 'food_restaurant_token' : 'food_delivery_token';
+    const token = localStorage.getItem(tokenKey) || localStorage.getItem('token');
+    if (!token) {
+      setItems([]);
+      setUnreadCount(0);
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const response = await notificationAPI.getInbox(

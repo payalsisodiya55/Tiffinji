@@ -44,7 +44,7 @@ export default function PrivacyPolicyV2() {
 
   return (
     <div className="min-h-screen bg-white dark:bg-[#0a0a0a] overflow-x-hidden">
-      <div className="fixed top-0 left-0 right-0 z-20 bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 px-4 py-4 flex items-center gap-4 shadow-sm">
+      <div className="bg-white dark:bg-zinc-900 border-b border-gray-200 dark:border-zinc-800 px-4 py-4 flex items-center gap-4 sticky top-0 z-10 shadow-sm">
         <button
           onClick={goBack}
           className="p-2 hover:bg-gray-100 dark:hover:bg-zinc-800 rounded-lg transition-colors"
@@ -54,7 +54,7 @@ export default function PrivacyPolicyV2() {
         <h1 className="text-lg font-bold text-gray-900 dark:text-white">Privacy Policy</h1>
       </div>
 
-      <div className="w-full px-5 pt-24 pb-6">
+      <div className="w-full px-5 py-6">
         <div className="max-w-4xl mx-auto">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20">

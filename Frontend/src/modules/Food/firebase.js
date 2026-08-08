@@ -74,18 +74,5 @@ export function ensureFirebaseInitialized(options = {}) {
   return firebaseApp;
 }
 
-/**
- * Get the initialized Firebase Realtime Database instance lazily.
- * This getter is the safest way to access the DB — it ensures the
- * instance is initialized before returning, avoiding stale null imports.
- */
-export function getFirebaseRealtimeDb() {
-  if (!firebaseRealtimeDb) {
-    const firebaseApp = initializeBaseApp();
-    firebaseRealtimeDb = getDatabase(firebaseApp);
-  }
-  return firebaseRealtimeDb;
-}
-
 // Proxies for export
 export { app as firebaseApp, firebaseAuth, googleProvider, firebaseRealtimeDb };

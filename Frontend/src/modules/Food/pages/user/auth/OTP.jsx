@@ -10,7 +10,7 @@ import { setAuthData as setUserAuthData } from "@food/utils/auth"
 
 export default function OTP() {
   const navigate = useNavigate()
-  const [otp, setOtp] = useState(["", "", "", ""]) // exactly 4 digits
+  const [otp, setOtp] = useState(["", "", "", "", "", ""]) // exactly 6 digits
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState(false)
@@ -86,7 +86,7 @@ export default function OTP() {
   }, [showNameInput])
 
   const handleChange = (index, value) => {
-    // Only allow digits; OTP is exactly 4 digits
+    // Only allow digits; OTP is exactly 6 digits
     if (value && !/^\d$/.test(value)) {
       return
     }
@@ -96,14 +96,14 @@ export default function OTP() {
     setOtp(newOtp)
     setError("")
 
-    // Auto-focus next input (4 boxes only)
-    if (value && index < 3) {
+    // Auto-focus next input (6 boxes only)
+    if (value && index < 5) {
       inputRefs.current[index + 1]?.focus()
     }
 
-    // Auto-submit when all 4 digits are entered
-    if (!showNameInput && newOtp.slice(0, 4).every((digit) => digit !== "")) {
-      handleVerify(newOtp.slice(0, 4).join(""))
+    // Auto-submit when all 6 digits are entered
+    if (!showNameInput && newOtp.slice(0, 6).every((digit) => digit !== "")) {
+      handleVerify(newOtp.slice(0, 6).join(""))
     }
   }
 
@@ -123,20 +123,20 @@ export default function OTP() {
         setOtp(newOtp)
       }
     }
-    // Handle paste (4 digits only)
+    // Handle paste (6 digits only)
     if (e.key === "v" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault()
       navigator.clipboard.readText().then((text) => {
-        const digits = text.replace(/\D/g, "").slice(0, 4).split("")
+        const digits = text.replace(/\D/g, "").slice(0, 6).split("")
         const newOtp = [...otp]
         digits.forEach((digit, i) => {
-          if (i < 4) newOtp[i] = digit
+          if (i < 6) newOtp[i] = digit
         })
         setOtp(newOtp)
-        if (!showNameInput && digits.length === 4) {
-          handleVerify(newOtp.slice(0, 4).join(""))
+        if (!showNameInput && digits.length === 6) {
+          handleVerify(newOtp.slice(0, 6).join(""))
         } else {
-          inputRefs.current[Math.min(digits.length, 3)]?.focus()
+          inputRefs.current[Math.min(digits.length, 5)]?.focus()
         }
       })
     }
@@ -145,16 +145,16 @@ export default function OTP() {
   const handlePaste = (e) => {
     e.preventDefault()
     const pastedData = e.clipboardData.getData("text")
-    const digits = pastedData.replace(/\D/g, "").slice(0, 4).split("")
+    const digits = pastedData.replace(/\D/g, "").slice(0, 6).split("")
     const newOtp = [...otp]
     digits.forEach((digit, i) => {
-      if (i < 4) newOtp[i] = digit
+      if (i < 6) newOtp[i] = digit
     })
     setOtp(newOtp)
-    if (!showNameInput && digits.length === 4) {
-      handleVerify(newOtp.slice(0, 4).join(""))
+    if (!showNameInput && digits.length === 6) {
+      handleVerify(newOtp.slice(0, 6).join(""))
     } else {
-      inputRefs.current[Math.min(digits.length, 3)]?.focus()
+      inputRefs.current[Math.min(digits.length, 5)]?.focus()
     }
   }
 
@@ -163,9 +163,9 @@ export default function OTP() {
     if (submittingRef.current) return
 
     const code = (otpValue || otp.join("")).replace(/\D/g, "")
-    const code4 = code.slice(0, 4)
-    if (code4.length !== 4) {
-      setError("OTP must be exactly 4 digits")
+    const code6 = code.slice(0, 6)
+    if (code6.length !== 6) {
+      setError("OTP must be exactly 6 digits")
       return
     }
 
@@ -193,9 +193,12 @@ export default function OTP() {
                 const t = await window.flutter_inappwebview.callHandler(handlerName, { module: "user" });
                 if (t && typeof t === "string" && t.length > 20) {
                   fcmToken = t.trim();
+                  try {
+                    localStorage.setItem("fcm_web_registered_token_user", fcmToken);
+                  } catch (e) { }
                   break;
                 }
-              } catch (e) {}
+              } catch (e) { }
             }
           } else {
             fcmToken = localStorage.getItem("fcm_web_registered_token_user") || null;
@@ -210,7 +213,7 @@ export default function OTP() {
 
       const response = await authAPI.verifyOTP(
         phone,
-        code4,
+        code6,
         purpose,
         providedName,
         email,
@@ -222,6 +225,16 @@ export default function OTP() {
       )
       const data = response?.data?.data || response?.data || {}
 
+      const needsName = data.needsName === true || data.isNewUser === true || (data.user && (!data.user.name || String(data.user.name).trim().length === 0 || String(data.user.name).toLowerCase() === "null"));
+
+      if (needsName) {
+        setVerifiedOtp(code6)
+        setShowNameInput(true)
+        setIsLoading(false)
+        submittingRef.current = false
+        return
+      }
+
       const accessToken = data.accessToken
       const refreshToken = data.refreshToken ?? null
       const user = data.user
@@ -231,18 +244,6 @@ export default function OTP() {
       }
       if (!refreshToken) {
         throw new Error("Invalid response from server: missing refresh token")
-      }
-
-      // Check if user needs name prompt (isNewUser flag or missing name)
-      const hasName = user.name && String(user.name).trim().length > 0 && String(user.name).toLowerCase() !== "null";
-      const needsName = data.isNewUser === true || !hasName;
-
-      if (needsName) {
-        setUserAuthData("user", accessToken, user, refreshToken)
-        setVerifiedOtp(code4)
-        setShowNameInput(true)
-        setSuccess(false)
-        return
       }
 
       // Clear auth data from sessionStorage
@@ -393,7 +394,7 @@ export default function OTP() {
       })
     }, 1000)
 
-    setOtp(["", "", "", ""])
+    setOtp(["", "", "", "", "", ""])
     setShowNameInput(false)
     setName("")
     setNameError("")
@@ -451,8 +452,8 @@ export default function OTP() {
             )}
             <div className="space-y-2">
               <h2 className="text-xl md:text-2xl font-bold text-gray-900 dark:text-white leading-tight">
-                {showNameInput 
-                  ? "Help us know you better" 
+                {showNameInput
+                  ? "Help us know you better"
                   : contactType === "email"
                     ? "Verify your email"
                     : "Verify your phone"}
@@ -460,7 +461,7 @@ export default function OTP() {
               <p className="text-sm text-gray-500 dark:text-gray-400 max-w-xs mx-auto">
                 {showNameInput
                   ? "We're excited to have you join us! Please tell us your full name to get started."
-                  : `We've sent a 4-digit code to ${contactInfo}`}
+                  : `We've sent a 6-digit code to ${contactInfo}`}
               </p>
             </div>
           </div>
@@ -482,8 +483,8 @@ export default function OTP() {
                     onKeyDown={(e) => handleKeyDown(index, e)}
                     onPaste={index === 0 ? handlePaste : undefined}
                     disabled={isLoading}
-                    aria-label={`OTP digit ${index + 1} of 4`}
-                    className="w-12 h-12 sm:w-14 sm:h-14 text-center text-xl font-bold border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary bg-white dark:bg-[#2a2a2a] text-gray-900 dark:text-white transition-all outline-none"
+                    aria-label={`OTP digit ${index + 1} of 6`}
+                    className="w-10 h-12 sm:w-12 sm:h-14 text-center text-xl font-bold border-2 border-gray-200 dark:border-gray-700 rounded-xl focus:border-primary focus:ring-1 focus:ring-primary bg-white dark:bg-[#2a2a2a] text-gray-900 dark:text-white transition-all outline-none"
                   />
                 ))}
               </div>
@@ -506,7 +507,7 @@ export default function OTP() {
                       type="button"
                       onClick={handleResend}
                       disabled={isLoading}
-                      className="text-primary hover:text-[#55254b] font-bold transition-colors disabled:opacity-50"
+                      className="text-primary hover:text-secondary font-bold transition-colors disabled:opacity-50"
                     >
                       Resend SMS
                     </button>
@@ -541,7 +542,7 @@ export default function OTP() {
               <Button
                 onClick={handleSubmitName}
                 disabled={isLoading}
-                className="w-full h-12 md:h-14 bg-primary hover:bg-[#55254b] text-white font-bold text-lg rounded-xl transition-all hover:shadow-lg active:scale-[0.98]"
+                className="w-full h-12 md:h-14 bg-primary hover:bg-secondary text-white font-bold text-lg rounded-xl transition-all hover:shadow-lg active:scale-[0.98]"
               >
                 {isLoading ? "Getting things ready..." : "Finish Registration"}
               </Button>
@@ -555,12 +556,12 @@ export default function OTP() {
             </div>
           )}
         </div>
-        
+
         {/* Footer info */}
         <div className="p-6 bg-gray-50 dark:bg-[#1f1f1f] text-center">
-            <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest font-bold">
-                Foodelo Food Delivery
-            </p>
+          <p className="text-[10px] text-gray-400 dark:text-gray-500 uppercase tracking-widest font-bold">
+            Tiffinji Food Delivery
+          </p>
         </div>
       </div>
     </AnimatedPage>

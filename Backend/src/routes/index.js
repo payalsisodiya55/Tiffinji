@@ -19,6 +19,7 @@ import { getQueuesController } from '../controllers/admin.controller.js';
 import webhookRoutes from '../core/payments/routes/webhook.routes.js';
 import searchRoutes from '../modules/food/search/routes/search.routes.js';
 import franchisePublicRoutes from '../modules/food/franchise/routes/franchise.public.routes.js';
+import * as appConfigController from '../modules/food/admin/controllers/appConfig.controller.js';
 
 const router = express.Router();
 
@@ -50,6 +51,11 @@ router.use('/v1/uploads', uploadRoutes);
 
 // Mark business-settings/public as truly public
 router.get('/v1/food/admin/business-settings/public', businessSettingsController.getBusinessSettings);
+
+// App Customization / Theme Settings routes (GET public, PUT admin only)
+router.get('/v1/app-config', appConfigController.getAllConfigs);
+router.get('/v1/app-config/:appName', appConfigController.getConfigByAppName);
+router.put('/v1/app-config/:appName', authMiddleware, requireRoles('ADMIN'), appConfigController.updateConfig);
 
 // Franchise public routes (no auth required)
 router.use('/v1/food/franchise', franchisePublicRoutes);

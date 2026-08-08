@@ -1,45 +1,36 @@
-import { Outlet, useLocation, useNavigate } from "react-router-dom"
+﻿import { Outlet, useLocation, useNavigate } from "react-router-dom"
 import { useEffect, useState, createContext, useContext } from "react"
 import { ProfileProvider } from "@food/context/ProfileContext"
-import LocationPrompt from "./LocationPrompt"
 import { CartProvider } from "@food/context/CartContext"
 import { OrdersProvider } from "@food/context/OrdersContext"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
-
 import SearchOverlay from "./SearchOverlay"
 import BottomNavigation from "./BottomNavigation"
 import DesktopNavbar from "./DesktopNavbar"
-import { useUserNotifications } from "../../hooks/useUserNotifications"
+import { UserNotificationProvider } from "@food/context/UserNotificationContext"
+import AppIntroSplash from "./AppIntroSplash"
+import { LocationProvider } from "@food/context/LocationProvider"
+import { useAppLocation } from "@food/hooks/useAppLocation"
+import LocationGuard from "./LocationGuard"
 
-// Create SearchOverlay context with default value
+const debugWarn = (...args) => {}
+
 const SearchOverlayContext = createContext({
   isSearchOpen: false,
   searchValue: "",
-  setSearchValue: () => {
-    debugWarn("SearchOverlayProvider not available")
-  },
-  openSearch: () => {
-    debugWarn("SearchOverlayProvider not available")
-  },
-  closeSearch: () => { }
+  setSearchValue: () => { debugWarn("SearchOverlayProvider not available") },
+  openSearch: () => { debugWarn("SearchOverlayProvider not available") },
+  closeSearch: () => {},
 })
 
 export function useSearchOverlay() {
-  const context = useContext(SearchOverlayContext)
-  // Always return context, even if provider is not available (will use default values)
-  return context
+  return useContext(SearchOverlayContext)
 }
 
 function SearchOverlayProvider({ children }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [searchValue, setSearchValue] = useState("")
 
-  const openSearch = () => {
-    setIsSearchOpen(true)
-  }
-
+  const openSearch = () => setIsSearchOpen(true)
   const closeSearch = () => {
     setIsSearchOpen(false)
     setSearchValue("")
@@ -60,13 +51,10 @@ function SearchOverlayProvider({ children }) {
   )
 }
 
-// Create LocationSelector context with default value
 const LocationSelectorContext = createContext({
   isLocationSelectorOpen: false,
-  openLocationSelector: () => {
-    debugWarn("LocationSelectorProvider not available")
-  },
-  closeLocationSelector: () => { }
+  openLocationSelector: () => { debugWarn("LocationSelectorProvider not available") },
+  closeLocationSelector: () => {},
 })
 
 export function useLocationSelector() {
@@ -81,16 +69,13 @@ function LocationSelectorProvider({ children }) {
   const navigate = useNavigate()
 
   const openLocationSelector = () => {
-    // Navigate to the standalone address selector page
     navigate("/food/user/address-selector")
   }
-
-  const closeLocationSelector = () => { }
 
   const value = {
     isLocationSelectorOpen: false,
     openLocationSelector,
-    closeLocationSelector
+    closeLocationSelector: () => {},
   }
 
   return (
@@ -100,73 +85,77 @@ function LocationSelectorProvider({ children }) {
   )
 }
 
-export default function UserLayout() {
+function UserLayoutShell() {
   const location = useLocation()
+  const { isOutOfService } = useAppLocation()
 
   useEffect(() => {
-    // Reset scroll to top whenever location changes (pathname, search, or hash)
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' })
   }, [location.pathname, location.search, location.hash])
-  useEffect(() => {
-    // Proactively request notification permission for native browser popups
-    if (typeof Notification !== 'undefined' && Notification.permission === 'default') {
-      // Small delay to avoid overwhelming the user on first load
-      const timer = setTimeout(() => {
-        Notification.requestPermission().then(perm => {
-          console.log('[UserLayout] Notification permission:', perm);
-        });
-      }, 3000);
-      return () => clearTimeout(timer);
-    }
-  }, []);
 
-  useUserNotifications()
-
-  // Note: Authentication checks and redirects are handled by ProtectedRoute components
-  // UserLayout should not interfere with authentication redirects
-
-  // Show bottom navigation only on home page, dining page, under-250 page, and profile page
   const path = location.pathname.startsWith("/food")
     ? location.pathname.substring(5) || "/"
     : location.pathname
-  const normalizedPath =
-    path.length > 1 ? path.replace(/\/+$/, "") : path
+  const normalizedPath = path.length > 1 ? path.replace(/\/+$/, "") : path
 
   const isProfileRoot =
     normalizedPath === "/profile" ||
     normalizedPath === "/user/profile"
 
-  const showBottomNav = normalizedPath === "/" ||
+  const showBottomNav = !isOutOfService && (
+    normalizedPath === "/" ||
     normalizedPath === "/user" ||
     normalizedPath === "/dining" ||
     normalizedPath === "/user/dining" ||
     normalizedPath === "/under-250" ||
     normalizedPath === "/user/under-250" ||
+    normalizedPath === "/orders" ||
+    normalizedPath === "/user/orders" ||
     isProfileRoot ||
-    normalizedPath === "" // Handle empty string case for root relative to /food
+    normalizedPath === ""
+  )
 
   const isUnder250 = normalizedPath === "/under-250" || normalizedPath === "/user/under-250"
 
   return (
+    <>
+      <div className="hidden md:block">
+        {showBottomNav && <DesktopNavbar showLogo={!isUnder250} />}
+      </div>
+      <LocationGuard>
+        <main className={showBottomNav ? "md:pt-40" : ""}>
+          <Outlet />
+        </main>
+      </LocationGuard>
+      {showBottomNav && <BottomNavigation />}
+    </>
+  )
+}
+
+export default function UserLayout() {
+  const [introFinished, setIntroFinished] = useState(() => {
+    return !!(typeof window !== 'undefined' && sessionStorage.getItem("appIntroSeen"))
+  })
+
+  return (
     <div className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a] transition-colors duration-200">
+      {!introFinished && (
+        <AppIntroSplash onComplete={() => setIntroFinished(true)} />
+      )}
+
       <CartProvider>
         <ProfileProvider>
-          <OrdersProvider>
-            <SearchOverlayProvider>
-              <LocationSelectorProvider>
-                {/* <Navbar /> */}
-                {/* Desktop Navbar - Hidden on mobile, visible on medium+ screens */}
-                <div className="hidden md:block">
-                  {showBottomNav && <DesktopNavbar showLogo={!isUnder250} />}
-                </div>
-                <LocationPrompt />
-                <main className={showBottomNav ? "md:pt-40" : ""}>
-                  <Outlet />
-                </main>
-                {showBottomNav && <BottomNavigation />}
-              </LocationSelectorProvider>
-            </SearchOverlayProvider>
-          </OrdersProvider>
+          <LocationProvider>
+            <OrdersProvider>
+              <SearchOverlayProvider>
+                <LocationSelectorProvider>
+                  <UserNotificationProvider>
+                    <UserLayoutShell />
+                  </UserNotificationProvider>
+                </LocationSelectorProvider>
+              </SearchOverlayProvider>
+            </OrdersProvider>
+          </LocationProvider>
         </ProfileProvider>
       </CartProvider>
     </div>

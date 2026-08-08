@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { deliveryAPI } from '@food/api';
+import { getOrderAcceptId } from '@food/utils/orderDispatchId';
 import { toast } from 'sonner';
 
 /**
@@ -12,8 +13,7 @@ export const useOrderManager = () => {
     activeOrder, tripStatus, updateTripStatus, clearActiveOrder, setActiveOrder, riderLocation 
   } = useDeliveryStore();
 
-  const resolveOrderId = (orderLike = activeOrder) =>
-    orderLike?._id || orderLike?.id || orderLike?.orderId || orderLike?.order_id;
+  const resolveOrderId = (orderLike = activeOrder) => getOrderAcceptId(orderLike);
 
   const acceptOrderInFlight = useRef(false);
 
@@ -124,7 +124,7 @@ export const useOrderManager = () => {
   /**
    * Mark "Picked Up" (Confirm order ID & start delivery)
    */
-  const pickUpOrder = async (billImageUrl) => {
+  const pickUpOrder = async (billImageUrl, otp) => {
     const orderId = resolveOrderId();
     if (!orderId) {
       toast.error('Order id not found. Please refresh current trip.');
@@ -136,7 +136,7 @@ export const useOrderManager = () => {
         orderId, 
         activeOrder.displayOrderId || orderId, 
         riderLocation || {},
-        { billImageUrl }
+        { billImageUrl, otp }
       );
       
       if (response?.data?.success) {

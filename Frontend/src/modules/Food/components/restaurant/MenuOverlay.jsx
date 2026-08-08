@@ -119,7 +119,7 @@ export default function MenuOverlay({ showMenu, setShowMenu }) {
               mass: 0.8
             }}
             onClick={(e) => e.stopPropagation()}
-            className="fixed bottom-0 left-0 right-0 bg-white rounded-t-3xl shadow-2xl z-[110] max-h-[90vh] overflow-hidden"
+            className="restaurant-modal-sheet bg-white rounded-2xl shadow-2xl z-[110] max-h-[90vh] overflow-hidden"
           >
             {/* Drag Handle */}
             <motion.div 
@@ -164,14 +164,59 @@ export default function MenuOverlay({ showMenu, setShowMenu }) {
                         } else if (option.isLogout) {
                           // Handle logout
                           if (window.confirm("Are you sure you want to logout?")) {
-                            // Clear authentication state
-                            localStorage.removeItem("restaurant_authenticated")
-                            localStorage.removeItem("restaurant_user")
-                            setIsAuthenticated(false)
-                            // Dispatch custom event for same-tab updates
-                            window.dispatchEvent(new Event('restaurantAuthChanged'))
-                            // Redirect to login
-                            navigate("/restaurant/login")
+                            const doLogout = async () => {
+                              try {
+                                let fcmToken = null;
+                                let platform = "web";
+                                try {
+                                  if (typeof window !== "undefined") {
+                                    if (window.flutter_inappwebview) {
+                                      platform = "mobile";
+                                      const handlerNames = ["getFcmToken", "getFCMToken", "getPushToken", "getFirebaseToken"];
+                                      for (const handlerName of handlerNames) {
+                                        try {
+                                          const t = await Promise.race([
+                                            window.flutter_inappwebview.callHandler(handlerName, { module: "restaurant" }),
+                                            new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3500))
+                                          ]);
+                                          if (t && typeof t === "string" && t.length > 20) {
+                                            fcmToken = t.trim();
+                                            break;
+                                          }
+                                        } catch (e) {
+                                          console.warn(`Bridge handler ${handlerName} failed or timed out`, e);
+                                        }
+                                      }
+                                      if (!fcmToken) {
+                                        fcmToken = localStorage.getItem("fcm_web_registered_token_restaurant") || null;
+                                      }
+                                    } else {
+                                      fcmToken = localStorage.getItem("fcm_web_registered_token_restaurant") || null;
+                                    }
+                                  }
+                                } catch (e) {}
+
+                                // Add explicit call to removeFcmToken API before logout
+                                if (fcmToken) {
+                                  try {
+                                    await restaurantAPI.removeFcmToken(fcmToken, platform);
+                                  } catch (e) {
+                                    console.warn("Failed to remove FCM token directly", e);
+                                  }
+                                }
+
+                                await restaurantAPI.logout(null, fcmToken, platform);
+                              } catch (e) {}
+                              
+                              // Clear authentication state comprehensively
+                              clearModuleAuth("restaurant");
+                              setIsAuthenticated(false)
+                              // Dispatch custom event for same-tab updates
+                              window.dispatchEvent(new Event('restaurantAuthChanged'))
+                              // Redirect to login
+                              navigate("/food/restaurant/login", { replace: true })
+                            };
+                            doLogout();
                           }
                         } else {
                           navigate(option.route)
@@ -180,7 +225,7 @@ export default function MenuOverlay({ showMenu, setShowMenu }) {
                       className={`flex flex-col items-center justify-center gap-2 p-3 md:p-4 rounded-xl transition-all shadow-md hover:shadow-lg ${
                         option.isLogout || option.isDelete
                           ? "bg-red-500 hover:bg-red-600 text-white"
-                          : "bg-gradient-to-br from-[#ff8100] to-[#ff9500] hover:from-[#e67300] hover:to-[#e68500] text-white"
+                          : "bg-gradient-to-br from-primary to-[#ff9500] hover:from-[#e67300] hover:to-[#e68500] text-white"
                       }`}
                     >
                       <motion.div
@@ -230,7 +275,7 @@ export default function MenuOverlay({ showMenu, setShowMenu }) {
         <motion.div
           initial={{ scale: 0.9, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          className="bg-white w-full max-w-sm rounded-2xl shadow-2xl overflow-hidden"
+          className="bg-white restaurant-modal-inline max-w-sm rounded-2xl shadow-2xl overflow-hidden"
           onClick={(e) => e.stopPropagation()}
         >
           {deleteStep === 1 && (

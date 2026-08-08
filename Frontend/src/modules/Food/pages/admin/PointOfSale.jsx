@@ -4,46 +4,7 @@ import { adminAPI } from '@food/api'
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
-// Format Restaurant ID to REST format (e.g., REST422829)
-const formatRestaurantId = (id) => {
-  if (!id) return "REST000000"
 
-  const idString = String(id)
-  // Extract last 6 digits from the ID
-  // Handle formats like "REST-1768045396242-2829" or "1768045396242-2829"
-  const parts = idString.split(/[-.]/)
-  let lastDigits = ""
-
-  // Get the last part and extract digits
-  if (parts.length > 0) {
-    const lastPart = parts[parts.length - 1]
-    // Extract only digits from the last part
-    const digits = lastPart.match(/\d+/g)
-    if (digits && digits.length > 0) {
-      // Get last 6 digits from all digits found
-      const allDigits = digits.join("")
-      lastDigits = allDigits.slice(-6).padStart(6, "0")
-    } else {
-      // If no digits in last part, look for digits in all parts
-      const allParts = parts.join("")
-      const allDigits = allParts.match(/\d+/g)
-      if (allDigits && allDigits.length > 0) {
-        const combinedDigits = allDigits.join("")
-        lastDigits = combinedDigits.slice(-6).padStart(6, "0")
-      }
-    }
-  }
-
-  // If no digits found, use a hash of the ID
-  if (!lastDigits) {
-    const hash = idString.split("").reduce((acc, char) => {
-      return ((acc << 5) - acc) + char.charCodeAt(0) | 0
-    }, 0)
-    lastDigits = Math.abs(hash).toString().slice(-6).padStart(6, "0")
-  }
-
-  return `REST${lastDigits}`
-}
 
 export default function PointOfSale() {
   const [restaurants, setRestaurants] = useState([])
@@ -420,7 +381,7 @@ export default function PointOfSale() {
                         <div className="flex items-center justify-between">
                           <div>
                             <p className="text-sm font-medium text-[#334257]">{restaurant.name}</p>
-                            <p className="text-xs text-[#8a94aa]">ID #{formatRestaurantId(restaurant.restaurantId || restaurant._id)}</p>
+                            <p className="text-xs text-[#8a94aa]">ID: {restaurant.restaurantId || restaurant._id}</p>
                           </div>
                           {selectedRestaurant === restaurant._id && (
                             <div className="w-2 h-2 bg-[#006fbd] rounded-full"></div>
@@ -483,7 +444,7 @@ export default function PointOfSale() {
                 <div>
                   <h2 className="text-xl font-bold text-[#334257] mb-1">{getSelectedRestaurantName()}</h2>
                   <p className="text-sm text-[#8a94aa]">
-                    ID #{formatRestaurantId(restaurants.find(r => r._id === selectedRestaurant)?.restaurantId || selectedRestaurant)}
+                    Restaurant ID: {restaurants.find(r => r._id === selectedRestaurant)?.restaurantId || selectedRestaurant}
                   </p>
                 </div>
                 <div className={`px-4 py-2 rounded-full text-sm font-semibold ${

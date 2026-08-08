@@ -59,9 +59,7 @@ export default function AdminProfile() {
           name: adminData.name || "",
           email: adminData.email || "",
           phone: adminData.phone || "",
-          profileImage: typeof adminData.profileImage === "string"
-            ? adminData.profileImage
-            : adminData.profileImage?.url || "",
+          profileImage: adminData.profileImage || "",
         });
         return;
       }
@@ -86,9 +84,7 @@ export default function AdminProfile() {
             name: fallback.name || "",
             email: fallback.email || "",
             phone: fallback.phone || "",
-            profileImage: typeof fallback.profileImage === "string"
-              ? fallback.profileImage
-              : fallback.profileImage?.url || "",
+            profileImage: fallback.profileImage || "",
           });
           toast.info("Showing saved profile. Backend disconnected — updates may not persist.");
           return;
@@ -103,25 +99,6 @@ export default function AdminProfile() {
   };
 
   const handleInputChange = (field, value) => {
-    if (field === "name") {
-      // Allow only letters and spaces
-      if (!/^[a-zA-Z\s]*$/.test(value)) {
-        return;
-      }
-    }
-    if (field === "phone") {
-      // Allow only digits up to 10 digits
-      if (!/^\d*$/.test(value) || value.length > 10) {
-        return;
-      }
-    }
-    if (field === "email") {
-      // Disallow uppercase letters in email input
-      if (/[A-Z]/.test(value)) {
-        return;
-      }
-    }
-
     setFormData((prev) => ({
       ...prev,
       [field]: value,
@@ -180,23 +157,6 @@ export default function AdminProfile() {
     e.preventDefault();
     
     try {
-      if (!formData.name || !formData.name.trim()) {
-        toast.error("Name field is required");
-        return;
-      }
-      if (!/^[a-zA-Z\s]+$/.test(formData.name)) {
-        toast.error("Name can only contain alphabets and spaces");
-        return;
-      }
-      if (formData.email && /[A-Z]/.test(formData.email)) {
-        toast.error("Email cannot contain capital letters");
-        return;
-      }
-      if (formData.phone && formData.phone.length > 10) {
-        toast.error("Phone number cannot exceed 10 digits");
-        return;
-      }
-
       const currentPassword = String(passwordData.currentPassword || "").trim();
       const newPassword = String(passwordData.newPassword || "").trim();
       const confirmPassword = String(passwordData.confirmPassword || "").trim();
@@ -262,9 +222,7 @@ export default function AdminProfile() {
           name: updatedAdmin.name || "",
           email: updatedAdmin.email || "",
           phone: updatedAdmin.phone || "",
-          profileImage: typeof updatedAdmin.profileImage === "string"
-            ? updatedAdmin.profileImage
-            : updatedAdmin.profileImage?.url || "",
+          profileImage: updatedAdmin.profileImage || "",
         });
         // Clear selected file and preview
         setSelectedFile(null);
@@ -311,9 +269,7 @@ export default function AdminProfile() {
       name: profile?.name || "",
       email: profile?.email || "",
       phone: profile?.phone || "",
-      profileImage: typeof profile?.profileImage === "string"
-        ? profile.profileImage
-        : profile?.profileImage?.url || "",
+      profileImage: profile?.profileImage || "",
     });
     setSelectedFile(null);
     setImagePreview(null);
@@ -329,9 +285,7 @@ export default function AdminProfile() {
       name: profile?.name || "",
       email: profile?.email || "",
       phone: profile?.phone || "",
-      profileImage: typeof profile?.profileImage === "string"
-        ? profile.profileImage
-        : profile?.profileImage?.url || "",
+      profileImage: profile?.profileImage || "",
     });
     setSelectedFile(null);
     setImagePreview(null);
@@ -449,25 +403,17 @@ export default function AdminProfile() {
             {/* Profile Picture Section */}
             <div className="flex items-center gap-6 pb-6 border-b border-neutral-200">
               <div className="w-20 h-20 rounded-full bg-neutral-100 flex items-center justify-center overflow-hidden border-2 border-neutral-300">
-                {(() => {
-                  const imgUrl = typeof profile?.profileImage === "string"
-                    ? profile.profileImage.trim()
-                    : profile?.profileImage?.url;
-                  if (imgUrl) {
-                    return (
-                      <img
-                        src={imgUrl}
-                        alt={profile.name}
-                        className="w-full h-full object-cover"
-                      />
-                    );
-                  }
-                  return (
-                    <span className="text-2xl font-semibold text-neutral-600">
-                      {getInitials(profile.name)}
-                    </span>
-                  );
-                })()}
+                {profile.profileImage ? (
+                  <img
+                    src={profile.profileImage}
+                    alt={profile.name}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <span className="text-2xl font-semibold text-neutral-600">
+                    {getInitials(profile.name)}
+                  </span>
+                )}
               </div>
               <div className="flex-1">
                 <p className="text-sm font-medium text-neutral-900">{profile.name}</p>
@@ -542,56 +488,48 @@ export default function AdminProfile() {
                   disabled={!isEditMode || saving || uploading}
                   className="hidden"
                 />
-                {(() => {
-                  const imgUrl = imagePreview || (typeof profile?.profileImage === "string"
-                    ? profile.profileImage.trim()
-                    : profile?.profileImage?.url);
-                  if (imgUrl) {
-                    return (
-                      <div className="relative w-48 h-48 border-2 border-neutral-300 rounded-lg overflow-hidden group">
-                        <img
-                          src={imgUrl}
-                          alt="Profile"
-                          className="w-full h-full object-cover"
-                        />
-                        {isEditMode && (
-                          <>
-                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
-                              <label
-                                htmlFor="profileImage"
-                                className="cursor-pointer bg-white text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-neutral-100 transition-colors"
-                              >
-                                Change Image
-                              </label>
-                            </div>
-                            <button
-                              type="button"
-                              onClick={handleRemoveImage}
-                              className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg z-10"
-                              title="Remove image"
-                            >
-                              <X className="w-4 h-4" />
-                            </button>
-                          </>
-                        )}
-                      </div>
-                    );
-                  }
-                  return (
-                    <label
-                      htmlFor="profileImage"
-                      className={`flex flex-col items-center justify-center w-48 h-48 border-2 border-dashed border-neutral-300 rounded-lg transition-colors bg-neutral-50 ${
-                        isEditMode ? "cursor-pointer hover:border-neutral-400" : "cursor-not-allowed opacity-70"
-                      }`}
-                    >
-                      <Upload className="w-8 h-8 text-neutral-400 mb-2" />
-                      <p className="text-sm text-neutral-600">
-                        {isEditMode ? "Click to upload" : "No profile image"}
-                      </p>
-                      <p className="text-xs text-neutral-500 mt-1">PNG, JPG, WEBP (max 5MB)</p>
-                    </label>
-                  );
-                })()}
+                {imagePreview || profile.profileImage ? (
+                  <div className="relative w-48 h-48 border-2 border-neutral-300 rounded-lg overflow-hidden group">
+                    <img
+                      src={imagePreview || profile.profileImage}
+                      alt="Profile"
+                      className="w-full h-full object-cover"
+                    />
+                    {isEditMode && (
+                      <>
+                        <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-40 transition-all flex items-center justify-center opacity-0 group-hover:opacity-100">
+                          <label
+                            htmlFor="profileImage"
+                            className="cursor-pointer bg-white text-black px-4 py-2 rounded-lg text-sm font-medium hover:bg-neutral-100 transition-colors"
+                          >
+                            Change Image
+                          </label>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={handleRemoveImage}
+                          className="absolute top-2 right-2 p-1.5 bg-red-500 text-white rounded-full hover:bg-red-600 transition-colors shadow-lg z-10"
+                          title="Remove image"
+                        >
+                          <X className="w-4 h-4" />
+                        </button>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <label
+                    htmlFor="profileImage"
+                    className={`flex flex-col items-center justify-center w-48 h-48 border-2 border-dashed border-neutral-300 rounded-lg transition-colors bg-neutral-50 ${
+                      isEditMode ? "cursor-pointer hover:border-neutral-400" : "cursor-not-allowed opacity-70"
+                    }`}
+                  >
+                    <Upload className="w-8 h-8 text-neutral-400 mb-2" />
+                    <p className="text-sm text-neutral-600">
+                      {isEditMode ? "Click to upload" : "No profile image"}
+                    </p>
+                    <p className="text-xs text-neutral-500 mt-1">PNG, JPG, WEBP (max 5MB)</p>
+                  </label>
+                )}
                 {isEditMode && imagePreview && (
                   <p className="text-xs text-green-600 mt-1">
                     New image selected. Click "Save Changes" to upload.

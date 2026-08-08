@@ -150,9 +150,9 @@ export default function SubmitComplaint() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] pb-24 text-gray-900 dark:text-gray-100">
+    <div className="min-h-screen bg-gray-50 dark:bg-[#0a0a0a] pb-24">
       {/* Header */}
-      <div className="bg-white dark:bg-[#1a1a1a] p-4 flex items-center sticky top-0 z-20 shadow-sm border-b border-gray-100 dark:border-gray-800">
+      <div className="bg-white dark:bg-[#121212] p-4 flex items-center sticky top-0 z-20 shadow-sm border-b dark:border-gray-800">
         <button
           type="button"
           onClick={goBack}
@@ -160,28 +160,33 @@ export default function SubmitComplaint() {
         >
           <ArrowLeft className="w-6 h-6 text-gray-700 dark:text-gray-300" />
         </button>
-        <h1 className="text-lg font-semibold text-gray-800 dark:text-gray-100 ml-3">Submit Complaint</h1>
+        <h1 className="text-lg font-semibold text-gray-800 dark:text-white ml-3">Submit Complaint</h1>
         <button
           type="button"
           onClick={() => navigate("/user/profile/support")}
-          className="ml-auto text-sm font-semibold text-[#7e3866] dark:text-[#a14b84]"
+          className="ml-auto text-sm font-semibold text-primary"
         >
           View History
         </button>
       </div>
 
       {/* Order Info */}
-      <div className="bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800 mx-4 mt-4 p-4 rounded-xl shadow-sm">
+      <div className="bg-white dark:bg-[#121212] mx-4 mt-4 p-4 rounded-xl shadow-sm border border-transparent dark:border-gray-800">
         <div className="flex items-center gap-3 mb-3">
           <div className="w-10 h-10 bg-gray-100 dark:bg-gray-800 rounded-lg flex items-center justify-center">
             <FileText className="w-5 h-5 text-gray-600 dark:text-gray-400" />
           </div>
           <div>
-            <p className="font-semibold text-gray-800 dark:text-gray-100">
+            <p className="font-semibold text-gray-800 dark:text-white">
               Order #{order.orderId || order._id}
             </p>
             <p className="text-xs text-gray-500 dark:text-gray-400">
-              {order.restaurantName || 'Restaurant'}
+              {(() => {
+                const restaurantName = order?.restaurantId?.restaurantName || order?.restaurantId?.name || order?.restaurantName || order?.restaurant?.restaurantName || "Restaurant";
+                const items = order?.items || [];
+                const itemNames = items.map(i => i?.name || i?.foodName).filter(Boolean).join(", ");
+                return itemNames ? `${restaurantName} • ${itemNames}` : restaurantName;
+              })()}
             </p>
           </div>
         </div>
@@ -206,12 +211,12 @@ export default function SubmitComplaint() {
           <select
             value={formData.complaintType}
             onChange={(e) => setFormData({ ...formData, complaintType: e.target.value })}
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#7e3866] focus:border-transparent"
+            className="w-full px-4 py-3 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             required
           >
-            <option value="" className="dark:bg-[#1a1a1a] text-gray-500 dark:text-gray-400">Select complaint type</option>
+            <option value="">Select complaint type</option>
             {COMPLAINT_TYPES.map((type) => (
-              <option key={type.value} value={type.value} className="dark:bg-[#1a1a1a]">
+              <option key={type.value} value={type.value}>
                 {type.label}
               </option>
             ))}
@@ -228,7 +233,7 @@ export default function SubmitComplaint() {
             value={formData.subject}
             onChange={(e) => setFormData({ ...formData, subject: e.target.value })}
             placeholder="Brief description of your complaint"
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#7e3866] focus:border-transparent"
+            className="w-full px-4 py-3 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent"
             required
             maxLength={200}
           />
@@ -244,7 +249,7 @@ export default function SubmitComplaint() {
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
             placeholder="Please provide detailed information about your complaint..."
             rows={6}
-            className="w-full px-4 py-3 border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-[#7e3866] focus:border-transparent resize-none"
+            className="w-full px-4 py-3 bg-white dark:bg-[#1a1a1a] text-gray-900 dark:text-white border border-gray-300 dark:border-gray-700 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent resize-none"
             required
             maxLength={1000}
           />
@@ -254,8 +259,8 @@ export default function SubmitComplaint() {
         </div>
 
         {/* Info Box */}
-        <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900/30 rounded-lg p-4 flex gap-3">
-          <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-450 flex-shrink-0 mt-0.5" />
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-900/50 rounded-lg p-4 flex gap-3">
+          <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
           <div className="text-sm text-blue-800 dark:text-blue-200">
             <p className="font-semibold mb-1">What happens next?</p>
             <p className="text-blue-700 dark:text-blue-300">
@@ -265,11 +270,11 @@ export default function SubmitComplaint() {
         </div>
 
         {/* Submit Button */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-gray-800 p-4 z-20">
+        <div className="fixed bottom-0 left-0 right-0 bg-white dark:bg-[#121212] border-t border-gray-200 dark:border-gray-800 p-4 z-20">
           <button
             type="submit"
             disabled={submitting}
-            className="w-full bg-[#7e3866] text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-[#55254b] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-primary text-white py-3 rounded-lg font-semibold flex items-center justify-center gap-2 hover:bg-secondary transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? (
               <>

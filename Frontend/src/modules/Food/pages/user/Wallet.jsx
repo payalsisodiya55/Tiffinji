@@ -10,9 +10,9 @@ import { toast } from "sonner"
 import { useCompanyName } from "@food/hooks/useCompanyName"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 const TRANSACTION_TYPES = {
   ALL: "all",
@@ -188,7 +188,7 @@ export default function Wallet() {
 
                 <div className="flex flex-col md:items-start items-center text-center md:text-left">
                   <h2 className="text-xl md:text-2xl lg:text-3xl xl:text-4xl font-bold text-gray-900 dark:text-white mb-2 md:mb-3">
-                    {String(companyName).trim().toLowerCase() === "tiffinji" ? "Tiffinji" : companyName} Money
+                    {companyName} Money
                   </h2>
 
                   <div className="mb-2 md:mb-3">
@@ -240,11 +240,10 @@ export default function Wallet() {
                       <button
                         key={filter.id}
                         onClick={() => setSelectedFilter(filter.id)}
-                        className={`px-4 md:px-5 lg:px-6 py-2 md:py-2.5 lg:py-3 rounded-lg md:rounded-xl text-xs md:text-sm lg:text-base font-medium whitespace-nowrap flex-shrink-0 transition-all ${
-                          isSelected
+                        className={`px-4 md:px-5 lg:px-6 py-2 md:py-2.5 lg:py-3 rounded-lg md:rounded-xl text-xs md:text-sm lg:text-base font-medium whitespace-nowrap flex-shrink-0 transition-all ${isSelected
                             ? "bg-white dark:bg-[#1a1a1a] border-2 border-green-600 dark:border-green-500 text-green-600 dark:text-green-400 shadow-sm"
                             : "bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 text-gray-600 dark:text-gray-300 hover:border-gray-300 dark:hover:border-gray-700 hover:shadow-sm"
-                        }`}
+                          }`}
                       >
                         {filter.label}
                       </button>
@@ -275,10 +274,10 @@ export default function Wallet() {
                               </p>
                               {(transaction?.metadata?.source === "referral_signup" ||
                                 String(transaction.description || "").toLowerCase().startsWith("referral reward")) && (
-                                <p className="text-[11px] md:text-xs text-green-600 dark:text-green-400 font-medium mb-1">
-                                  Referral reward
-                                </p>
-                              )}
+                                  <p className="text-[11px] md:text-xs text-green-600 dark:text-green-400 font-medium mb-1">
+                                    Referral reward
+                                  </p>
+                                )}
                               <p className="text-gray-500 dark:text-gray-400 text-xs md:text-sm lg:text-base">
                                 {formatDate(transaction.date || transaction.createdAt)}
                               </p>
@@ -295,8 +294,26 @@ export default function Wallet() {
                   ))}
                 </div>
               ) : (
-                <div className="py-12 md:py-16 lg:py-20 xl:py-24 text-center">
-                  <p className="text-gray-600 dark:text-gray-400 text-sm md:text-base lg:text-lg font-medium">
+                <div className="py-12 md:py-16 lg:py-20 xl:py-24">
+                  <div className="space-y-3 md:space-y-4 mb-6 md:mb-8 max-w-2xl mx-auto">
+                    {[1, 2, 3].map((i) => (
+                      <div
+                        key={i}
+                        className="flex items-center gap-3 md:gap-4 bg-gray-100 dark:bg-gray-800 rounded-xl px-4 md:px-5 lg:px-6 py-3 md:py-4"
+                        style={{
+                          opacity: 0.3 + i * 0.15,
+                        }}
+                      >
+                        <div className="w-10 h-10 md:w-12 md:h-12 bg-gray-200 dark:bg-gray-700 rounded-lg flex-shrink-0" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-3 md:h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4" />
+                          <div className="h-2 md:h-3 bg-gray-200 dark:bg-gray-700 rounded w-1/2" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <p className="text-gray-600 dark:text-gray-400 text-sm md:text-base lg:text-lg text-center font-medium">
                     Your transactions will appear here
                   </p>
                 </div>

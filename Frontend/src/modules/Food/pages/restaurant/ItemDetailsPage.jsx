@@ -24,6 +24,7 @@ import { toast } from "sonner"
 import { ImageSourcePicker } from "@food/components/ImageSourcePicker"
 import { isFlutterBridgeAvailable } from "@food/utils/imageUploadUtils"
 import { getFoodVariants } from "@food/utils/foodVariants"
+import { getImageUrl } from "@food/utils/getImageUrl"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -57,7 +58,6 @@ export default function ItemDetailsPage() {
   const defaultCategory = location.state?.category || "Select category"
   const defaultCategoryId = location.state?.categoryId || ""
   const fileInputRef = useRef(null)
-  const scrollContentRef = useRef(null)
 
   // Initialize state with empty values - will be populated from API
   const [itemData, setItemData] = useState(null) // Store the full item data for saving
@@ -102,8 +102,8 @@ export default function ItemDetailsPage() {
   const [categories, setCategories] = useState([])
   const [loadingCategories, setLoadingCategories] = useState(true)
   const [loadingItem, setLoadingItem] = useState(false)
+  const [restaurantProfile, setRestaurantProfile] = useState(null)
   const [keyboardInset, setKeyboardInset] = useState(0)
-  const [isPureVeg, setIsPureVeg] = useState(false)
 
   const maxNameLength = 70
   const maxDescriptionLength = 1000
@@ -112,31 +112,6 @@ export default function ItemDetailsPage() {
   const nameLength = itemName.length
   const currentApprovalStatus = String(itemData?.approvalStatus || "").toLowerCase()
   const currentRejectionReason = String(itemData?.rejectionReason || "").trim()
-
-  useEffect(() => {
-    const checkVegStatus = async () => {
-      try {
-        const response = await restaurantAPI.getCurrentRestaurant()
-        const data = response?.data?.data?.restaurant || response?.data?.restaurant
-        if (data?.pureVegRestaurant) {
-          setIsPureVeg(true)
-          setFoodType("Veg")
-        }
-      } catch (err) {
-        try {
-          const storedUser = localStorage.getItem("restaurant_user")
-          if (storedUser) {
-            const user = JSON.parse(storedUser)
-            if (user?.restaurant?.pureVegRestaurant || user?.pureVegRestaurant) {
-              setIsPureVeg(true)
-              setFoodType("Veg")
-            }
-          }
-        } catch (e) {}
-      }
-    }
-    checkVegStatus()
-  }, [])
 
   const populateFormFromItem = (item = {}) => {
     setItemData(item)
@@ -304,7 +279,51 @@ export default function ItemDetailsPage() {
     fetchCategories()
   }, [category, defaultCategory, defaultCategoryId, isNewItem, selectedCategoryId])
 
-  // Track virtual keyboard height and push layout above keyboard
+  // Fetch restaurant profile
+  useEffect(() => {
+    const fetchRestaurantProfile = async () => {
+      try {
+        const response = await restaurantAPI.getCurrentRestaurant()
+        const profile =
+          response?.data?.data?.restaurant ||
+          response?.data?.restaurant ||
+          response?.data?.data ||
+          null
+        setRestaurantProfile(profile)
+        
+        if (profile?.pureVegRestaurant === true) {
+           setFoodType("Veg")
+        }
+      } catch (error) {
+        debugWarn("Failed to load restaurant profile:", error)
+      }
+    }
+    fetchRestaurantProfile()
+  }, [])
+
+  // Keep focused form fields visible above mobile keyboard
+  useEffect(() => {
+    const ensureFieldVisible = (target) => {
+      if (!target) return
+      const isFormField = target.matches?.('input, textarea, select, [contenteditable="true"]')
+      if (!isFormField) return
+
+      window.setTimeout(() => {
+        target.scrollIntoView({ behavior: "smooth", block: "center", inline: "nearest" })
+      }, 120)
+    }
+
+    const handleFocusIn = (event) => {
+      ensureFieldVisible(event.target)
+    }
+
+    document.addEventListener("focusin", handleFocusIn, true)
+    return () => {
+      document.removeEventListener("focusin", handleFocusIn, true)
+    }
+  }, [])
+
+  // Track virtual keyboard height and push footer above keyboard
   useEffect(() => {
     const viewport = window.visualViewport
     if (!viewport) return
@@ -321,43 +340,6 @@ export default function ItemDetailsPage() {
     return () => {
       viewport.removeEventListener("resize", updateKeyboardInset)
       viewport.removeEventListener("scroll", updateKeyboardInset)
-    }
-  }, [])
-
-  // Scroll focused field above keyboard inside the scrollable content container
-  useEffect(() => {
-    const ensureFieldVisible = (target) => {
-      if (!target) return
-      const isFormField = target.matches?.('input, textarea, select, [contenteditable="true"]')
-      if (!isFormField) return
-
-      window.setTimeout(() => {
-        const container = scrollContentRef.current
-        if (!container) {
-          target.scrollIntoView({ behavior: "smooth", block: "nearest" })
-          return
-        }
-        // Get the bounding rects relative to the container
-        const containerRect = container.getBoundingClientRect()
-        const fieldRect = target.getBoundingClientRect()
-        // Desired gap above the keyboard — 24px breathing room
-        const gap = 24
-        // If field bottom is below the container bottom, scroll it into view
-        if (fieldRect.bottom > containerRect.bottom - gap) {
-          const scrollBy = fieldRect.bottom - containerRect.bottom + gap
-          container.scrollBy({ top: scrollBy, behavior: "smooth" })
-        } else if (fieldRect.top < containerRect.top) {
-          const scrollBy = fieldRect.top - containerRect.top - gap
-          container.scrollBy({ top: scrollBy, behavior: "smooth" })
-        }
-      }, 150)
-    }
-
-    const handleFocusIn = (event) => ensureFieldVisible(event.target)
-
-    document.addEventListener("focusin", handleFocusIn, true)
-    return () => {
-      document.removeEventListener("focusin", handleFocusIn, true)
     }
   }, [])
 
@@ -551,48 +533,8 @@ export default function ItemDetailsPage() {
   }
 
   const handleSave = async () => {
-    if (images.length === 0) {
-      toast.error("Please add at least one item image")
-      return
-    }
-
     if (!itemName.trim()) {
       toast.error("Please enter an item name")
-      return
-    }
-
-    if (!preparationTime) {
-      toast.error("Please select the preparation timing")
-      return
-    }
-
-    if (itemDescription.trim() && itemDescription.trim().length < minDescriptionLength) {
-      toast.error(`Item description must be at least ${minDescriptionLength} characters long`)
-      return
-    }
-
-    const testVariants = variants
-      .map((variant) => ({
-        persistedId: String(variant.persistedId || "").trim(),
-        name: String(variant.name || "").trim(),
-        price: Number(variant.price),
-      }))
-      .filter((variant) => variant.name || variant.persistedId || variant.price)
-
-    if (testVariants.some((variant) => !variant.name)) {
-      toast.error("Each variant must have a name")
-      return
-    }
-
-    if (testVariants.some((variant) => !Number.isFinite(variant.price) || variant.price <= 0)) {
-      toast.error("Each variant price must be greater than 0")
-      return
-    }
-
-    const hasVariants = testVariants.length > 0
-    const parsedBasePrice = Number(basePrice)
-    if (!hasVariants && (!basePrice || !basePrice.trim() || !Number.isFinite(parsedBasePrice) || parsedBasePrice <= 0)) {
-      toast.error("Please enter a valid base price greater than 0")
       return
     }
 
@@ -700,10 +642,22 @@ export default function ItemDetailsPage() {
         }))
         .filter((variant) => variant.name || variant.persistedId || variant.price)
 
+      if (normalizedVariants.some((variant) => !variant.name)) {
+        toast.error("Each variant must have a name")
+        setUploadingImages(false)
+        return
+      }
+
+      if (normalizedVariants.some((variant) => !Number.isFinite(variant.price) || variant.price <= 0)) {
+        toast.error("Each variant price must be greater than 0")
+        setUploadingImages(false)
+        return
+      }
+
       const hasVariants = normalizedVariants.length > 0
       const parsedBasePrice = Number(basePrice)
-      if (!hasVariants && (!basePrice || !basePrice.trim() || !Number.isFinite(parsedBasePrice) || parsedBasePrice <= 0)) {
-        toast.error("Please enter a valid base price greater than 0")
+      if (!hasVariants && (!Number.isFinite(parsedBasePrice) || parsedBasePrice < 0)) {
+        toast.error("Please enter a valid base price")
         setUploadingImages(false)
         return
       }
@@ -812,32 +766,14 @@ export default function ItemDetailsPage() {
     setVariants((prev) => prev.filter((variant) => variant.localId !== localId))
   }
 
-  const handleDelete = async () => {
-    if (isNewItem || !id) return
-
-    if (!window.confirm("Are you sure you want to delete this item?")) {
-      return
-    }
-
-    try {
-      setUploadingImages(true)
-      await restaurantAPI.deleteFood(id)
-      toast.success("Item deleted successfully")
-      window.dispatchEvent(new CustomEvent('foodsChanged'))
-      goBack()
-    } catch (error) {
-      debugError("Error deleting item:", error)
-      toast.error(error.response?.data?.message || error.message || "Failed to delete the item")
-    } finally {
-      setUploadingImages(false)
-    }
+  const handleDelete = () => {
+    // Delete logic here
+    debugLog("Deleting item:", id)
+    goBack()
   }
 
   return (
-    <div
-      className="bg-white flex flex-col overflow-hidden"
-      style={{ height: keyboardInset > 0 ? `calc(100vh - ${keyboardInset}px)` : "100dvh" }}
-    >
+    <div className="restaurant-page min-h-full bg-white">
       <style>{`
         [data-slot="switch"][data-state="checked"] {
           background-color: #16a34a !important;
@@ -860,8 +796,8 @@ export default function ItemDetailsPage() {
       </div>
 
 
-      {/* Content — scrollable region that shrinks when keyboard opens */}
-      <div ref={scrollContentRef} className="flex-1 overflow-y-auto" style={{ paddingBottom: "24px" }}>
+      {/* Content */}
+      <div style={{ paddingBottom: `${96 + keyboardInset}px` }}>
         {!isNewItem && currentApprovalStatus === "rejected" && currentRejectionReason ? (
           <div className="px-4 pt-4">
             <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3">
@@ -875,11 +811,6 @@ export default function ItemDetailsPage() {
         ) : null}
 
         {/* Image Carousel */}
-        <div className="px-4 pt-4 bg-white">
-          <label className="block text-sm font-medium text-gray-900 mb-2">
-            Item image <span className="text-red-500">*</span>
-          </label>
-        </div>
         <div className="relative bg-white">
           {images.length > 0 ? (
             <div className="relative w-full h-80 overflow-hidden bg-gray-100">
@@ -903,7 +834,7 @@ export default function ItemDetailsPage() {
                   >
                     {images[currentImageIndex] ? (
                       <img
-                        src={images[currentImageIndex]}
+                        src={getImageUrl(images[currentImageIndex])}
                         alt={`${itemName} - Image ${currentImageIndex + 1}`}
                         className="w-full h-full object-cover"
                       />
@@ -1004,7 +935,7 @@ export default function ItemDetailsPage() {
           {/* Category Selector */}
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Category <span className="text-red-500">*</span>
+              Category
             </label>
             <button
               onClick={() => setIsCategoryPopupOpen(true)}
@@ -1020,7 +951,7 @@ export default function ItemDetailsPage() {
           {/* Item Name */}
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Item name <span className="text-red-500">*</span>
+              Item name
             </label>
             <div className="relative">
               <input
@@ -1055,19 +986,15 @@ export default function ItemDetailsPage() {
                 maxLength={maxDescriptionLength}
                 rows={4}
                 placeholder="Eg: Yummy veg paneer burger with a soft patty, veggies, cheese, and special sauce"
-                className={`w-full px-4 py-3 pr-12 border rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 resize-none transition-colors ${
-                  descriptionLength > 0 && descriptionLength < minDescriptionLength
-                    ? "border-red-300 focus:ring-red-500 focus:border-transparent"
-                    : "border-gray-300 focus:ring-blue-500 focus:border-transparent"
-                }`}
+                className="w-full px-4 py-3 pr-12 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               />
               <button className="absolute right-3 top-3 p-1 rounded-full hover:bg-gray-100">
                 <EditIcon className="w-4 h-4 text-gray-500" />
               </button>
             </div>
             <div className="flex items-center justify-between mt-1">
-              <span className={`text-xs ${descriptionLength > 0 && descriptionLength < minDescriptionLength ? "text-red-500" : "text-gray-500"}`}>
-                {descriptionLength > 0 && descriptionLength < minDescriptionLength ? "Min 5 characters required" : ""}
+              <span className={`text-xs ${descriptionLength < minDescriptionLength ? "text-red-500" : "text-gray-500"}`}>
+                {descriptionLength < minDescriptionLength ? "Min 5 characters required" : ""}
               </span>
               <span className="text-xs text-gray-500">
                 {descriptionLength} / {maxDescriptionLength}
@@ -1085,7 +1012,7 @@ export default function ItemDetailsPage() {
                 {foodType === "Veg" && <Check className="w-4 h-4" />}
                 <span>Veg</span>
               </button>
-              {!isPureVeg && (
+              {restaurantProfile?.pureVegRestaurant !== true && (
                 <button
                   onClick={() => setFoodType("Non-Veg")}
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${foodType === "Non-Veg"
@@ -1103,7 +1030,7 @@ export default function ItemDetailsPage() {
           {/* Item Price */}
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Item price <span className="text-red-500">*</span>
+              Item price
             </label>
             <div className="space-y-3">
               {variants.length === 0 ? (
@@ -1214,7 +1141,7 @@ export default function ItemDetailsPage() {
 
               {/* Preparation Time */}
               <div className="relative">
-                <label className="block text-xs text-gray-600 mb-1">Preparation Time <span className="text-red-500">*</span></label>
+                <label className="block text-xs text-gray-600 mb-1">Preparation Time</label>
                 <div className="relative">
                   <select
                     value={preparationTime}
@@ -1266,35 +1193,6 @@ export default function ItemDetailsPage() {
             </div>
           </div>
 
-          {/* Bottom Buttons - flow naturally so they don't cover inputs above keyboard */}
-          <div className="flex gap-3 pt-6 border-t border-gray-200">
-            {!isNewItem && (
-              <button
-                onClick={handleDelete}
-                disabled={uploadingImages}
-                className="flex-1 py-3 px-4 border border-black rounded-lg text-sm font-semibold text-black bg-white hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                Delete
-              </button>
-            )}
-            <button
-              onClick={handleSave}
-              disabled={uploadingImages}
-              className={`${isNewItem ? 'w-full' : 'flex-1'} py-3 px-4 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${!uploadingImages
-                ? "bg-black text-white hover:bg-black"
-                : "bg-gray-300 text-gray-500 cursor-not-allowed"
-                }`}
-            >
-              {uploadingImages ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Uploading...</span>
-                </>
-              ) : (
-                "Save"
-              )}
-            </button>
-          </div>
 
         </div>
       </div>
@@ -1315,7 +1213,7 @@ export default function ItemDetailsPage() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 max-h-[85vh] flex flex-col"
+              className="restaurant-modal-sheet bg-white rounded-t-2xl shadow-2xl z-50 max-h-[85vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
@@ -1408,7 +1306,7 @@ export default function ItemDetailsPage() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 max-h-[60vh] flex flex-col"
+              className="restaurant-modal-sheet bg-white rounded-t-2xl shadow-2xl z-50 max-h-[60vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
@@ -1443,7 +1341,39 @@ export default function ItemDetailsPage() {
       </AnimatePresence> */}
 
 
-      {/* Bottom Sticky Buttons removed to flow naturally inside scrollable content */}
+      {/* Bottom Sticky Buttons */}
+      <div
+        className="fixed left-0 right-0 bg-white border-t border-gray-200 z-40"
+        style={{ bottom: `${keyboardInset}px` }}
+      >
+        <div className={`flex gap-3 px-4 py-4 ${isNewItem ? 'justify-end' : ''}`}>
+          {!isNewItem && (
+            <button
+              onClick={handleDelete}
+              className="flex-1 py-3 px-4 border border-black rounded-lg text-sm font-semibold text-black bg-white hover:bg-gray-50 transition-colors"
+            >
+              Delete
+            </button>
+          )}
+          <button
+            onClick={handleSave}
+            disabled={uploadingImages}
+            className={`${isNewItem ? 'w-full' : 'flex-1'} py-3 px-4 rounded-lg text-sm font-semibold transition-colors flex items-center justify-center gap-2 ${!uploadingImages
+              ? "bg-black text-white hover:bg-black"
+              : "bg-gray-300 text-gray-500 cursor-not-allowed"
+              }`}
+          >
+            {uploadingImages ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin" />
+                <span>Uploading...</span>
+              </>
+            ) : (
+              "Save"
+            )}
+          </button>
+        </div>
+      </div>
       {/* Photo Picker */}
       <ImageSourcePicker
         isOpen={isPhotoPickerOpen}

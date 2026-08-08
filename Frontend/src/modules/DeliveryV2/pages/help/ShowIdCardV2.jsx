@@ -111,15 +111,6 @@ export default function ShowIdCardV2() {
     profileImage: getProfileImageUrl()
   };
 
-  const statusColorsConfig = {
-    'bg-green-500': { bg: '#10b981', shadow: 'rgba(16, 185, 129, 0.3)' },
-    'bg-yellow-500': { bg: '#f59e0b', shadow: 'rgba(245, 158, 11, 0.3)' },
-    'bg-red-500': { bg: '#ef4444', shadow: 'rgba(239, 68, 68, 0.3)' },
-    'bg-gray-500': { bg: '#6b7280', shadow: 'rgba(107, 114, 128, 0.3)' }
-  };
-  const badgeColors = statusColorsConfig[idCardData.statusColor] || statusColorsConfig['bg-green-500'];
-
-
   return (
     <div className="min-h-screen bg-black relative">
       <div className="max-w-md mx-auto min-h-screen bg-gray-100 relative shadow-2xl">
@@ -151,7 +142,7 @@ export default function ShowIdCardV2() {
         </div>
 
         {/* Main White Content Area */}
-        <div className="bg-white min-h-[calc(100vh-10rem)] relative pt-24 px-6 pb-12">
+        <div className="bg-white min-h-[calc(100vh-10rem)] relative pt-20 px-6 pb-12">
           <div className="flex flex-col items-center text-center">
             {/* Brand Name */}
             <p className="text-xs font-black uppercase tracking-[0.3em] text-orange-500 mb-2">{companyName}</p>
@@ -162,13 +153,7 @@ export default function ShowIdCardV2() {
 
             {/* Active Status Badge */}
             <div className="mb-8">
-              <span 
-                className="text-white px-8 py-2.5 rounded-full text-xs font-black uppercase tracking-[0.2em] shadow-lg"
-                style={{
-                  backgroundColor: badgeColors.bg,
-                  boxShadow: `0 10px 15px -3px ${badgeColors.shadow}`
-                }}
-              >
+              <span className={`${idCardData.statusColor} text-white px-8 py-2.5 rounded-full text-xs font-black uppercase tracking-[0.2em] shadow-lg shadow-green-500/20`}>
                 {idCardData.status}
               </span>
             </div>

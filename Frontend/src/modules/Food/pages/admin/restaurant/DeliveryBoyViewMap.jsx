@@ -1,708 +1,620 @@
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
 import { MapPin, ArrowLeft, Search, Bike } from "lucide-react"
 import { adminAPI } from "@food/api"
 import { getGoogleMapsApiKey } from "@food/utils/googleMapsApiKey"
 import { Loader } from "@googlemaps/js-api-loader"
-import { subscribeDeliveryLocation } from "@food/realtimeTracking"
-const debugLog = (...args) => console.log('[DeliveryBoyViewMap]', ...args)
-const debugWarn = (...args) => console.warn('[DeliveryBoyViewMap]', ...args)
-const debugError = (...args) => console.error('[DeliveryBoyViewMap]', ...args)
+import { subscribeAllDeliveryLocations } from "@food/realtimeTracking"
 
+const API_REFRESH_MS = 30000
+
+function escapeHtml(value = "") {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;")
+}
+
+function isValidCoord(lat, lng) {
+  return (
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    lat >= -90 &&
+    lat <= 90 &&
+    lng >= -180 &&
+    lng <= 180 &&
+    !(lat === 0 && lng === 0)
+  )
+}
+
+function isFirebaseOnline(payload = {}) {
+  return (
+    payload?.isOnline === true ||
+    payload?.status === "online" ||
+    payload?.status === "busy"
+  )
+}
+
+function readPartnerCoords(partner = {}) {
+  let lat = Number(partner?.lastLat)
+  let lng = Number(partner?.lastLng)
+
+  const coords = partner?.lastLocation?.coordinates
+  if ((!Number.isFinite(lat) || !Number.isFinite(lng)) && Array.isArray(coords) && coords.length >= 2) {
+    lng = Number(coords[0])
+    lat = Number(coords[1])
+  }
+
+  return { lat, lng }
+}
+
+function buildRiderInfoHtml(rider) {
+  const lastUpdate = rider?.lastUpdate
+    ? new Date(rider.lastUpdate).toLocaleTimeString()
+    : null
+
+  return `
+    <div style="padding: 12px; min-width: 220px;">
+      <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">
+        ${escapeHtml(rider?.name || "Delivery Partner")}
+      </h3>
+      <div style="font-size: 13px; color: #64748b; line-height: 1.6;">
+        <div style="margin-bottom: 4px;">
+          <strong>Phone:</strong> ${escapeHtml(rider?.phone || "N/A")}
+        </div>
+        <div style="margin-bottom: 4px;">
+          <strong>Status:</strong>
+          <span style="color: #10b981; font-weight: 600;">Online</span>
+        </div>
+        ${
+          lastUpdate
+            ? `<div style="margin-top: 8px; font-size: 12px; color: #94a3b8;">
+                Last updated: ${lastUpdate}
+              </div>`
+            : ""
+        }
+      </div>
+    </div>
+  `
+}
+
+function createRiderOverlayClass(google) {
+  return class DeliveryRiderOverlay extends google.maps.OverlayView {
+    constructor({ position, rider, onSelect }) {
+      super()
+      this.position = position
+      this.rider = rider
+      this.onSelect = onSelect
+      this.div = null
+      this.nameEl = null
+      this.dotEl = null
+    }
+
+    onAdd() {
+      this.div = document.createElement("div")
+      this.div.className = "delivery-rider-map-marker"
+      this.div.style.cssText =
+        "position:absolute;transform:translate(-50%,-100%);cursor:pointer;text-align:center;pointer-events:auto;z-index:1200;"
+
+      this.dotEl = document.createElement("div")
+      this.dotEl.style.cssText =
+        "width:16px;height:16px;margin:0 auto;border-radius:50%;background:#22c55e;border:3px solid #fff;box-shadow:0 0 0 2px rgba(34,197,94,.35), 0 2px 6px rgba(0,0,0,.3);"
+
+      this.nameEl = document.createElement("div")
+      this.nameEl.style.cssText =
+        "margin-top:4px;background:#1e293b;color:#fff;font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap;box-shadow:0 1px 4px rgba(0,0,0,.25);border:1px solid #fff;max-width:140px;overflow:hidden;text-overflow:ellipsis;"
+
+      this.div.appendChild(this.dotEl)
+      this.div.appendChild(this.nameEl)
+      this.div.addEventListener("click", (event) => {
+        event.stopPropagation()
+        this.onSelect?.(this.rider)
+      })
+
+      this.renderContent()
+      this.getPanes()?.overlayMouseTarget?.appendChild(this.div)
+    }
+
+    renderContent() {
+      if (!this.nameEl) return
+      this.nameEl.textContent = this.rider?.name || "Rider"
+    }
+
+    draw() {
+      if (!this.div) return
+      const projection = this.getProjection()
+      const point = projection?.fromLatLngToDivPixel(
+        new google.maps.LatLng(this.position.lat, this.position.lng),
+      )
+      if (!point) return
+      this.div.style.left = `${point.x}px`
+      this.div.style.top = `${point.y}px`
+    }
+
+    onRemove() {
+      this.div?.remove()
+      this.div = null
+      this.nameEl = null
+      this.dotEl = null
+    }
+
+    update({ position, rider }) {
+      this.position = position
+      this.rider = rider
+      this.renderContent()
+      this.draw()
+    }
+  }
+}
 
 export default function DeliveryBoyViewMap() {
   const navigate = useNavigate()
   const mapRef = useRef(null)
   const mapInstanceRef = useRef(null)
   const zonesPolygonsRef = useRef([])
-  const infoWindowsRef = useRef([])
-  const deliveryBoyMarkersRef = useRef([])
-  const markersMapRef = useRef(new Map()) // Cache/Ref for active markers on map
-  const rotatedIconCacheRef = useRef(new Map()) // Cache for rotated bike icons
-  const directoryPartnersRef = useRef([])
-  const latestRealtimeNodeRef = useRef({})
-  const activeSubscriptionsRef = useRef(new Map()) // Maps deliveryId -> unsubscribe function
-  const riderImageRef = useRef(null) // Pre-loaded rider image
-  const hasFitBoundsRef = useRef(false)
-  
+  const zoneInfoWindowsRef = useRef([])
+  const markersMapRef = useRef(new Map())
+  const ridersMapRef = useRef(new Map())
+  const partnerMetaRef = useRef(new Map())
+  const riderOverlayClassRef = useRef(null)
+  const hasFitRiderBoundsRef = useRef(false)
+  const selectedRiderIdRef = useRef(null)
+
   const [googleMapsApiKey, setGoogleMapsApiKey] = useState("")
   const [mapLoading, setMapLoading] = useState(true)
+  const [zonesLoading, setZonesLoading] = useState(true)
+  const [ridersLoading, setRidersLoading] = useState(true)
   const [zones, setZones] = useState([])
-  const [deliveryBoys, setDeliveryBoys] = useState([])
-  const deliveryMetaByIdRef = useRef(new Map())
-  const [loading, setLoading] = useState(true)
+  const [onlineRiders, setOnlineRiders] = useState([])
+  const [selectedRiderId, setSelectedRiderId] = useState(null)
   const [locationSearch, setLocationSearch] = useState("")
   const autocompleteInputRef = useRef(null)
   const autocompleteRef = useRef(null)
+  const riderInfoWindowRef = useRef(null)
 
-  useEffect(() => {
-    // Pre-load rider image for marker rendering
-    const img = new Image()
-    img.src = "/MapRider.png"
-    img.onload = () => {
-      debugLog("Image /MapRider.png loaded successfully")
-      riderImageRef.current = img
-      if (mapInstanceRef.current && window.google) {
-        drawDeliveryBoyMarkers(window.google, mapInstanceRef.current).catch(err => {
-          debugError("Error redrawing markers on image load:", err)
-        })
-      }
-    }
-    img.onerror = (e) => {
-      debugError("Failed to load /MapRider.png image", e)
-    }
-
-    fetchZones()
-    fetchDeliveryPartnerDirectory()
-    loadGoogleMaps()
-
-    // Periodically poll backend directory as a fallback for real-time updates when Firebase is blocked
-    const pollInterval = setInterval(() => {
-      fetchDeliveryPartnerDirectory()
-    }, 10000)
-
-    return () => {
-      clearInterval(pollInterval)
-      // Unsubscribe from all individual listeners
-      activeSubscriptionsRef.current.forEach(unsub => {
-        if (typeof unsub === "function") unsub()
-      })
-      activeSubscriptionsRef.current.clear()
-
-      markersMapRef.current.forEach(item => {
-        if (item.marker) item.marker.setMap(null)
-      })
-      markersMapRef.current.clear()
-    }
+  const syncRidersToState = useCallback(() => {
+    const riders = Array.from(ridersMapRef.current.values()).sort((a, b) =>
+      String(a.name || "").localeCompare(String(b.name || "")),
+    )
+    setOnlineRiders(riders)
+    setRidersLoading(false)
   }, [])
 
-  // Initialize Places Autocomplete when map is loaded
-  useEffect(() => {
-    if (!mapLoading && mapInstanceRef.current && autocompleteInputRef.current && window.google?.maps?.places && !autocompleteRef.current) {
-      const autocomplete = new window.google.maps.places.Autocomplete(autocompleteInputRef.current, {
-        componentRestrictions: { country: 'in' }
+  const getPartnerMeta = useCallback((id) => {
+    return partnerMetaRef.current.get(String(id)) || null
+  }, [])
+
+  const mergeRider = useCallback(
+    (id, patch = {}) => {
+      const riderId = String(id || "").trim()
+      if (!riderId) return
+
+      const meta = getPartnerMeta(riderId)
+      const previous = ridersMapRef.current.get(riderId) || {
+        _id: riderId,
+        name: meta?.name || "Delivery Partner",
+        phone: meta?.phone || "N/A",
+      }
+
+      const nextUpdate = Number(patch.lastUpdate || 0)
+      const prevUpdate = Number(previous.lastUpdate || 0)
+      if (nextUpdate > 0 && prevUpdate > 0 && nextUpdate < prevUpdate) {
+        return
+      }
+
+      ridersMapRef.current.set(riderId, {
+        ...previous,
+        ...patch,
+        _id: riderId,
+        name: patch.name || meta?.name || previous.name || "Delivery Partner",
+        phone: patch.phone || meta?.phone || previous.phone || "N/A",
+        lastUpdate: Math.max(prevUpdate, nextUpdate),
       })
-      
-      autocomplete.addListener('place_changed', () => {
-        const place = autocomplete.getPlace()
-        if (place.geometry && place.geometry.location && mapInstanceRef.current) {
-          const location = place.geometry.location
-          mapInstanceRef.current.setCenter(location)
-          mapInstanceRef.current.setZoom(12)
-          setLocationSearch(place.formatted_address || place.name || "")
+    },
+    [getPartnerMeta],
+  )
+
+  const removeRider = useCallback((id, sourceOnly = null) => {
+    const riderId = String(id || "").trim()
+    if (!riderId) return
+    const existing = ridersMapRef.current.get(riderId)
+    if (!existing) return
+    if (sourceOnly && existing.source !== sourceOnly) return
+    ridersMapRef.current.delete(riderId)
+  }, [])
+
+  const applyApiPartners = useCallback(
+    (partners = []) => {
+      const onlineIds = new Set()
+
+      partners.forEach((partner) => {
+        const id = String(partner?._id || partner?.id || "").trim()
+        if (!id) return
+
+        partnerMetaRef.current.set(id, {
+          name: partner?.name || "Delivery Partner",
+          phone: partner?.phone || "N/A",
+          availabilityStatus: partner?.availabilityStatus || "offline",
+        })
+
+        if (partner?.availabilityStatus !== "online") {
+          removeRider(id, "api")
+          return
+        }
+
+        const { lat, lng } = readPartnerCoords(partner)
+        if (!isValidCoord(lat, lng)) return
+
+        const lastUpdate = partner?.lastLocationAt
+          ? new Date(partner.lastLocationAt).getTime()
+          : Date.now()
+
+        onlineIds.add(id)
+        mergeRider(id, {
+          name: partner?.name || "Delivery Partner",
+          phone: partner?.phone || "N/A",
+          lat,
+          lng,
+          heading: Number(partner?.heading) || 0,
+          lastUpdate,
+          source: "api",
+        })
+      })
+
+      ridersMapRef.current.forEach((rider, id) => {
+        if (rider.source === "api" && !onlineIds.has(id)) {
+          ridersMapRef.current.delete(id)
         }
       })
-      
-      autocompleteRef.current = autocomplete
-    }
-  }, [mapLoading])
 
-  // Draw zones when map and zones are ready (bounds fit only once)
-  useEffect(() => {
-    if (!mapLoading && mapInstanceRef.current && window.google && zones.length > 0) {
-      drawAllZonesOnMap(window.google, mapInstanceRef.current)
-    }
-  }, [zones, mapLoading])
+      syncRidersToState()
+    },
+    [mergeRider, removeRider, syncRidersToState],
+  )
 
-  // Draw delivery boy markers when map and deliveryBoys are ready
-  useEffect(() => {
-    if (!mapLoading && mapInstanceRef.current && window.google) {
-      drawDeliveryBoyMarkers(window.google, mapInstanceRef.current).catch(error => {
-        debugError("Error drawing delivery boy markers:", error)
+  const applyFirebaseLocations = useCallback(
+    (deliveryNode = {}) => {
+      Object.entries(deliveryNode || {}).forEach(([deliveryId, payload]) => {
+        const id = String(deliveryId || "").trim()
+        if (!id) return
+
+        const meta = getPartnerMeta(id)
+
+        if (!isFirebaseOnline(payload)) {
+          removeRider(id, "firebase")
+          return
+        }
+
+        const lat = Number(payload?.lat)
+        const lng = Number(payload?.lng)
+        if (!isValidCoord(lat, lng)) return
+
+        mergeRider(id, {
+          name: meta?.name || "Delivery Partner",
+          phone: meta?.phone || "N/A",
+          lat,
+          lng,
+          heading: Number(payload?.heading) || 0,
+          lastUpdate: Number(payload?.timestamp || payload?.last_updated) || Date.now(),
+          source: "firebase",
+        })
       })
-    }
-  }, [deliveryBoys, mapLoading])
 
-  const getMergedDeliveryBoys = (realtimeNode) => {
-    const nextMap = new Map()
+      syncRidersToState()
+    },
+    [getPartnerMeta, mergeRider, removeRider, syncRidersToState],
+  )
 
-    // 1. Populate from MongoDB directory partners
-    const directoryList = directoryPartnersRef.current || []
-    directoryList.forEach(boy => {
-      const fullData = boy.fullData || boy
-      const boyId = boy._id || boy.id || boy.deliveryId || fullData?._id || fullData?.id || fullData?.deliveryId
-      if (!boyId) return
-
-      const idString = String(boyId)
-      const lat = Number(boy.lastLat ?? boy.location?.latitude ?? boy.location?.lat ?? fullData?.location?.latitude ?? fullData?.location?.lat ?? fullData?.lastLat)
-      const lng = Number(boy.lastLng ?? boy.location?.longitude ?? boy.location?.lng ?? fullData?.location?.longitude ?? fullData?.location?.lng ?? fullData?.lastLng)
-
-      const isOnlineStatus = boy.availabilityStatus === 'online' || fullData?.availabilityStatus === 'online'
-
-      if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        nextMap.set(idString, {
-          _id: idString,
-          name: boy.name || fullData.name || "Delivery Partner",
-          phone: boy.phone || fullData.phone || "N/A",
-          availability: {
-            isOnline: isOnlineStatus, // Fallback to backend online status
-            currentLocation: {
-              type: "Point",
-              coordinates: [lng, lat],
-              heading: 0,
-              speed: 0,
-              lastUpdate: boy.lastLocationAt ? new Date(boy.lastLocationAt).getTime() : null
-            },
-            lastLocationUpdate: boy.lastLocationAt ? new Date(boy.lastLocationAt).getTime() : null
-          }
-        })
-      }
-    })
-
-    // 2. Overwrite / merge with real-time Firebase coordinates
-    Object.entries(realtimeNode || {}).forEach(([deliveryId, payload]) => {
-      const idString = String(deliveryId)
-      const location = payload?.location || payload || {}
-      const lat = Number(location?.lat ?? location?.latitude)
-      const lng = Number(location?.lng ?? location?.longitude)
-      
-      const isOnline =
-        location?.isOnline === true ||
-        location?.status === "online" ||
-        location?.status === "busy" ||
-        payload?.isOnline === true ||
-        payload?.status === "online" ||
-        payload?.status === "busy"
-
-      if (Number.isFinite(lat) && Number.isFinite(lng)) {
-        const meta = deliveryMetaByIdRef.current.get(idString) || {}
-        nextMap.set(idString, {
-          _id: idString,
-          name: meta.name || meta.fullName || "Delivery Partner",
-          phone: meta.phone || "N/A",
-          availability: {
-            isOnline: Boolean(isOnline),
-            currentLocation: {
-              type: "Point",
-              coordinates: [lng, lat],
-              heading: Number(location?.heading ?? payload?.heading) || 0,
-              speed: Number(location?.speed ?? payload?.speed) || 0,
-              lastUpdate: Number(location?.timestamp || location?.last_updated || payload?.timestamp || payload?.last_updated) || Date.now()
-            },
-            lastLocationUpdate: Number(location?.timestamp || location?.last_updated || payload?.timestamp || payload?.last_updated) || Date.now()
-          }
-        })
-      }
-    })
-
-    return Array.from(nextMap.values())
-  }
-
-  const fetchZones = async () => {
+  const fetchOnlineRidersFromApi = useCallback(async () => {
     try {
-      setLoading(true)
+      const response = await adminAPI.getLiveMonitorStatus()
+      const partners = response?.data?.data?.deliveryPartners || []
+      applyApiPartners(partners)
+    } catch (error) {
+      console.error("Error fetching online delivery partners:", error)
+      setRidersLoading(false)
+    }
+  }, [applyApiPartners])
+
+  const fetchZones = useCallback(async () => {
+    try {
+      setZonesLoading(true)
       const response = await adminAPI.getZones({ limit: 1000 })
       if (response.data?.success && response.data.data?.zones) {
         setZones(response.data.data.zones)
+      } else {
+        setZones([])
       }
     } catch (error) {
-      debugError("Error fetching zones:", error)
+      console.error("Error fetching zones:", error)
       setZones([])
     } finally {
-      setLoading(false)
+      setZonesLoading(false)
     }
-  }
+  }, [])
 
-  const syncFirebaseSubscriptions = (partners) => {
-    const currentIds = new Set(partners.map(p => {
-      const pId = p._id || p.id || p.deliveryId || p.fullData?._id || p.fullData?.id
-      return pId ? String(pId) : null
-    }).filter(Boolean))
+  const openRiderInfo = useCallback((google, map, rider) => {
+    if (!rider || !map) return
+    const id = String(rider._id)
+    selectedRiderIdRef.current = id
+    setSelectedRiderId(id)
 
-    // Unsubscribe from IDs no longer in list
-    activeSubscriptionsRef.current.forEach((unsub, id) => {
-      if (!currentIds.has(id)) {
-        unsub()
-        activeSubscriptionsRef.current.delete(id)
-        
-        const nextNode = { ...latestRealtimeNodeRef.current }
-        delete nextNode[id]
-        latestRealtimeNodeRef.current = nextNode
+    if (!riderInfoWindowRef.current) {
+      riderInfoWindowRef.current = new google.maps.InfoWindow()
+    }
+
+    riderInfoWindowRef.current.setContent(buildRiderInfoHtml(rider))
+    riderInfoWindowRef.current.setPosition({ lat: Number(rider.lat), lng: Number(rider.lng) })
+    riderInfoWindowRef.current.open(map)
+  }, [])
+
+  const updateDeliveryMarkers = useCallback(
+    async (google, map, riders) => {
+      if (!riderOverlayClassRef.current) {
+        riderOverlayClassRef.current = createRiderOverlayClass(google)
       }
-    })
+      const RiderOverlay = riderOverlayClassRef.current
+      const activeIds = new Set()
 
-    // Subscribe to new IDs
-    partners.forEach(partner => {
-      const boyId = String(partner._id || partner.id || partner.deliveryId || partner.fullData?._id || partner.fullData?.id)
-      if (!boyId || activeSubscriptionsRef.current.has(boyId)) return
+      for (const rider of riders) {
+        const id = String(rider?._id || "")
+        if (!id) continue
 
-      debugLog(`📡 Subscribing to location for delivery partner: ${boyId}`)
-      
-      const unsub = subscribeDeliveryLocation(
-        boyId,
-        (data) => {
-          debugLog(`🔥 Firebase update for ${boyId}:`, JSON.stringify(data))
-          
-          latestRealtimeNodeRef.current = {
-            ...latestRealtimeNodeRef.current,
-            [boyId]: data
-          }
-          
-          const merged = getMergedDeliveryBoys(latestRealtimeNodeRef.current)
-          setDeliveryBoys(merged)
-        },
-        (error) => {
-          const errStr = String(error?.message || error || "");
-          if (errStr.includes("permission_denied") || errStr.includes("PERMISSION_DENIED")) {
-            debugLog(`ℹ️ Firebase direct listener for ${boyId} restricted (permission_denied). Falling back to HTTP polling.`)
-          } else {
-            debugError(`🚨 Firebase listener for ${boyId} FAILED:`, error?.message || error)
-          }
+        const lat = Number(rider.lat)
+        const lng = Number(rider.lng)
+        if (!isValidCoord(lat, lng)) continue
+
+        activeIds.add(id)
+        const position = { lat, lng }
+
+        let entry = markersMapRef.current.get(id)
+        if (!entry) {
+          const overlay = new RiderOverlay({
+            position,
+            rider,
+            onSelect: (selected) => openRiderInfo(google, map, selected),
+          })
+          overlay.setMap(map)
+          entry = { overlay }
+          markersMapRef.current.set(id, entry)
+        } else {
+          entry.overlay.update({ position, rider })
         }
-      )
+      }
 
-      activeSubscriptionsRef.current.set(boyId, unsub)
-    })
-  }
-
-  const fetchDeliveryPartnerDirectory = async () => {
-    try {
-      const response = await adminAPI.getDeliveryPartners({
-        limit: 1000,
-        status: "approved",
-        isActive: true,
-        includeAvailability: false
+      markersMapRef.current.forEach((entry, id) => {
+        if (!activeIds.has(id)) {
+          entry.overlay?.setMap(null)
+          markersMapRef.current.delete(id)
+        }
       })
 
-      if (response.data?.success && response.data.data?.deliveryPartners) {
-        const nextMap = new Map()
-        const partners = response.data.data.deliveryPartners || []
-        directoryPartnersRef.current = partners
-        
-        debugLog('📋 API returned', partners.length, 'delivery partners')
-        if (partners.length > 0) {
-          debugLog('📋 Sample partner keys:', Object.keys(partners[0]))
-          debugLog('📋 Sample partner data:', JSON.stringify(partners[0]).substring(0, 500))
-        }
-
-        partners.forEach((boy) => {
-          const boyId =
-            boy?._id ||
-            boy?.id ||
-            boy?.deliveryId ||
-            boy?.fullData?._id ||
-            boy?.fullData?.id
-
-          if (!boyId) return
-
-          nextMap.set(String(boyId), {
-            name: boy?.name || boy?.fullData?.name || "Delivery Partner",
-            fullName: boy?.fullName || boy?.fullData?.fullName || "",
-            phone: boy?.phone || boy?.fullData?.phone || "N/A"
-          })
+      if (!hasFitRiderBoundsRef.current && riders.length > 0 && map) {
+        const bounds = new google.maps.LatLngBounds()
+        riders.forEach((rider) => {
+          if (isValidCoord(Number(rider.lat), Number(rider.lng))) {
+            bounds.extend({ lat: Number(rider.lat), lng: Number(rider.lng) })
+          }
         })
-        deliveryMetaByIdRef.current = nextMap
-
-        // Sync individual Firebase subscriptions
-        syncFirebaseSubscriptions(partners)
-
-        // Update list immediately when directory data returns
-        const merged = getMergedDeliveryBoys(latestRealtimeNodeRef.current)
-        debugLog('📋 After directory merge, delivery boys count:', merged.length)
-        setDeliveryBoys(merged)
+        if (!bounds.isEmpty()) {
+          map.fitBounds(bounds, { top: 80, right: 320, bottom: 80, left: 80 })
+          hasFitRiderBoundsRef.current = true
+        }
       }
-    } catch (error) {
-      debugError("Error fetching delivery partner directory:", error)
+    },
+    [openRiderInfo],
+  )
+
+  const drawAllZonesOnMap = useCallback((google, map) => {
+    zonesPolygonsRef.current.forEach((polygon) => polygon?.setMap(null))
+    zonesPolygonsRef.current = []
+    zoneInfoWindowsRef.current.forEach((infoWindow) => infoWindow?.close())
+    zoneInfoWindowsRef.current = []
+
+    if (!zones?.length) return
+
+    const colors = [
+      "#3b82f6", "#10b981", "#f59e0b", "#ef4444",
+      "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16",
+    ]
+    const bounds = new google.maps.LatLngBounds()
+
+    zones.forEach((zone, index) => {
+      if (!zone.coordinates || zone.coordinates.length < 3) return
+
+      const path = zone.coordinates
+        .map((coord) => {
+          const lat = typeof coord === "object" ? (coord.latitude ?? coord.lat) : null
+          const lng = typeof coord === "object" ? (coord.longitude ?? coord.lng) : null
+          if (lat == null || lng == null) return null
+          const latLng = new google.maps.LatLng(lat, lng)
+          bounds.extend(latLng)
+          return latLng
+        })
+        .filter(Boolean)
+
+      if (path.length < 3) return
+
+      const color = colors[index % colors.length]
+      const polygon = new google.maps.Polygon({
+        paths: path,
+        strokeColor: color,
+        strokeOpacity: 0.8,
+        strokeWeight: 2,
+        fillColor: color,
+        fillOpacity: 0.18,
+        editable: false,
+        draggable: false,
+        clickable: true,
+        zIndex: 1,
+      })
+
+      polygon.setMap(map)
+      zonesPolygonsRef.current.push(polygon)
+
+      const infoWindow = new google.maps.InfoWindow({
+        content: `
+          <div style="padding: 12px; min-width: 200px;">
+            <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">
+              ${escapeHtml(zone.name || "Unnamed Zone")}
+            </h3>
+            <div style="font-size: 13px; color: #64748b; line-height: 1.6;">
+              <div><strong>Location:</strong> ${escapeHtml(zone.serviceLocation || "N/A")}</div>
+              <div><strong>Status:</strong> ${zone.isActive ? "Active" : "Inactive"}</div>
+            </div>
+          </div>
+        `,
+      })
+
+      polygon.addListener("click", () => {
+        zoneInfoWindowsRef.current.forEach((iw) => iw?.close())
+        infoWindow.setPosition(path[0])
+        infoWindow.open(map)
+        zoneInfoWindowsRef.current.push(infoWindow)
+      })
+    })
+
+    if (!bounds.isEmpty() && !hasFitRiderBoundsRef.current) {
+      map.fitBounds(bounds, { top: 80, right: 320, bottom: 80, left: 80 })
     }
-  }
-  const loadGoogleMaps = async () => {
+  }, [zones])
+
+  const focusRiderOnMap = useCallback((rider) => {
+    if (!mapInstanceRef.current || !rider) return
+    const lat = Number(rider.lat)
+    const lng = Number(rider.lng)
+    if (!isValidCoord(lat, lng)) return
+
+    mapInstanceRef.current.panTo({ lat, lng })
+    mapInstanceRef.current.setZoom(Math.max(mapInstanceRef.current.getZoom() || 14, 14))
+    openRiderInfo(window.google, mapInstanceRef.current, rider)
+  }, [openRiderInfo])
+
+  const initializeMap = useCallback((google) => {
+    if (!mapRef.current) return
+
+    const map = new google.maps.Map(mapRef.current, {
+      center: { lat: 20.5937, lng: 78.9629 },
+      zoom: 5,
+      mapTypeControl: true,
+      mapTypeControlOptions: {
+        style: google.maps.MapTypeControlStyle.HORIZONTAL_BAR,
+        position: google.maps.ControlPosition.TOP_RIGHT,
+        mapTypeIds: [google.maps.MapTypeId.ROADMAP, google.maps.MapTypeId.SATELLITE],
+      },
+      zoomControl: true,
+      streetViewControl: false,
+      fullscreenControl: true,
+      scrollwheel: true,
+      gestureHandling: "greedy",
+      disableDoubleClickZoom: false,
+    })
+
+    mapInstanceRef.current = map
+    setMapLoading(false)
+  }, [])
+
+  const loadGoogleMaps = useCallback(async () => {
     try {
       const apiKey = await getGoogleMapsApiKey()
       setGoogleMapsApiKey(apiKey || "loaded")
-      
-      if (window.google && window.google.maps) {
+
+      let retries = 0
+      while (!window.google && retries < 50) {
+        await new Promise((resolve) => setTimeout(resolve, 100))
+        retries += 1
+      }
+
+      if (window.google?.maps) {
         initializeMap(window.google)
         return
       }
 
       if (apiKey) {
         const loader = new Loader({
-          apiKey: apiKey,
+          apiKey,
           version: "weekly",
-          libraries: ["places", "drawing", "geometry"]
+          libraries: ["places", "drawing", "geometry"],
         })
-
         const google = await loader.load()
         initializeMap(google)
       } else {
         setMapLoading(false)
       }
     } catch (error) {
-      debugError("Error loading Google Maps:", error)
+      console.error("Error loading Google Maps:", error)
       setMapLoading(false)
     }
-  }
+  }, [initializeMap])
 
-  const initializeMap = (google) => {
-    if (!mapRef.current) return
+  useEffect(() => {
+    fetchZones()
+    fetchOnlineRidersFromApi()
+    loadGoogleMaps()
 
-    const initialLocation = { lat: 20.5937, lng: 78.9629 }
+    const apiInterval = setInterval(fetchOnlineRidersFromApi, API_REFRESH_MS)
+    const unsubscribeRealtime = subscribeAllDeliveryLocations(
+      applyFirebaseLocations,
+      (error) => console.error("Firebase delivery listener failed:", error),
+    )
 
-    const g = google || window.google
-    if (!g || !g.maps) {
-      debugError("Google Maps object not found during initializeMap")
-      return
-    }
-
-    const map = new g.maps.Map(mapRef.current, {
-      center: initialLocation,
-      zoom: 5,
-      mapTypeControl: true,
-      mapTypeControlOptions: {
-        style: g.maps.MapTypeControlStyle?.HORIZONTAL_BAR || 1,
-        position: g.maps.ControlPosition?.TOP_RIGHT || 2,
-        mapTypeIds: [g.maps.MapTypeId?.ROADMAP || 'roadmap', g.maps.MapTypeId?.SATELLITE || 'satellite']
-      },
-      zoomControl: true,
-      streetViewControl: false,
-      fullscreenControl: true,
-      scrollwheel: true,
-      gestureHandling: 'greedy',
-      disableDoubleClickZoom: false,
-    })
-
-    mapInstanceRef.current = map
-    setMapLoading(false)
-  }
-
-  // Draw all zones on the map
-  const drawAllZonesOnMap = (google, map) => {
-    const g = google || window.google
-    if (!g || !g.maps) return
-
-    if (!zones || zones.length === 0) {
-      zonesPolygonsRef.current.forEach(polygon => {
-        if (polygon) polygon.setMap(null)
-      })
-      zonesPolygonsRef.current = []
-      return
-    }
-
-    zonesPolygonsRef.current.forEach(polygon => {
-      if (polygon) polygon.setMap(null)
-    })
-    zonesPolygonsRef.current = []
-
-    infoWindowsRef.current.forEach(infoWindow => {
-      if (infoWindow) infoWindow.close()
-    })
-    infoWindowsRef.current = []
-
-    const colors = [
-      "#3b82f6", "#10b981", "#f59e0b", "#ef4444",
-      "#8b5cf6", "#ec4899", "#06b6d4", "#84cc16",
-    ]
-
-    const bounds = new g.maps.LatLngBounds()
-
-    zones.forEach((zone, index) => {
-      if (!zone.coordinates || zone.coordinates.length < 3) return
-
-      const path = zone.coordinates.map(coord => {
-        const lat = typeof coord === 'object' ? (coord.latitude || coord.lat) : null
-        const lng = typeof coord === 'object' ? (coord.longitude || coord.lng) : null
-        if (lat === null || lng === null) return null
-        const latLng = new g.maps.LatLng(lat, lng)
-        bounds.extend(latLng)
-        return latLng
-      }).filter(Boolean)
-
-      if (path.length < 3) return
-
-      const color = colors[index % colors.length]
-
-      const polygon = new g.maps.Polygon({
-        paths: path,
-        strokeColor: color,
-        strokeOpacity: 0.8,
-        strokeWeight: 2,
-        fillColor: color,
-        fillOpacity: 0.25,
-        editable: false,
-        draggable: false,
-        clickable: true,
-        zIndex: 1
-      })
-
-      polygon.setMap(map)
-      zonesPolygonsRef.current.push(polygon)
-
-      const infoWindow = new g.maps.InfoWindow({
-        content: `
-          <div style="padding: 12px; min-width: 200px;">
-            <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">
-              ${zone.name || 'Unnamed Zone'}
-            </h3>
-            <div style="font-size: 13px; color: #64748b; line-height: 1.6;">
-              <div style="margin-bottom: 4px;">
-                <strong>Location:</strong> ${zone.serviceLocation || 'N/A'}
-              </div>
-              <div style="margin-bottom: 4px;">
-                <strong>Unit:</strong> ${zone.unit || 'km'}
-              </div>
-              <div style="margin-bottom: 4px;">
-                <strong>Points:</strong> ${zone.coordinates.length}
-              </div>
-              <div>
-                <strong>Status:</strong> 
-                <span style="color: ${zone.isActive ? '#10b981' : '#ef4444'}; font-weight: 600;">
-                  ${zone.isActive ? 'Active' : 'Inactive'}
-                </span>
-              </div>
-            </div>
-          </div>
-        `
-      })
-
-      polygon.addListener('click', () => {
-        infoWindowsRef.current.forEach(iw => {
-          if (iw && iw !== infoWindow) iw.close()
-        })
-        infoWindow.setPosition(path[0])
-        infoWindow.open(map)
-        infoWindowsRef.current.push(infoWindow)
-      })
-    })
-
-    if (zones.length > 0 && !hasFitBoundsRef.current) {
-      map.fitBounds(bounds)
-      const padding = { top: 50, right: 50, bottom: 50, left: 50 }
-      map.fitBounds(bounds, padding)
-      hasFitBoundsRef.current = true
-    }
-  }
-
-  // Function to get rotated bike icon (similar to delivery app, using /MapRider.png via canvas)
-  const getRotatedBikeIcon = (heading = 0, isOnline = true) => {
-    const size = 60
-    const canvas = document.createElement("canvas")
-    canvas.width = size
-    canvas.height = size
-    const ctx = canvas.getContext("2d")
-
-    if (!ctx) return ""
-
-    ctx.clearRect(0, 0, size, size)
-
-    if (riderImageRef.current) {
-      ctx.save()
-      ctx.translate(size / 2, size / 2)
-      ctx.rotate((heading * Math.PI) / 180)
-      
-      try {
-        if (!isOnline) {
-          ctx.filter = "grayscale(100%) opacity(0.6)"
-        }
-      } catch (e) {
-        // Fallback for browsers that don't support ctx.filter
-      }
-
-      ctx.drawImage(riderImageRef.current, -size / 2, -size / 2, size, size)
-      ctx.restore()
-    } else {
-      // Fallback SVG representation until the image is fully loaded
-      ctx.save()
-      ctx.translate(size / 2, size / 2)
-      ctx.rotate((heading * Math.PI) / 180)
-      const strokeColor = isOnline ? "#ff8100" : "#94a3b8"
-      const fillColor = isOnline ? "#ff8100" : "#94a3b8"
-      const circleColor = isOnline ? "white" : "#f1f5f9"
-      
-      ctx.beginPath()
-      ctx.arc(0, 0, 28, 0, 2 * Math.PI)
-      ctx.fillStyle = circleColor
-      ctx.fill()
-      ctx.strokeStyle = strokeColor
-      ctx.lineWidth = 4
-      ctx.stroke()
-      ctx.restore()
-    }
-
-    return canvas.toDataURL("image/png")
-  }
-
-  // Draw delivery boy markers (bikes) on the map
-  const drawDeliveryBoyMarkers = async (google, map) => {
-    const g = google || window.google
-    if (!g || !g.maps) return
-
-    debugLog('🎨 drawDeliveryBoyMarkers called with', deliveryBoys.length, 'boys')
-    if (!deliveryBoys || deliveryBoys.length === 0) {
-      deliveryBoyMarkersRef.current.forEach(marker => {
-        if (marker) marker.setMap(null)
-      })
-      deliveryBoyMarkersRef.current = []
-      markersMapRef.current.forEach(item => {
-        if (item.marker) item.marker.setMap(null)
+    return () => {
+      clearInterval(apiInterval)
+      if (typeof unsubscribeRealtime === "function") unsubscribeRealtime()
+      markersMapRef.current.forEach((entry) => {
+        entry?.overlay?.setMap(null)
       })
       markersMapRef.current.clear()
-      return
+      riderInfoWindowRef.current?.close()
     }
+  }, [
+    applyFirebaseLocations,
+    fetchOnlineRidersFromApi,
+    fetchZones,
+    loadGoogleMaps,
+  ])
 
-    // Keep track of active boy IDs in this update
-    const activeBoyIds = new Set()
+  useEffect(() => {
+    if (!mapLoading && mapInstanceRef.current && window.google?.maps?.places && autocompleteInputRef.current && !autocompleteRef.current) {
+      const autocomplete = new window.google.maps.places.Autocomplete(autocompleteInputRef.current, {
+        componentRestrictions: { country: "in" },
+      })
 
-    for (const boy of deliveryBoys) {
-      const fullData = boy.fullData || boy
-      const boyId = boy._id || boy.id || boy.deliveryId || fullData?._id || fullData?.id || fullData?.deliveryId
-      
-      if (!boyId) continue
-      
-      const idString = boyId.toString()
-      activeBoyIds.add(idString)
-      
-      const availability = boy.availability || fullData?.availability
-      const currentLocation = availability?.currentLocation
-      
-      if (!currentLocation?.coordinates) continue
-
-      const coords = currentLocation.coordinates
-      let lat, lng
-      if (Array.isArray(coords) && coords.length >= 2) {
-        if (coords[0] > -180 && coords[0] < 180 && coords[1] > -90 && coords[1] < 90) {
-          lng = coords[0]
-          lat = coords[1]
-        } else {
-          lat = coords[0]
-          lng = coords[1]
+      autocomplete.addListener("place_changed", () => {
+        const place = autocomplete.getPlace()
+        if (place.geometry?.location && mapInstanceRef.current) {
+          mapInstanceRef.current.setCenter(place.geometry.location)
+          mapInstanceRef.current.setZoom(12)
+          setLocationSearch(place.formatted_address || place.name || "")
         }
-      } else {
-        continue
-      }
+      })
 
-      if (!lat || !lng || isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) continue
-
-      const heading = currentLocation.heading || 0
-      const isOnline = availability?.isOnline !== false
-      const boyName = fullData.name || "Delivery Partner"
-      const boyPhone = fullData.phone || "N/A"
-      const lastUpdate = availability?.lastLocationUpdate || currentLocation?.lastUpdate
-
-      const existing = markersMapRef.current.get(idString)
-      const latLng = new g.maps.LatLng(lat, lng)
-
-      if (existing) {
-        // Update position if it changed
-        const currentPos = existing.marker.getPosition()
-        if (!currentPos || currentPos.lat() !== lat || currentPos.lng() !== lng) {
-          existing.marker.setPosition(latLng)
-        }
-
-        // Update icon if heading or status changed
-        if (existing.heading !== heading || existing.isOnline !== isOnline) {
-          const rotatedIconUrl = getRotatedBikeIcon(heading, isOnline)
-          existing.marker.setIcon({
-            url: rotatedIconUrl,
-            scaledSize: new g.maps.Size(60, 60),
-            anchor: new g.maps.Point(30, 30)
-          })
-          existing.heading = heading
-          existing.isOnline = isOnline
-        }
-
-        // Update InfoWindow content
-        const newContent = `
-          <div style="padding: 12px; min-width: 200px; font-family: sans-serif;">
-            <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">
-              ${boyName}
-            </h3>
-            <div style="font-size: 13px; color: #64748b; line-height: 1.6;">
-              <div style="margin-bottom: 4px;">
-                <strong>Phone:</strong> ${boyPhone}
-              </div>
-              <div style="margin-bottom: 4px;">
-                <strong>Status:</strong> 
-                <span style="color: ${isOnline ? '#10b981' : '#ef4444'}; font-weight: 600;">
-                  ${isOnline ? 'Online' : 'Offline'}
-                </span>
-              </div>
-              ${lastUpdate ? `
-                <div style="margin-top: 8px; font-size: 12px; color: #94a3b8;">
-                  Last updated: ${new Date(lastUpdate).toLocaleTimeString()}
-                </div>
-              ` : ''}
-            </div>
-          </div>
-        `
-        existing.infoWindow.setContent(newContent)
-      } else {
-        // Create new marker
-        const rotatedIconUrl = getRotatedBikeIcon(heading, isOnline)
-        const marker = new g.maps.Marker({
-          position: latLng,
-          map: map,
-          icon: {
-            url: rotatedIconUrl,
-            scaledSize: new g.maps.Size(60, 60),
-            anchor: new g.maps.Point(30, 30)
-          },
-          title: boyName,
-          zIndex: 1000
-        })
-
-        const infoWindow = new g.maps.InfoWindow({
-          content: `
-            <div style="padding: 12px; min-width: 200px; font-family: sans-serif;">
-              <h3 style="margin: 0 0 8px 0; font-size: 16px; font-weight: 600; color: #1e293b;">
-                ${boyName}
-              </h3>
-              <div style="font-size: 13px; color: #64748b; line-height: 1.6;">
-                <div style="margin-bottom: 4px;">
-                  <strong>Phone:</strong> ${boyPhone}
-                </div>
-                <div style="margin-bottom: 4px;">
-                  <strong>Status:</strong> 
-                  <span style="color: ${isOnline ? '#10b981' : '#ef4444'}; font-weight: 600;">
-                    ${isOnline ? 'Online' : 'Offline'}
-                  </span>
-                </div>
-                ${lastUpdate ? `
-                  <div style="margin-top: 8px; font-size: 12px; color: #94a3b8;">
-                    Last updated: ${new Date(lastUpdate).toLocaleTimeString()}
-                  </div>
-                ` : ''}
-              </div>
-            </div>
-          `
-        })
-
-        marker.addListener('click', () => {
-          infoWindowsRef.current.forEach(iw => {
-            if (iw && iw !== infoWindow) iw.close()
-          })
-          infoWindow.open(map, marker)
-          infoWindowsRef.current.push(infoWindow)
-        })
-
-        markersMapRef.current.set(idString, {
-          marker,
-          infoWindow,
-          heading,
-          isOnline
-        })
-      }
+      autocompleteRef.current = autocomplete
     }
+  }, [mapLoading])
 
-    // Clean up markers for delivery boys who are no longer active/in the list
-    markersMapRef.current.forEach((value, key) => {
-      if (!activeBoyIds.has(key)) {
-        value.marker.setMap(null)
-        markersMapRef.current.delete(key)
-      }
+  useEffect(() => {
+    if (mapLoading || !mapInstanceRef.current || !window.google) return
+    drawAllZonesOnMap(window.google, mapInstanceRef.current)
+  }, [drawAllZonesOnMap, mapLoading, zones])
+
+  useEffect(() => {
+    if (mapLoading || !mapInstanceRef.current || !window.google) return
+    updateDeliveryMarkers(window.google, mapInstanceRef.current, onlineRiders).catch((error) => {
+      console.error("Error updating delivery markers:", error)
     })
-  }
-
-  const onlineCount = deliveryBoys.filter(b => b.availability?.isOnline).length
-  const offlineCount = deliveryBoys.length - onlineCount
+  }, [mapLoading, onlineRiders, updateDeliveryMarkers])
 
   return (
     <div className="min-h-screen bg-slate-50">
       <div className="p-4 lg:p-6">
-        {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <button
             onClick={() => navigate("/admin/food/zone-setup")}
             className="p-2 hover:bg-slate-200 rounded-lg transition-colors"
+            type="button"
           >
             <ArrowLeft className="w-5 h-5 text-slate-600" />
           </button>
@@ -712,12 +624,11 @@ export default function DeliveryBoyViewMap() {
             </div>
             <div>
               <h1 className="text-2xl font-bold text-slate-900">Delivery Boy View</h1>
-              <p className="text-sm text-slate-600">View zones and online delivery boys on map</p>
+              <p className="text-sm text-slate-600">Live location of online delivery partners</p>
             </div>
           </div>
         </div>
 
-        {/* Search Bar */}
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4 mb-4">
           <div className="relative">
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -732,76 +643,87 @@ export default function DeliveryBoyViewMap() {
           </div>
         </div>
 
-        {/* Map Container */}
         <div className="bg-white rounded-lg shadow-sm border border-slate-200 p-4">
-          <div className="relative" style={{ height: "calc(100vh - 250px)", minHeight: "600px" }}>
-            <div ref={mapRef} className="w-full h-full rounded-lg" />
-            
-            {mapLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-100 rounded-lg">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-slate-600">Loading map...</p>
-                </div>
-              </div>
-            )}
+          <div className="flex flex-col lg:flex-row gap-4">
+            <div className="relative flex-1" style={{ height: "calc(100vh - 250px)", minHeight: "600px" }}>
+              <div ref={mapRef} className="w-full h-full rounded-lg" />
 
-            {loading && !mapLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-100 rounded-lg">
-                <div className="text-center">
-                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-                  <p className="text-slate-600">Loading data...</p>
+              {mapLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-100 rounded-lg">
+                  <div className="text-center">
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4" />
+                    <p className="text-slate-600">Loading map...</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
 
-            {!googleMapsApiKey && !mapLoading && (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-100 rounded-lg">
-                <div className="text-center p-6">
-                  <MapPin className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                  <p className="text-sm text-slate-600">Google Maps API key not found</p>
+              {!googleMapsApiKey && !mapLoading && (
+                <div className="absolute inset-0 flex items-center justify-center bg-slate-100 rounded-lg">
+                  <div className="text-center p-6">
+                    <MapPin className="w-12 h-12 text-slate-400 mx-auto mb-4" />
+                    <p className="text-sm text-slate-600">Google Maps API key not found</p>
+                  </div>
                 </div>
-              </div>
-            )}
+              )}
+            </div>
 
-            {!loading && !mapLoading && zones.length === 0 && deliveryBoys.length === 0 && (
-              <div className="absolute inset-0 flex items-center justify-center bg-slate-100 rounded-lg">
-                <div className="text-center p-6">
-                  <MapPin className="w-12 h-12 text-slate-400 mx-auto mb-4" />
-                  <p className="text-sm text-slate-600">No zones or delivery boys found</p>
-                </div>
+            <div className="w-full lg:w-72 shrink-0 border border-slate-200 rounded-lg bg-slate-50 overflow-hidden flex flex-col" style={{ minHeight: "600px", maxHeight: "calc(100vh - 250px)" }}>
+              <div className="px-4 py-3 border-b border-slate-200 bg-white">
+                <h3 className="text-sm font-semibold text-slate-900">Online Riders</h3>
+                <p className="text-xs text-slate-500 mt-1">
+                  {ridersLoading ? "Loading..." : `${onlineRiders.length} on map`}
+                </p>
               </div>
-            )}
-          </div>
 
-          {/* Legend */}
-          {!mapLoading && (
-            <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
-              <h3 className="text-sm font-semibold text-slate-900 mb-2">Map Information</h3>
-              <div className="text-xs text-slate-600 space-y-1">
-                {zones.length > 0 && (
-                  <p>
-                    Click on any <span className="font-semibold text-blue-600">zone</span> on the map to view details. Total zones: <strong>{zones.length}</strong>
-                  </p>
-                )}
-                {deliveryBoys.length > 0 && (
-                  <p>
-                    Click on any <span className="font-semibold text-slate-800">bike icon</span> to view delivery boy details. Online: <strong>{onlineCount}</strong> | Offline: <strong>{offlineCount}</strong>
-                  </p>
-                )}
-                {deliveryBoys.length === 0 && (
-                  <p className="text-amber-600">
-                    No active or registered delivery boys found on map.
-                  </p>
+              <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                {ridersLoading ? (
+                  <div className="text-center py-8 text-sm text-slate-500">Fetching riders...</div>
+                ) : onlineRiders.length === 0 ? (
+                  <div className="text-center py-8 px-3 text-sm text-amber-700 bg-amber-50 rounded-lg border border-amber-100">
+                    No online riders with live location right now. Ask delivery partners to go online in the app.
+                  </div>
+                ) : (
+                  onlineRiders.map((rider) => (
+                    <button
+                      key={rider._id}
+                      type="button"
+                      onClick={() => focusRiderOnMap(rider)}
+                      className={`w-full text-left p-3 rounded-lg border transition-colors ${
+                        selectedRiderId === rider._id
+                          ? "border-emerald-500 bg-emerald-50"
+                          : "border-slate-200 bg-white hover:bg-slate-100"
+                      }`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center shrink-0">
+                          <span className="w-3 h-3 rounded-full bg-green-500 border-2 border-white shadow-sm" />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-slate-900 truncate">{rider.name}</p>
+                          <p className="text-xs text-slate-500 truncate">{rider.phone}</p>
+                        </div>
+                      </div>
+                    </button>
+                  ))
                 )}
               </div>
             </div>
-          )}
+          </div>
+
+          <div className="mt-4 p-4 bg-slate-50 rounded-lg border border-slate-200">
+            <h3 className="text-sm font-semibold text-slate-900 mb-2">Map Guide</h3>
+            <div className="text-xs text-slate-600 space-y-1">
+              <p>
+                Each online rider appears as a <span className="font-semibold text-green-600">green dot with name</span> on the map.
+              </p>
+              <p>Click the icon or rider name in the list to see full details.</p>
+              <p>
+                Locations refresh live from the delivery app and update every 30 seconds.
+              </p>
+            </div>
+          </div>
         </div>
       </div>
     </div>
   )
 }
-
-
-

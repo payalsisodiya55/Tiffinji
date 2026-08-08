@@ -48,7 +48,7 @@ export default function DepositPopup({ onSuccess, cashInHand = 0 }) {
       try {
         const pr = await deliveryAPI.getProfile()
         profile = pr?.data?.data?.profile || pr?.data?.profile || {}
-      } catch (_) {}
+      } catch (_) { }
 
       const phone = (profile?.phone || "").replace(/\D/g, "").slice(-10)
       const email = profile?.email || ""

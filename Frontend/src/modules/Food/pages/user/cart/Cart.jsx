@@ -10,10 +10,9 @@ import { Button } from "@food/components/ui/button"
 import { useCart } from "@food/context/CartContext"
 import { useProfile } from "@food/context/ProfileContext"
 import { useOrders } from "@food/context/OrdersContext"
-import { useLocation as useUserLocation } from "@food/hooks/useLocation"
-import { useZone } from "@food/hooks/useZone"
+import { useAppLocation } from "@food/hooks/useAppLocation"
 import { useLocationSelector } from "@food/components/user/UserLayout"
-import { orderAPI, restaurantAPI, adminAPI, userAPI, API_ENDPOINTS } from "@food/api"
+import { orderAPI, restaurantAPI, adminAPI, userAPI, publicAPI, API_ENDPOINTS } from "@food/api"
 import { API_BASE_URL } from "@food/api/config"
 import { initRazorpayPayment } from "@food/utils/razorpay"
 import { toast } from "sonner"
@@ -22,7 +21,7 @@ import { calculateDistance } from "@food/utils/common"
 import { useCompanyName } from "@food/hooks/useCompanyName"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
-const zoopSound = "/zomato_sms.mp3"
+import zoopSound from "@food/assets/audio/zomato_sms.mp3"
 const debugLog = (...args) => { }
 const debugWarn = (...args) => { }
 const debugError = (...args) => { }
@@ -117,7 +116,7 @@ export default function Cart() {
   const { getDefaultAddress, getDefaultPaymentMethod, setDefaultAddress, addresses, paymentMethods, userProfile } = useProfile()
   const { createOrder } = useOrders()
   const { openLocationSelector } = useLocationSelector()
-  const { location: currentLocation, loading: currentLocationLoading } = useUserLocation() // Get live location address
+  const { location: currentLocation, effectiveLocation, loading: currentLocationLoading, zoneId, setSavedLocation } = useAppLocation()
 
   const [showCoupons, setShowCoupons] = useState(false)
   const [appliedCoupon, setAppliedCoupon] = useState(null)
@@ -127,6 +126,26 @@ export default function Cart() {
   const [showPaymentSheet, setShowPaymentSheet] = useState(false)
   const [walletBalance, setWalletBalance] = useState(0)
   const [isLoadingWallet, setIsLoadingWallet] = useState(false)
+  const [onlinePaymentOnly, setOnlinePaymentOnly] = useState(false)
+  const [maxCodAmount, setMaxCodAmount] = useState(0)
+
+  useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const response = await publicAPI.getBusinessSettings()
+        if (response.data?.success && response.data?.data) {
+          const isOnlineOnly = !!response.data.data.onlinePaymentOnly;
+          const codLimit = Number(response.data.data.maxCodAmount) || 0;
+          setOnlinePaymentOnly(isOnlineOnly)
+          setMaxCodAmount(codLimit)
+        }
+      } catch (error) {
+        debugError("Error fetching business settings:", error)
+      }
+    }
+    fetchSettings()
+  }, [])
+
   const [restaurantNote, setRestaurantNote] = useState(() => {
     try {
       if (typeof window === "undefined") return ""
@@ -161,6 +180,7 @@ export default function Cart() {
   const [sendCutlery, setSendCutlery] = useState(true)
   const [isPlacingOrder, setIsPlacingOrder] = useState(false)
   const [showBillDetails, setShowBillDetails] = useState(true)
+  const [showGstModal, setShowGstModal] = useState(false)
   const [showPlacingOrder, setShowPlacingOrder] = useState(false)
   const [isScheduled, setIsScheduled] = useState(false)
   const [scheduledDate, setScheduledDate] = useState("")
@@ -173,6 +193,7 @@ export default function Cart() {
   const [showOrderSuccess, setShowOrderSuccess] = useState(false)
   const [orderSuccessSavingsAmount, setOrderSuccessSavingsAmount] = useState(0)
   const [placedOrderId, setPlacedOrderId] = useState(null)
+  const [placedOrder, setPlacedOrder] = useState(null)
   const [selectedAddressId, setSelectedAddressId] = useState(null)
   const [deliveryAddressMode, setDeliveryAddressMode] = useState(() => {
     try {
@@ -242,13 +263,13 @@ export default function Cart() {
 
   // Fee settings from database (used for platform fee and GST fallback only)
   const [feeSettings, setFeeSettings] = useState({
-    deliveryFee: 25,
+    deliveryFee: 0,
     deliveryFeeRanges: [],
     freeDeliveryUpTo: 0,
     freeDeliveryThreshold: 149,
-    platformFee: 5,
+    platformFee: 0,
     packagingFee: 0,
-    gstRate: 5,
+    gstRate: 0,
   })
 
 
@@ -333,7 +354,7 @@ export default function Cart() {
     if (normalized === "other") return "Other"
     return label || "Saved address"
   }
-  const sanitizeRecipientPhone = (value) => String(value || "").replace(/[^\d]/g, "").slice(0, 10)
+  const sanitizeRecipientPhone = (value) => String(value || "").replace(/[^\d+]/g, "").slice(0, 14)
   const savedAddress = getDefaultAddress()
   const selectedAddress = addresses.find((addr) => getAddressId(addr) && getAddressId(addr) === selectedAddressId)
 
@@ -396,13 +417,7 @@ export default function Cart() {
   const recipientName = String(recipientDetails.name || "").trim() || userProfile?.name || "Your Name"
   const recipientPhone = sanitizeRecipientPhone(recipientDetails.phone || "") || userProfile?.phone || ""
   const selectedAddressCoordinates = defaultAddress?.location?.coordinates
-  const zoneLocation = selectedAddressCoordinates?.length === 2
-    ? {
-      latitude: selectedAddressCoordinates[1],
-      longitude: selectedAddressCoordinates[0]
-    }
-    : currentLocation
-  const { zoneId } = useZone(zoneLocation) // Prefer selected/saved address zone
+  // zoneId comes from centralized LocationProvider (uses GPS or saved address)
   const defaultPayment = getDefaultPaymentMethod()
 
   useEffect(() => {
@@ -839,22 +854,30 @@ export default function Cart() {
             coupons.forEach(coupon => {
               if (!uniqueCouponCodes.has(coupon.couponCode)) {
                 uniqueCouponCodes.add(coupon.couponCode)
-                // Convert backend coupon format to frontend format
+                const isPercentage = coupon.discountType === "percentage"
+                const flatDiscount = isPercentage
+                  ? 0
+                  : Number(coupon.discountValue || coupon.discount || coupon.originalPrice || 0)
+                const pctDiscount = isPercentage
+                  ? Number(coupon.discountPercentage || coupon.discountValue || 0)
+                  : 0
                 allCoupons.push({
                   code: coupon.couponCode,
-                  discount: coupon.originalPrice - coupon.discountedPrice,
-                  discountPercentage: coupon.discountPercentage,
-                  discountDisplay: coupon.discountType === "percentage"
-                    ? `${coupon.discountPercentage}% OFF`
-                    : `${RUPEE_SYMBOL}${Math.max(0, (coupon.originalPrice || 0) - (coupon.discountedPrice || 0))} OFF`,
-                  minOrder: coupon.minOrderValue || 0,
-                  description: coupon.discountType === "percentage"
-                    ? `${coupon.discountPercentage}% OFF with '${coupon.couponCode}'`
-                    : `Save ${RUPEE_SYMBOL}${Math.max(0, (coupon.originalPrice || 0) - (coupon.discountedPrice || 0))} with '${coupon.couponCode}'`,
+                  discount: flatDiscount,
+                  discountValue: Number(coupon.discountValue || flatDiscount || pctDiscount || 0),
+                  discountPercentage: pctDiscount,
+                  discountDisplay: isPercentage
+                    ? `${pctDiscount}% OFF`
+                    : `${RUPEE_SYMBOL}${flatDiscount} OFF`,
+                  minOrder: coupon.minOrderValue || coupon.minOrder || 0,
+                  description: isPercentage
+                    ? `${pctDiscount}% OFF with '${coupon.couponCode}'`
+                    : `Save ${RUPEE_SYMBOL}${flatDiscount} with '${coupon.couponCode}'`,
                   originalPrice: coupon.originalPrice,
                   discountedPrice: coupon.discountedPrice,
                   customerGroup: coupon.customerGroup || "all",
                   isGlobalCoupon: Boolean(coupon.isGlobalCoupon),
+                  discountType: coupon.discountType,
                   itemId: couponItemId,
                   itemName: cartItem.name,
                 })
@@ -894,7 +917,7 @@ export default function Cart() {
           quantity: item.quantity || 1,
           image: item.image,
           description: item.description,
-          isVeg: item.isVeg === true || item.foodType === 'Veg'
+          isVeg: item.isVeg !== false
         }))
 
         const resolvedRestaurantId = restaurantData?.restaurantId || restaurantData?._id || restaurantId || undefined
@@ -908,14 +931,23 @@ export default function Cart() {
         })
 
         if (response?.data?.success && response?.data?.data?.pricing) {
-          setPricing(response.data.data.pricing)
+          const newPricing = response.data.data.pricing
+          setPricing(newPricing)
 
-          // Update applied coupon if backend returns one
-          if (response.data.data.pricing.appliedCoupon && !appliedCoupon) {
-            const coupon = availableCoupons.find(c => c.code === response.data.data.pricing.appliedCoupon.code)
+          if (newPricing.couponError && appliedCoupon) {
+            toast.error(newPricing.couponError)
+            setAppliedCoupon(null)
+            setCouponCode("")
+            setManualCouponCode("")
+          } else if (newPricing.appliedCoupon && !appliedCoupon) {
+            const coupon = availableCoupons.find(c => c.code === newPricing.appliedCoupon.code)
             if (coupon) {
               setAppliedCoupon(coupon)
             }
+          } else if (!newPricing.appliedCoupon && appliedCoupon) {
+            setAppliedCoupon(null)
+            setCouponCode("")
+            setManualCouponCode("")
           }
         }
       } catch (error) {
@@ -977,13 +1009,16 @@ export default function Cart() {
         const response = await adminAPI.getPublicFeeSettings()
         if (response.data.success && response.data.data.feeSettings) {
           setFeeSettings({
-            deliveryFee: response.data.data.feeSettings.deliveryFee ?? 25,
+            deliveryFee: response.data.data.feeSettings.deliveryFee ?? 0,
             deliveryFeeRanges: response.data.data.feeSettings.deliveryFeeRanges ?? [],
             freeDeliveryUpTo: response.data.data.feeSettings.freeDeliveryUpTo ?? 0,
             freeDeliveryThreshold: response.data.data.feeSettings.freeDeliveryThreshold ?? 149,
-            platformFee: response.data.data.feeSettings.platformFee ?? 5,
+            platformFee: response.data.data.feeSettings.platformFee ?? 0,
             packagingFee: response.data.data.feeSettings.packagingFee ?? 0,
-            gstRate: response.data.data.feeSettings.gstRate ?? 5,
+            gstRate: response.data.data.feeSettings.gstRate ?? 0,
+            gstOnDeliveryFee: response.data.data.feeSettings.gstOnDeliveryFee ?? 0,
+            gstOnPlatformFee: response.data.data.feeSettings.gstOnPlatformFee ?? 0,
+            gstOnPackagingFee: response.data.data.feeSettings.gstOnPackagingFee ?? 0,
           })
         }
       } catch (error) {
@@ -1008,6 +1043,16 @@ export default function Cart() {
 
   // Use backend pricing if available, otherwise fallback to database fee settings
   const subtotal = pricing?.subtotal || cart.reduce((sum, item) => sum + (item.price || 0) * (item.quantity || 1), 0)
+  const orderDistanceKm = useMemo(() => {
+    const rCoords = restaurantData?.location?.coordinates
+    const dCoords = defaultAddress?.location?.coordinates
+    if (!Array.isArray(rCoords) || !Array.isArray(dCoords)) return null
+    if (rCoords.length !== 2 || dCoords.length !== 2) return null
+    const [rLng, rLat] = rCoords
+    const [dLng, dLat] = dCoords
+    return calculateDistance(rLat, rLng, dLat, dLng)
+  }, [restaurantData, defaultAddress])
+
   const fallbackDeliveryFee = (() => {
     if (appliedCoupon?.freeDelivery) {
       return 0
@@ -1018,15 +1063,7 @@ export default function Cart() {
       return 0
     }
 
-    const distanceKm = (() => {
-      const rCoords = restaurantData?.location?.coordinates
-      const dCoords = defaultAddress?.location?.coordinates
-      if (!Array.isArray(rCoords) || !Array.isArray(dCoords)) return null
-      if (rCoords.length !== 2 || dCoords.length !== 2) return null
-      const [rLng, rLat] = rCoords
-      const [dLng, dLat] = dCoords
-      return calculateDistance(rLat, rLng, dLat, dLng)
-    })()
+    const distanceKm = orderDistanceKm
 
     const ranges = Array.isArray(feeSettings.deliveryFeeRanges) ? [...feeSettings.deliveryFeeRanges] : []
     if (ranges.length > 0 && Number.isFinite(distanceKm)) {
@@ -1038,17 +1075,13 @@ export default function Cart() {
         const fee = Number(range.fee)
         const isLastRange = i === sortedRanges.length - 1
         const inRange = isLastRange
-          ? distanceKm >= min && distanceKm <= max
+          ? distanceKm >= min
           : distanceKm >= min && distanceKm < max
 
         if (inRange) return fee
       }
 
-      return 0
-    }
-
-    if (subtotal >= feeSettings.freeDeliveryThreshold) {
-      return 0
+      return Number(feeSettings.deliveryFee || 0)
     }
 
     return Number(feeSettings.deliveryFee || 0)
@@ -1063,12 +1096,28 @@ export default function Cart() {
     : null
   const platformFee = pricing != null ? (pricing.platformFee ?? 0) : (feeSettings.platformFee ?? 0)
   const packagingFee = pricing != null ? (pricing.packagingFee ?? 0) : (feeSettings.packagingFee ?? 0)
-  const gstCharges = pricing != null ? (pricing.tax ?? 0) : Math.round(subtotal * ((feeSettings.gstRate ?? 0) / 100))
-  const discount = pricing?.discount || (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0)
-  const totalBeforeDiscount = subtotal + deliveryFee + platformFee + packagingFee + gstCharges
-  const total = pricing?.total || (totalBeforeDiscount - discount)
+  const gstOnItemTotal = pricing?.taxBreakdown?.itemTax ?? (subtotal * ((feeSettings.gstRate ?? 0) / 100));
+  const gstOnDeliveryFee = pricing?.taxBreakdown?.deliveryTax ?? (fallbackDeliveryFee * ((feeSettings.gstOnDeliveryFee ?? 0) / 100));
+  const gstOnPlatformFee = pricing?.taxBreakdown?.platformTax ?? ((feeSettings.platformFee ?? 0) * ((feeSettings.gstOnPlatformFee ?? 0) / 100));
+  const gstOnPackagingFee = pricing?.taxBreakdown?.packagingTax ?? ((feeSettings.packagingFee ?? 0) * ((feeSettings.gstOnPackagingFee ?? 0) / 100));
+  const gstCharges = pricing != null ? (pricing.tax ?? 0) : Math.round(gstOnItemTotal + gstOnDeliveryFee + gstOnPlatformFee + gstOnPackagingFee);
+  const itemDiscount = pricing?.itemDiscount || 0;
+  const couponDiscount = pricing?.couponDiscount || (appliedCoupon ? Math.min(appliedCoupon.discount, subtotal * 0.5) : 0);
+  const discount = pricing?.discount || couponDiscount;
+  const totalBeforeDiscount = subtotal + deliveryFee + platformFee + packagingFee + gstCharges;
+  const total = pricing?.total || Math.max(0, totalBeforeDiscount - discount);
   const savings = pricing?.savings ?? Math.max(0, totalBeforeDiscount - total)
-  
+
+  // Determine if COD should be hidden
+  const isCodHidden = onlinePaymentOnly || (maxCodAmount > 0 && total > maxCodAmount)
+
+  // Ensure valid payment method is selected
+  useEffect(() => {
+    if (isCodHidden && selectedPaymentMethod === "cash") {
+      setSelectedPaymentMethod("razorpay")
+    }
+  }, [isCodHidden, selectedPaymentMethod, total])
+
   // Calculate platform pricing comparison savings
   const platformPricingSavings = useMemo(() => {
     let totalPlatformPrice = 0
@@ -1133,12 +1182,6 @@ export default function Cart() {
 
   // Restaurant name from data or cart
   const restaurantName = restaurantData?.name || cart[0]?.restaurant || "Restaurant"
-
-  // Check if the restaurant is currently open
-  const restaurantIsOpen = useMemo(() => {
-    if (!restaurantData) return true // Assume open while loading
-    return getRestaurantAvailabilityStatus(restaurantData)?.isOpen !== false
-  }, [restaurantData])
 
   const handleShare = async () => {
     const restaurantNameStr = restaurantName || companyName || "this restaurant"
@@ -1296,20 +1339,6 @@ export default function Cart() {
         return
       }
 
-      // Update location in backend
-      await userAPI.updateLocation({
-        latitude,
-        longitude,
-        address: `${address.street}, ${address.city}`,
-        city: address.city,
-        state: address.state,
-        area: address.additionalDetails || "",
-        formattedAddress: address.additionalDetails
-          ? `${address.additionalDetails}, ${address.street}, ${address.city}, ${address.state}${address.zipCode ? ` ${address.zipCode}` : ''}`
-          : `${address.street}, ${address.city}, ${address.state}${address.zipCode ? ` ${address.zipCode}` : ''}`
-      })
-
-      // Update the location in localStorage
       const locationData = {
         city: address.city,
         state: address.state,
@@ -1322,7 +1351,7 @@ export default function Cart() {
           ? `${address.additionalDetails}, ${address.street}, ${address.city}, ${address.state}${address.zipCode ? ` ${address.zipCode}` : ''}`
           : `${address.street}, ${address.city}, ${address.state}${address.zipCode ? ` ${address.zipCode}` : ''}`
       }
-      localStorage.setItem("userLocation", JSON.stringify(locationData))
+      await setSavedLocation(locationData, { mode: 'saved', persistDb: true })
       // User selected a saved address from Cart; prefer saved mode.
       try {
         localStorage.setItem("deliveryAddressMode", "saved")
@@ -1348,8 +1377,16 @@ export default function Cart() {
     }
 
     // Validate with backend first; only set applied if backend accepts
-    if (cart.length > 0 && hasSavedAddress) {
-      try {
+    if (cart.length === 0) {
+      toast.error("Add items to cart first")
+      return
+    }
+    if (!hasSavedAddress) {
+      toast.error("Add delivery address first")
+      return
+    }
+
+    try {
         const items = cart.map(item => ({
           itemId: item.itemId || item.id,
           name: item.name,
@@ -1360,7 +1397,7 @@ export default function Cart() {
           quantity: item.quantity || 1,
           image: item.image,
           description: item.description,
-          isVeg: item.isVeg === true || item.foodType === 'Veg'
+          isVeg: item.isVeg !== false
         }))
 
         const response = await orderAPI.calculateOrder({
@@ -1371,13 +1408,21 @@ export default function Cart() {
         })
 
         const pricingData = response?.data?.data?.pricing
+        if (pricingData?.couponError) {
+          toast.error(pricingData.couponError)
+          return
+        }
+
         if (!pricingData || !pricingData.appliedCoupon) {
           toast.error("Coupon not applicable")
           return
         }
 
         setPricing(pricingData)
-        setAppliedCoupon(coupon)
+        setAppliedCoupon({
+          ...coupon,
+          discount: Number(pricingData.appliedCoupon.discount || pricingData.couponDiscount || coupon.discount || 0),
+        })
         setCouponCode(coupon.code)
         setManualCouponCode(coupon.code)
         setShowCoupons(false)
@@ -1385,7 +1430,6 @@ export default function Cart() {
         debugError("Error recalculating pricing:", error)
         toast.error("Failed to apply coupon")
       }
-    }
   }
 
   const handleApplyCouponCode = async () => {
@@ -1421,7 +1465,7 @@ export default function Cart() {
         quantity: item.quantity || 1,
         image: item.image,
         description: item.description,
-        isVeg: item.isVeg === true || item.foodType === 'Veg'
+        isVeg: item.isVeg !== false
       }))
 
       const response = await orderAPI.calculateOrder({
@@ -1434,6 +1478,12 @@ export default function Cart() {
       const pricingData = response?.data?.data?.pricing
       if (!pricingData) {
         toast.error("Unable to validate coupon")
+        return
+      }
+
+      if (pricingData.couponError) {
+        toast.error(pricingData.couponError)
+        setCouponCode("")
         return
       }
 
@@ -1501,11 +1551,7 @@ export default function Cart() {
 
 
   const handlePlaceOrder = async () => {
-    // Block ordering from closed restaurants
-    if (!restaurantIsOpen) {
-      toast.error(`${restaurantName} is currently closed. Please try again later.`)
-      return
-    }
+
 
     if (!hasSavedAddress) {
       toast.error("Please choose a delivery location to continue")
@@ -1787,6 +1833,7 @@ export default function Cart() {
       if (selectedPaymentMethod === "cash") {
         toast.success("Order placed with Cash on Delivery")
         setPlacedOrderId(order?._id || order?.orderId || order?.id || null)
+        setPlacedOrder(order || null)
         setOrderSuccessSavingsAmount(platformPricingSavings.totalSavings > 0 ? platformPricingSavings.totalSavings : 0)
         if (platformPricingSavings.totalSavings > 0) {
           setCongratssSavingsAmount(platformPricingSavings.totalSavings)
@@ -1813,6 +1860,7 @@ export default function Cart() {
       if (selectedPaymentMethod === "wallet") {
         toast.success("Order placed with Wallet payment")
         setPlacedOrderId(order?._id || order?.orderId || order?.id || null)
+        setPlacedOrder(order || null)
         setOrderSuccessSavingsAmount(platformPricingSavings.totalSavings > 0 ? platformPricingSavings.totalSavings : 0)
         if (platformPricingSavings.totalSavings > 0) {
           setCongratssSavingsAmount(platformPricingSavings.totalSavings)
@@ -1924,6 +1972,7 @@ export default function Cart() {
                 paymentId: verifyResponse.data.data?.payment?.paymentId
               })
               setPlacedOrderId(order._id || order.orderId)
+              setPlacedOrder(order || null)
               setOrderSuccessSavingsAmount(platformPricingSavings.totalSavings > 0 ? platformPricingSavings.totalSavings : 0)
               if (platformPricingSavings.totalSavings > 0) {
                 setCongratssSavingsAmount(platformPricingSavings.totalSavings)
@@ -2053,7 +2102,9 @@ export default function Cart() {
     setCongratssSavingsPercentage(0)
     setCongratssSavingsItems([])
     setOrderSuccessSavingsAmount(0)
-    navigate(`/user/orders/${placedOrderId}?confirmed=true`)
+    navigate(`/user/orders/${placedOrderId}?confirmed=true`, {
+      state: { order: placedOrder },
+    })
   }
 
   // Empty cart state - but don't show if order success or placing order modal is active
@@ -2080,7 +2131,7 @@ export default function Cart() {
           <h2 className="text-lg font-semibold text-gray-800 dark:text-white mb-1">Your cart is empty</h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mb-4 text-center">Add items from a restaurant to start a new order</p>
           <Link to="/user">
-            <Button className="bg-[#7e3866] hover:bg-[#55254b] text-white">Browse Restaurants</Button>
+            <Button className="bg-primary hover:bg-secondary text-white">Browse Restaurants</Button>
           </Link>
         </div>
       </AnimatedPage>
@@ -2124,25 +2175,6 @@ export default function Cart() {
 
       {/* Scrollable Content Area */}
       <div className="flex-1 overflow-y-auto overflow-x-hidden pb-44 md:pb-52">
-        {/* Restaurant Closed Warning */}
-        {!restaurantIsOpen && (
-          <div className="bg-red-100 dark:bg-red-900/30 px-4 md:px-6 py-3 md:py-4 flex-shrink-0 border-b border-red-200 dark:border-red-800">
-            <div className="max-w-7xl mx-auto flex items-center gap-3">
-              <div className="w-8 h-8 md:w-10 md:h-10 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0">
-                <Clock className="h-4 w-4 md:h-5 md:w-5 text-white" />
-              </div>
-              <div>
-                <p className="text-sm md:text-base font-bold text-red-800 dark:text-red-200">
-                  {restaurantName} is currently closed
-                </p>
-                <p className="text-xs md:text-sm text-red-600 dark:text-red-300">
-                  This restaurant is not accepting orders right now. Please try again later.
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Savings Banner */}
         {savings > 0 && (
           <div className="bg-blue-100 dark:bg-blue-900/20 px-4 md:px-6 py-2 md:py-3 flex-shrink-0">
@@ -2162,9 +2194,44 @@ export default function Cart() {
               <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-4 md:py-5 rounded-2xl md:rounded-3xl shadow-sm border border-slate-100 dark:border-gray-800">
                 <div className="space-y-3 md:space-y-4">
                   <div className="space-y-6">
-                    {cart.map((item, index) => (
-                      <div key={item.id}>
-                        <div className="flex items-center gap-4">
+                    {cart.map((item, index) => {
+                      let displayPrice = item.originalPrice || item.price || 0;
+                      let originalDisplayPrice = displayPrice;
+                      let bestDiscountAmount = 0;
+
+                      // 1. Check item specific discount
+                      if (restaurantData?.itemDiscounts && restaurantData.itemDiscounts.length > 0) {
+                        const itemDiscountRule = restaurantData.itemDiscounts.find(
+                          (rule) => String(rule.itemId) === String(item.itemId || item.id)
+                        );
+                        if (itemDiscountRule) {
+                          const discountVal = Number(itemDiscountRule.discountValue) || 0;
+                          if (discountVal > 0) {
+                            if (itemDiscountRule.discountType === 'FLAT') {
+                              bestDiscountAmount = Math.min(originalDisplayPrice, discountVal);
+                            } else {
+                              bestDiscountAmount = originalDisplayPrice * (discountVal / 100);
+                            }
+                          }
+                        }
+                      }
+
+                      // 2. Check global discount
+                      if (restaurantData?.discount > 0) {
+                        const globalDiscountVal = Number(restaurantData.discount);
+                        const globalDiscountAmount = originalDisplayPrice * (globalDiscountVal / 100);
+                        if (globalDiscountAmount > bestDiscountAmount) {
+                          bestDiscountAmount = globalDiscountAmount;
+                        }
+                      }
+
+                      if (bestDiscountAmount > 0) {
+                        displayPrice = Math.max(0, originalDisplayPrice - bestDiscountAmount);
+                      }
+
+                      return (
+                        <div key={item.id}>
+                          <div className="flex items-center gap-4">
                           {/* Veg/Non-veg indicator */}
                           <div className={`w-4 h-4 border-2 ${item.isVeg === true || item.foodType === 'Veg' ? 'border-green-600' : 'border-red-600'} flex items-center justify-center flex-shrink-0 rounded-[2px]`}>
                             <div className={`w-2 h-2 rounded-full ${item.isVeg === true || item.foodType === 'Veg' ? 'bg-green-600' : 'bg-red-600'}`} />
@@ -2194,40 +2261,52 @@ export default function Cart() {
                           </div>
 
                           <div className="flex flex-col items-end gap-2.5 flex-shrink-0">
-                            <div className="flex items-center border border-[#7e3866]/30 dark:border-[#7e3866]/40 rounded-lg overflow-hidden bg-white dark:bg-gray-900 shadow-sm">
+                            <div className="flex items-center border border-primary/30 dark:border-primary/40 rounded-lg overflow-hidden bg-white dark:bg-gray-900 shadow-sm">
                               <button
                                 onClick={() => updateQuantity(item.id, item.quantity - 1)}
-                                className="px-2.5 py-1.5 hover:bg-[#7e3866]/5 text-[#7e3866] transition-colors"
+                                className="px-2.5 py-1.5 hover:bg-primary/5 text-primary transition-colors"
                               >
                                 <Minus className="w-3.5 h-3.5" />
                               </button>
-                              <span className="px-2 text-sm md:text-base font-black text-[#7e3866] min-w-[28px] text-center">
+                              <span className="px-2 text-sm md:text-base font-black text-primary min-w-[28px] text-center">
                                 {item.quantity}
                               </span>
                               <button
                                 onClick={() => updateQuantity(item.id, item.quantity + 1)}
-                                className="px-2.5 py-1.5 hover:bg-[#7e3866]/5 text-[#7e3866] transition-colors"
+                                className="px-2.5 py-1.5 hover:bg-primary/5 text-primary transition-colors"
                               >
                                 <Plus className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                            <p className="text-sm md:text-base font-black text-gray-900 dark:text-gray-100">
-                              {RUPEE_SYMBOL}{((item.price || 0) * (item.quantity || 1)).toFixed(0)}
-                            </p>
+                            <div className="flex flex-col items-end text-right">
+                              <p className="text-sm md:text-base font-black text-gray-900 dark:text-gray-100">
+                                {RUPEE_SYMBOL}{(displayPrice * (item.quantity || 1)).toFixed(0)}
+                              </p>
+                              {originalDisplayPrice > displayPrice && (
+                                <div className="flex flex-col items-end gap-1 mt-0.5">
+                                  <p className="text-xs md:text-sm text-gray-400 line-through">
+                                    {RUPEE_SYMBOL}{(originalDisplayPrice * (item.quantity || 1)).toFixed(0)}
+                                  </p>
+                                  <span className="text-[10px] font-bold text-green-600 bg-green-50 border border-green-200 px-1 py-0.5 rounded uppercase">
+                                    {Math.round(((originalDisplayPrice - displayPrice) / originalDisplayPrice) * 100)}% OFF
+                                  </span>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </div>
                         {index < cart.length - 1 && (
                           <div className="mt-6 border-b border-gray-100 dark:border-gray-800/40 border-dashed" />
                         )}
                       </div>
-                    ))}
+                    )})}
                   </div>
                 </div>
 
                 {/* Add more items */}
                 <button
                   onClick={handleBack}
-                  className="flex items-center gap-2 mt-4 md:mt-6 text-[#7e3866] dark:text-[#7e3866]"
+                  className="flex items-center gap-2 mt-4 md:mt-6 text-primary dark:text-primary"
                 >
                   <Plus className="h-4 w-4 md:h-5 md:w-5" />
                   <span className="text-sm md:text-base font-medium">Add more items</span>
@@ -2248,7 +2327,7 @@ export default function Cart() {
                 </div>
                 <button
                   onClick={() => setSendCutlery(!sendCutlery)}
-                  className={`flex items-center gap-2 px-3 md:px-4 py-2 md:py-3 border rounded-lg md:rounded-xl text-sm md:text-base h-full ${sendCutlery ? 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300' : 'border-[#7e3866] dark:border-[#7e3866]/50 text-[#7e3866] dark:text-[#7e3866] bg-[#7e386605] dark:bg-[#7e386610]'}`}
+                  className={`flex items-center gap-2 px-3 md:px-4 py-2 md:py-3 border rounded-lg md:rounded-xl text-sm md:text-base h-full ${sendCutlery ? 'border-gray-200 dark:border-gray-700 text-gray-600 dark:text-gray-300' : 'border-primary dark:border-primary/50 text-primary dark:text-primary bg-[#7e386605] dark:bg-[#7e386610]'}`}
                 >
                   <Utensils className="h-4 w-4 md:h-5 md:w-5" />
                   <span className="whitespace-nowrap">
@@ -2267,7 +2346,7 @@ export default function Cart() {
                     value={restaurantNote}
                     onChange={(e) => setRestaurantNote(e.target.value)}
                     placeholder="Eg. Don't add onions, make it extra spicy, etc."
-                     className="w-full border border-gray-200 dark:border-gray-700 rounded-lg md:rounded-xl p-3 md:p-4 text-sm md:text-base resize-none h-20 md:h-24 focus:outline-none focus:border-[#7e3866] dark:focus:border-[#7e3866] bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100"
+                     className="w-full border border-gray-200 dark:border-gray-700 rounded-lg md:rounded-xl p-3 md:p-4 text-sm md:text-base resize-none h-20 md:h-24 focus:outline-none focus:border-primary dark:focus:border-primary bg-white dark:bg-[#0a0a0a] text-gray-900 dark:text-gray-100"
                     maxLength={240}
                   />
                   <div className="mt-2 flex items-center justify-between gap-3">
@@ -2286,7 +2365,7 @@ export default function Cart() {
                 <div className="bg-white dark:bg-[#1a1a1a] px-4 md:px-6 py-5 rounded-2xl shadow-sm border border-slate-100 dark:border-gray-800">
                   <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
                     <div className="w-6 h-6 md:w-8 md:h-8 bg-gray-100 dark:bg-gray-800 rounded flex items-center justify-center">
-                       <Sparkles className="h-4 w-4 md:h-5 md:w-5 text-[#7e3866]" />
+                       <Sparkles className="h-4 w-4 md:h-5 md:w-5 text-primary" />
                     </div>
                     <span className="text-sm md:text-base font-semibold text-gray-800 dark:text-gray-200">Complete your meal with</span>
                   </div>
@@ -2348,9 +2427,9 @@ export default function Cart() {
                                   restaurantId: cartRestaurantId
                                 });
                               }}
-                               className="absolute bottom-1 md:bottom-2 right-1 md:right-2 w-6 h-6 md:w-7 md:h-7 bg-white border border-[#7e3866] rounded flex items-center justify-center shadow-sm hover:bg-[#7e386605] dark:hover:bg-[#7e386610] transition-colors"
+                               className="absolute bottom-1 md:bottom-2 right-1 md:right-2 w-6 h-6 md:w-7 md:h-7 bg-white border border-primary rounded flex items-center justify-center shadow-sm hover:bg-[#7e386605] dark:hover:bg-[#7e386610] transition-colors"
                             >
-                               <Plus className="h-3.5 w-3.5 md:h-4 md:w-4 text-[#7e3866]" />
+                               <Plus className="h-3.5 w-3.5 md:h-4 md:w-4 text-primary" />
                             </button>
                           </div>
                           <p className="text-xs md:text-sm font-medium text-gray-800 dark:text-gray-200 mt-1.5 md:mt-2 line-clamp-2 leading-tight">{addon.name}</p>
@@ -2378,13 +2457,13 @@ export default function Cart() {
                 {appliedCoupon ? (
                   <div className="px-4 py-3 md:px-6 md:py-4 flex items-center justify-between">
                     <div className="flex items-start gap-3">
-                       <Percent className="h-5 w-5 text-[#7e3866] mt-0.5" />
+                       <Percent className="h-5 w-5 text-primary mt-0.5" />
                       <div>
                         <p className="text-sm font-semibold text-gray-800 dark:text-gray-200">'{appliedCoupon.code}' applied</p>
-                         <p className="text-xs text-[#7e3866] font-medium mt-0.5">You saved {RUPEE_SYMBOL}{discount}</p>
+                         <p className="text-xs text-primary font-medium mt-0.5">You saved {RUPEE_SYMBOL}{discount}</p>
                       </div>
                     </div>
-                     <button onClick={handleRemoveCoupon} className="text-[#7e3866] text-xs font-semibold px-2 hover:underline">REMOVE</button>
+                     <button onClick={handleRemoveCoupon} className="text-primary text-xs font-semibold px-2 hover:underline">REMOVE</button>
                   </div>
                 ) : (
                   /* Available / Input View */
@@ -2400,20 +2479,20 @@ export default function Cart() {
                               {availableCoupons[0].discountDisplay || `Save ${RUPEE_SYMBOL}${availableCoupons[0].discount}`} with '{availableCoupons[0].code}'
                             </p>
                             {availableCoupons[0].customerGroup === "new" ? (
-                               <p className="text-[11px] text-[#7e3866] mb-1">First-time users only</p>
+                               <p className="text-[11px] text-primary mb-1">First-time users only</p>
                             ) : subtotal < availableCoupons[0].minOrder ? (
                               <p className="text-xs text-blue-600 font-medium mb-1">Add items worth {RUPEE_SYMBOL}{(availableCoupons[0].minOrder - subtotal).toFixed(0)} more to unlock</p>
                             ) : null}
 
                             {availableCoupons.length > 1 && (
-                               <button onClick={() => setShowCoupons(!showCoupons)} className="text-[11px] text-[#7e3866] hover:underline flex items-center mt-1">
+                               <button onClick={() => setShowCoupons(!showCoupons)} className="text-[11px] text-primary hover:underline flex items-center mt-1">
                                  View all coupons <ChevronRight className="h-3 w-3 ml-0.5" />
                                </button>
                             )}
                           </div>
                         </div>
                         <button
-                           className="border border-[#7e3866] text-[#7e3866] dark:hover:bg-[#7e386610] rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed ml-2 shadow-sm"
+                           className="border border-primary text-primary dark:hover:bg-[#7e386610] rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wider disabled:opacity-50 disabled:cursor-not-allowed ml-2 shadow-sm"
                           onClick={() => handleApplyCoupon(availableCoupons[0])}
                           disabled={subtotal < availableCoupons[0].minOrder || (availableCoupons[0].customerGroup === "new" && userOrderCount > 0)}
                         >
@@ -2437,10 +2516,10 @@ export default function Cart() {
                             value={manualCouponCode}
                             onChange={(e) => setManualCouponCode(e.target.value.toUpperCase())}
                             placeholder="Enter coupon code"
-                             className="flex-1 h-9 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0a0a0a] px-3 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:border-[#7e3866]"
+                             className="flex-1 h-9 rounded border border-gray-300 dark:border-gray-700 bg-white dark:bg-[#0a0a0a] px-3 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:border-primary"
                           />
                           <button
-                             className="bg-white dark:bg-[#1a1a1a] border border-[#7e3866] text-[#7e3866] rounded px-4 h-9 text-xs font-semibold uppercase hover:bg-[#7e386605] dark:hover:bg-[#7e386610]"
+                             className="bg-white dark:bg-[#1a1a1a] border border-primary text-primary rounded px-4 h-9 text-xs font-semibold uppercase hover:bg-[#7e386605] dark:hover:bg-[#7e386610]"
                             onClick={handleApplyCouponCode}
                           >
                             APPLY
@@ -2455,7 +2534,7 @@ export default function Cart() {
                                   {coupon.discountDisplay || `Save ${RUPEE_SYMBOL}${coupon.discount}`} with '{coupon.code}'
                                 </p>
                                 {coupon.customerGroup === "new" ? (
-                                   <p className="text-[11px] text-[#7e3866] mb-1">First-time users only</p>
+                                   <p className="text-[11px] text-primary mb-1">First-time users only</p>
                                 ) : subtotal < coupon.minOrder ? (
                                   <p className="text-xs text-blue-600 font-medium mb-1 line-clamp-1">Add items worth {RUPEE_SYMBOL}{(coupon.minOrder - subtotal).toFixed(0)} more to unlock</p>
                                 ) : (
@@ -2516,7 +2595,7 @@ export default function Cart() {
                         max={new Date(Date.now() + 86400000).toLocaleDateString('en-CA')}
                         value={scheduledDate}
                         onChange={(e) => setScheduledDate(e.target.value)}
-                        className="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-[#0a0a0a] text-gray-800 dark:text-gray-200 focus:outline-none focus:border-[#7e3866]"
+                        className="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-[#0a0a0a] text-gray-800 dark:text-gray-200 focus:outline-none focus:border-primary"
                       />
                     </div>
                     <div className="flex-1">
@@ -2526,7 +2605,7 @@ export default function Cart() {
                           <select
                             value={scheduledTime}
                             onChange={(e) => setScheduledTime(e.target.value)}
-                             className="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-[#0a0a0a] text-gray-800 dark:text-gray-200 focus:outline-none focus:border-[#7e3866] appearance-none pr-8"
+                             className="w-full text-sm p-2 border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-[#0a0a0a] text-gray-800 dark:text-gray-200 focus:outline-none focus:border-primary appearance-none pr-8"
                           >
                             {availableTimeSlots.map(slot => (
                               <option key={slot.value} value={slot.value}>{slot.label}</option>
@@ -2549,7 +2628,7 @@ export default function Cart() {
                 <div className="flex items-start justify-between w-full text-left">
                   <div className="flex items-start gap-4 flex-1">
                      <div className="bg-[#7e386605] dark:bg-[#7e386610] p-2 rounded-xl mt-0.5">
-                       <MapPin className="h-5 w-5 text-[#7e3866]" />
+                       <MapPin className="h-5 w-5 text-primary" />
                      </div>
                     <div className="flex-1">
                         <div className="flex flex-col">
@@ -2574,7 +2653,7 @@ export default function Cart() {
                                 </p>
                               )}
                               <div className="mt-1 flex items-center gap-2">
-                                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] md:text-[11px] font-semibold bg-[#7e386605] text-[#7e3866] dark:bg-[#7e386610] dark:text-[#7e3866] border border-[#7e3866]/30">
+                                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[10px] md:text-[11px] font-semibold bg-[#7e386605] text-primary dark:bg-[#7e386610] dark:text-primary border border-primary/30">
                                    GPS enabled
                                  </span>
                               </div>
@@ -2586,7 +2665,7 @@ export default function Cart() {
                           )}
                         </div>
                         {!hasSavedAddress && (
-                           <p className="text-sm text-[#7e3866] mt-2 font-medium">
+                           <p className="text-sm text-primary mt-2 font-medium">
                              Select a delivery location to continue
                            </p>
                         )}
@@ -2629,7 +2708,7 @@ export default function Cart() {
                                     handleSelectSavedAddress(address)
                                   }}
                                    className={`w-full text-left rounded-xl border-2 p-3 transition-colors ${isSelected
-                                     ? "border-[#7e3866] bg-[#7e386605] dark:bg-[#7e3866]/5"
+                                     ? "border-primary bg-[#7e386605] dark:bg-primary/5"
                                      : "border-slate-100 dark:border-gray-800 hover:border-slate-200"
                                      }`}
                                 >
@@ -2643,7 +2722,7 @@ export default function Cart() {
                                       </p>
                                     </div>
                                     {isSelected && (
-                                       <span className="text-[10px] bg-[#7e3866] text-white px-2 py-0.5 rounded uppercase font-bold tracking-wider whitespace-nowrap">
+                                       <span className="text-[10px] bg-primary text-white px-2 py-0.5 rounded uppercase font-bold tracking-wider whitespace-nowrap">
                                          Selected
                                        </span>
                                     )}
@@ -2658,7 +2737,7 @@ export default function Cart() {
                   <button
                     type="button"
                      onClick={openLocationSelector}
-                     className="p-2 text-[#7e3866] bg-[#7e386605] rounded-full hover:bg-[#7e386610] transition-colors dark:bg-[#7e386615] dark:hover:bg-[#7e386620]"
+                     className="p-2 text-primary bg-[#7e386605] rounded-full hover:bg-[#7e386610] transition-colors dark:bg-[#7e386615] dark:hover:bg-[#7e386620]"
                      aria-label="Open location selector"
                    >
                      <ChevronRight className="h-5 w-5" />
@@ -2683,7 +2762,7 @@ export default function Cart() {
                   <button
                     type="button"
                     onClick={() => setIsEditingRecipient((prev) => !prev)}
-                     className="text-[#7e3866] text-xs md:text-sm font-semibold whitespace-nowrap"
+                     className="text-primary text-xs md:text-sm font-semibold whitespace-nowrap"
                   >
                     {isEditingRecipient ? "Done" : "Change"}
                   </button>
@@ -2701,11 +2780,11 @@ export default function Cart() {
                         onChange={(e) =>
                           setRecipientDetails((prev) => ({
                             ...prev,
-                            name: e.target.value.replace(/[^A-Za-z\s]/g, ""),
+                            name: e.target.value,
                           }))
                         }
                         placeholder="Enter recipient name"
-                         className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[#7e3866]"
+                         className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-primary"
                       />
                     </div>
                     <div>
@@ -2722,11 +2801,11 @@ export default function Cart() {
                           }))
                         }
                         placeholder="Enter recipient phone"
-                         className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-[#7e3866]"
+                         className="w-full rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#111111] px-3 py-2.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:border-primary"
                       />
                     </div>
                     <p className="text-[11px] text-gray-500 dark:text-gray-400">
-                      If you are ordering for someone else, save their name and phone number here.
+                      Agar aap kisi aur ke liye order kar rahe ho, to yahan uska naam aur phone save kar do.
                     </p>
                   </div>
                 )}
@@ -2741,13 +2820,13 @@ export default function Cart() {
                     <FileText className="h-5 w-5 text-gray-500 dark:text-gray-400" />
                     <div className="text-left">
                       <div className="flex items-center gap-2 flex-wrap mb-0.5">
-                        <span className="text-base text-gray-800 dark:text-gray-200 font-semibold tracking-wide">To Pay</span>
+                        <span className="text-base text-green-600 dark:text-green-500 font-bold tracking-wide">To Pay</span>
                         {platformPricingSavings.hasPlatformPricing && (
                           <span className="text-base text-gray-400 dark:text-gray-500 line-through font-medium">
                             {RUPEE_SYMBOL}{platformPricingSavings.totalPlatformPriceWithGst.toFixed(2)}
                           </span>
                         )}
-                        <span className="text-base font-bold text-gray-900 dark:text-white">
+                        <span className="text-base font-bold text-green-600 dark:text-green-500">
                           {RUPEE_SYMBOL}{total.toFixed(2)}
                         </span>
                       </div>
@@ -2766,7 +2845,7 @@ export default function Cart() {
 
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-600 dark:text-gray-400">Delivery Fee</span>
-                       <span className={deliveryFee === 0 ? "text-[#7e3866] font-medium" : "text-gray-800 dark:text-gray-200 font-medium"}>
+                       <span className={deliveryFee === 0 ? "text-primary font-medium" : "text-gray-800 dark:text-gray-200 font-medium"}>
                          {deliveryFee === 0 ? "FREE" : `${RUPEE_SYMBOL}${deliveryFee.toFixed(2)}`}
                        </span>
                     </div>
@@ -2777,10 +2856,10 @@ export default function Cart() {
                     )}
                     {Number((pricing?.freeDeliveryUpTo ?? feeSettings.freeDeliveryUpTo) || 0) > 0 && (
                       <div className="-mt-1.5">
-                        <div className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-[#7e3866]/10 via-[#7e3866]/20 to-[#7e3866]/10 text-[#7e3866] border border-[#7e3866]/25 px-2.5 py-1 text-[11px] font-semibold shadow-sm animate-pulse">
+                        <div className="inline-flex items-center gap-1.5 rounded-full bg-gradient-to-r from-primary/10 via-primary/20 to-primary/10 text-primary border border-primary/25 px-2.5 py-1 text-[11px] font-semibold shadow-sm animate-pulse">
                           <Sparkles className="h-3 w-3" />
                           <span>Free delivery at</span>
-                          <span className="text-[#55254b]">
+                          <span className="text-secondary">
                             {RUPEE_SYMBOL}{Number((pricing?.freeDeliveryUpTo ?? feeSettings.freeDeliveryUpTo) || 0).toFixed(0)}+
                           </span>
                         </div>
@@ -2795,23 +2874,28 @@ export default function Cart() {
                       <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{packagingFee.toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600 dark:text-gray-400">GST</span>
+                      <span 
+                        className="text-gray-600 dark:text-gray-400 border-b border-dashed border-gray-400 cursor-pointer"
+                        onClick={() => setShowGstModal(true)}
+                      >
+                        GST
+                      </span>
                       <span className="text-gray-800 dark:text-gray-200 font-medium">{RUPEE_SYMBOL}{gstCharges.toFixed(2)}</span>
                     </div>
-                    {discount > 0 && (
-                       <div className="flex justify-between text-sm text-[#7e3866] font-medium">
+                    {couponDiscount > 0 && (
+                       <div className="flex justify-between text-sm text-primary font-medium">
                          <span>Coupon Discount</span>
-                         <span>-{RUPEE_SYMBOL}{discount.toFixed(2)}</span>
+                         <span>-{RUPEE_SYMBOL}{couponDiscount.toFixed(2)}</span>
                        </div>
                     )}
 
                     {/* Platform Pricing Comparison - Bottom */}
                     {platformPricingSavings.hasPlatformPricing && (
-                      <div className="rounded-lg bg-gradient-to-r from-[#7e3866]/5 via-[#7e3866]/12 to-[#7e3866]/5 dark:from-[#7e3866]/10 dark:via-[#7e3866]/15 dark:to-[#7e3866]/10 border border-[#7e3866]/20 p-3 space-y-2 mt-2 shadow-sm animate-pulse">
+                      <div className="rounded-lg bg-gradient-to-r from-primary/5 via-primary/12 to-primary/5 dark:from-primary/10 dark:via-primary/15 dark:to-primary/10 border border-primary/20 p-3 space-y-2 mt-2 shadow-sm animate-pulse">
                         <div className="flex items-center justify-between text-sm">
                           <div className="flex items-center gap-2">
-                            <Sparkles className="h-4 w-4 text-[#7e3866]" />
-                            <span className="font-semibold text-[#7e3866]">Other platform total</span>
+                            <Sparkles className="h-4 w-4 text-primary" />
+                            <span className="font-semibold text-primary">Other platform total</span>
                           </div>
                           <span className="text-gray-700 dark:text-gray-300 font-medium">{RUPEE_SYMBOL}{platformPricingSavings.totalPlatformPrice.toFixed(2)}</span>
                         </div>
@@ -2824,21 +2908,21 @@ export default function Cart() {
                           <span>{RUPEE_SYMBOL}{platformPricingSavings.totalPlatformPriceWithGst.toFixed(2)}</span>
                         </div>
                         {platformPricingSavings.items.length > 0 && (
-                          <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1 border-t border-[#7e3866]/15 pt-2">
+                          <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1 border-t border-primary/15 pt-2">
                             {platformPricingSavings.items.slice(0, 2).map((item, idx) => (
                               <div key={idx} className="flex justify-between">
                                 <span>{item.name} x{item.quantity}</span>
-                                <span className="font-medium text-[#7e3866]">-{RUPEE_SYMBOL}{item.savings.toFixed(0)}</span>
+                                <span className="font-medium text-primary">-{RUPEE_SYMBOL}{item.savings.toFixed(0)}</span>
                               </div>
                             ))}
                             {platformPricingSavings.items.length > 2 && (
-                              <div className="text-center font-semibold text-[#7e3866]">
+                              <div className="text-center font-semibold text-primary">
                                 +{platformPricingSavings.items.length - 2} more items
                               </div>
                             )}
                           </div>
                         )}
-                        <div className="flex items-center justify-between text-xs font-bold text-white bg-[#7e3866] rounded px-2 py-1.5 -mx-3 -mb-3">
+                        <div className="flex items-center justify-between text-xs font-bold text-white bg-primary rounded px-2 py-1.5 -mx-3 -mb-3">
                           <span>You save approx</span>
                           <span>{RUPEE_SYMBOL}{platformPricingSavings.totalSavings.toFixed(0)} ({platformPricingSavings.savingsPercentage}%)</span>
                         </div>
@@ -2848,6 +2932,16 @@ export default function Cart() {
                 )}
               </div>
 
+              {/* Cancellation Policy */}
+              <div className="bg-gray-50 dark:bg-[#1a1a1a]/30 px-4 md:px-6 py-4 rounded-2xl text-left">
+                <h3 className="text-[15px] font-bold text-gray-400 dark:text-gray-500 mb-0.5 tracking-tight">
+                  Cancellation policy:
+                </h3>
+                <p className="text-[13px] text-gray-400 dark:text-gray-500 leading-snug tracking-tight">
+                  Please double-check your order and address details.<br />
+                  Orders are non-refundable once placed.
+                </p>
+              </div>
             </div>
           </div>
         </div>
@@ -2867,12 +2961,12 @@ export default function Cart() {
             >
               <div className="flex items-center gap-3">
                 <div className="w-9 h-9 rounded-lg bg-[#7e386610] dark:bg-[#7e386620] flex items-center justify-center flex-shrink-0">
-                   {selectedPaymentMethod === "wallet" ? (
-                    <Wallet className="h-5 w-5 text-[#7e3866]" />
+                  {selectedPaymentMethod === "wallet" ? (
+                    <Wallet className="h-5 w-5 text-primary" />
                   ) : selectedPaymentMethod === "razorpay" ? (
-                    <Zap className="h-5 w-5 text-[#7e3866]" />
+                    <Zap className="h-5 w-5 text-primary" />
                   ) : (
-                    <Banknote className="h-5 w-5 text-[#7e3866]" />
+                    <Banknote className="h-5 w-5 text-primary" />
                   )}
                 </div>
                 <div className="leading-tight">
@@ -2892,7 +2986,7 @@ export default function Cart() {
                 </div>
               </div>
 
-               <div className="flex items-center gap-0.5 text-[#7e3866] font-bold text-[11px] uppercase tracking-widest bg-[#7e386605] dark:bg-[#7e386610] px-2.5 py-1 rounded-lg">
+               <div className="flex items-center gap-0.5 text-primary font-bold text-[11px] uppercase tracking-widest bg-[#7e386605] dark:bg-[#7e386610] px-2.5 py-1 rounded-lg">
                 CHANGE <ChevronRight className="h-3.5 w-3.5" />
               </div>
             </div>
@@ -2900,23 +2994,21 @@ export default function Cart() {
             {/* Place Order Button */}
             <button
               onClick={handlePlaceOrder}
-              disabled={isPlacingOrder || !restaurantIsOpen || (selectedPaymentMethod === "wallet" && walletBalance < total)}
-              className={`w-full px-6 h-12 md:h-14 rounded-2xl font-bold shadow-lg disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98] ${!restaurantIsOpen ? 'bg-gray-400 shadow-gray-400/30 cursor-not-allowed' : 'bg-gradient-to-r from-[#D51F10] to-[#9C120A] hover:from-[#9C120A] hover:to-[#1E0301] shadow-[#D51F10]/30'} text-white`}
+              disabled={isPlacingOrder || (selectedPaymentMethod === "wallet" && walletBalance < total)}
+              className="w-full bg-gradient-to-r from-primary to-secondary hover:from-secondary hover:to-[#3c0f3d] text-white px-6 h-12 md:h-14 rounded-2xl font-bold shadow-lg shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-between transition-transform active:scale-[0.98]"
             >
-              {!restaurantIsOpen ? null : (selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
+              {(selectedPaymentMethod === "razorpay" || selectedPaymentMethod === "wallet" || selectedPaymentMethod === "cash") && (
                 <div className="text-left flex flex-col justify-center border-r-[1.5px] border-white/20 pr-4">
                   <span className="text-xs md:text-sm font-semibold text-white/90">{RUPEE_SYMBOL}{total.toFixed(2)}</span>
                   <span className="text-[9px] md:text-[10px] uppercase font-bold tracking-wider text-white/80 mt-[-2px]">Total</span>
                 </div>
               )}
               <div className="flex items-center gap-1 mx-auto text-sm md:text-lg tracking-wide">
-                {!restaurantIsOpen
-                  ? "Restaurant Closed"
-                  : isPlacingOrder
-                    ? "Processing..."
-                    : !hasSavedAddress
-                      ? "Select Address"
-                      : "Place Order"}
+                {isPlacingOrder
+                  ? "Processing..."
+                  : !hasSavedAddress
+                    ? "Select Address"
+                    : "Place Order"}
                 <div className="flex align-center h-full">
                   <ChevronRight className="h-4 w-4 md:h-5 md:w-5" />
                 </div>
@@ -2980,7 +3072,7 @@ export default function Cart() {
                   <div className="relative mb-6">
                     <div className="h-2.5 bg-gray-200 rounded-full overflow-hidden">
                       <div
-                         className="h-full bg-gradient-to-r from-[#7e3866] to-[#55254b] rounded-full transition-all duration-100 ease-linear"
+                         className="h-full bg-gradient-to-r from-primary to-secondary rounded-full transition-all duration-100 ease-linear"
                         style={{
                            width: `${orderProgress}%`,
                            boxShadow: '0 0 10px rgba(126, 56, 102, 0.5)'
@@ -3006,7 +3098,7 @@ export default function Cart() {
                     }}
                     className="w-full text-right"
                   >
-                    <span className="text-[#7e3866] font-semibold text-base hover:text-[#55254b] transition-colors">
+                    <span className="text-primary font-semibold text-base hover:text-secondary transition-colors">
                       CANCEL
                     </span>
                   </button>
@@ -3046,7 +3138,7 @@ export default function Cart() {
                   style={{ animation: 'bounce 0.8s ease-in-out infinite' }}
                 >
                   <div className="w-24 h-24 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center shadow-2xl shadow-yellow-300/60 dark:shadow-yellow-900/40">
-                    <span className="text-5xl">🎉</span>
+                    <span className="text-5xl">ðŸŽ‰</span>
                   </div>
                 </div>
 
@@ -3178,10 +3270,10 @@ export default function Cart() {
                   className="mt-12 text-center"
                   style={{ animation: 'slideUp 0.5s ease-out 0.8s both' }}
                 >
-                  <h3 className="text-3xl font-bold text-[#7e3866] dark:text-[#a65d8a] mb-2">Order Placed!</h3>
+                  <h3 className="text-3xl font-bold text-primary dark:text-[#a65d8a] mb-2">Order Placed!</h3>
                   <p className="text-gray-600 dark:text-gray-300">Your delicious food is on its way</p>
                   {orderSuccessSavingsAmount > 0 && (
-                    <p className="mt-2 text-sm text-[#7e3866] dark:text-[#a65d8a]">
+                    <p className="mt-2 text-sm text-primary dark:text-[#a65d8a]">
                       You save approx {RUPEE_SYMBOL}{orderSuccessSavingsAmount.toFixed(0)} on this order
                     </p>
                   )}
@@ -3190,17 +3282,17 @@ export default function Cart() {
                 {/* Platform Pricing Savings Celebration */}
                 {platformPricingSavings.hasPlatformPricing && platformPricingSavings.totalSavings > 0 && (
                   <motion.div
-                    className="mt-8 w-full max-w-sm bg-gradient-to-br from-[#7e3866]/10 to-[#7e3866]/5 dark:from-[#7e3866]/20 dark:to-[#7e3866]/10 border border-[#7e3866]/30 rounded-2xl p-4"
+                    className="mt-8 w-full max-w-sm bg-gradient-to-br from-primary/10 to-primary/5 dark:from-primary/20 dark:to-primary/10 border border-primary/30 rounded-2xl p-4"
                     initial={{ opacity: 0, scale: 0.9 }}
                     animate={{ opacity: 1, scale: 1 }}
                     transition={{ duration: 0.6, delay: 1.0 }}
                   >
                     <div className="flex items-center justify-center gap-2 mb-3">
-                      <Sparkles className="h-5 w-5 text-[#7e3866]" />
-                      <span className="font-bold text-[#7e3866]">You Saved on this Order</span>
+                      <Sparkles className="h-5 w-5 text-primary" />
+                      <span className="font-bold text-primary">You Saved on this Order</span>
                     </div>
                     <div className="text-center space-y-1">
-                      <div className="text-4xl font-black text-[#7e3866]">
+                      <div className="text-4xl font-black text-primary">
                         {RUPEE_SYMBOL}{platformPricingSavings.totalSavings.toFixed(0)}
                       </div>
                       <p className="text-sm text-gray-600 dark:text-gray-400">
@@ -3216,7 +3308,7 @@ export default function Cart() {
                 {/* Action Button */}
                  <button
                   onClick={handleGoToOrders}
-                  className="mt-10 bg-[#7e3866] hover:bg-[#55254b] text-white font-semibold py-4 px-12 rounded-xl shadow-lg shadow-[#7e3866]/20 dark:shadow-[#7e3866]/40 transition-all hover:shadow-xl hover:scale-105"
+                  className="mt-10 bg-primary hover:bg-secondary text-white font-semibold py-4 px-12 rounded-xl shadow-lg shadow-primary/20 dark:shadow-primary/40 transition-all hover:shadow-xl hover:scale-105"
                   style={{ animation: 'slideUp 0.5s ease-out 1s both' }}
                 >
                   Track Your Order
@@ -3289,9 +3381,10 @@ export default function Cart() {
                           description: 'Pay when order arrives',
                           icon: <Banknote className="w-5 h-5" />,
                           color: 'bg-orange-50 text-#55254b dark:bg-orange-900/40 dark:text-orange-400',
-                          selectedColor: 'bg-[#7e3866] text-white'
+                          selectedColor: 'bg-primary text-white',
+                          hidden: isCodHidden
                         }
-                      ].map((option) => (
+                      ].filter(opt => !opt.hidden).map((option) => (
                         <button
                           key={option.id}
                           onClick={() => {
@@ -3301,8 +3394,8 @@ export default function Cart() {
                             }
                           }}
                            className={`w-full flex items-center justify-between p-4 rounded-2xl border-2 transition-all duration-300 group ${selectedPaymentMethod === option.id
-                               ? 'border-[#7e3866] bg-[#7e3866] shadow-lg shadow-[#7e3866]/30'
-                               : 'border-gray-100 dark:border-gray-800/80 bg-white dark:bg-[#222222] hover:border-[#7e3866]/30 dark:hover:border-[#7e3866]/30 shadow-sm'
+                               ? 'border-primary bg-primary shadow-lg shadow-primary/30'
+                               : 'border-gray-100 dark:border-gray-800/80 bg-white dark:bg-[#222222] hover:border-primary/30 dark:hover:border-primary/30 shadow-sm'
                              } ${option.disabled ? 'opacity-40 grayscale-[0.8] cursor-not-allowed' : 'cursor-pointer active:scale-[0.98]'}`}
                         >
                           <div className="flex items-center gap-4">
@@ -3355,7 +3448,7 @@ export default function Cart() {
                               ? 'bg-white border-white'
                               : 'border-gray-200 dark:border-gray-700'
                             }`}>
-                             {selectedPaymentMethod === option.id && <Check className="w-3.5 h-3.5 text-[#7e3866]" strokeWidth={4} />}
+                             {selectedPaymentMethod === option.id && <Check className="w-3.5 h-3.5 text-primary" strokeWidth={4} />}
                            </div>
                         </button>
                       ))}
@@ -3367,11 +3460,11 @@ export default function Cart() {
                     >
                       <div className="flex-shrink-0">
                          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Total Pay</p>
-                         <p className="text-xl font-black text-[#7e3866] tabular-nums">{RUPEE_SYMBOL}{total.toFixed(0)}</p>
+                         <p className="text-xl font-black text-primary tabular-nums">{RUPEE_SYMBOL}{total.toFixed(0)}</p>
                        </div>
                        <Button
                         onClick={() => setShowPaymentSheet(false)}
-                        className="flex-1 bg-[#7e3866] hover:bg-[#55254b] text-white h-11 rounded-xl text-sm font-bold shadow-lg shadow-[#7e3866]/20 transition-all active:scale-[0.98]"
+                        className="flex-1 bg-primary hover:bg-secondary text-white h-11 rounded-xl text-sm font-bold shadow-lg shadow-primary/20 transition-all active:scale-[0.98]"
                       >
                         Confirm Order
                       </Button>
@@ -3464,6 +3557,79 @@ export default function Cart() {
           stroke-dashoffset: 0;
         }
       `}</style>
+
+      {/* GST Modal */}
+      {typeof window !== "undefined" &&
+        createPortal(
+          <AnimatePresence>
+            {showGstModal && (
+              <>
+                <motion.div
+                  className="fixed inset-0 bg-black/50 z-[10020]"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  exit={{ opacity: 0 }}
+                  onClick={() => setShowGstModal(false)}
+                />
+                <motion.div
+                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[90vw] max-w-[320px] bg-white dark:bg-[#1a1a1a] rounded-xl shadow-2xl overflow-hidden"
+                  initial={{ opacity: 0, scale: 0.95 }}
+                  animate={{ opacity: 1, scale: 1 }}
+                  exit={{ opacity: 0, scale: 0.95 }}
+                  transition={{ duration: 0.16 }}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <div className="p-5">
+                    <p className="text-[13px] text-gray-600 dark:text-gray-400 leading-relaxed mb-4">
+                      {companyName} has no role to play in taxes levied by the govt.
+                    </p>
+                    
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center text-[13px]">
+                        <span className="text-gray-800 dark:text-gray-200">GST on item total</span>
+                        <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{gstOnItemTotal.toFixed(2)}</span>
+                      </div>
+                      
+                      {gstOnPackagingFee > 0 && (
+                        <div className="flex justify-between items-center text-[13px]">
+                          <span className="text-gray-800 dark:text-gray-200">GST on restaurant packaging charges</span>
+                          <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{gstOnPackagingFee.toFixed(2)}</span>
+                        </div>
+                      )}
+                      
+                      {gstOnDeliveryFee > 0 && (
+                        <div className="flex justify-between items-center text-[13px]">
+                          <span className="text-gray-800 dark:text-gray-200">GST on delivery partner fee</span>
+                          <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{gstOnDeliveryFee.toFixed(2)}</span>
+                        </div>
+                      )}
+                      
+                      {gstOnPlatformFee > 0 && (
+                        <div className="flex justify-between items-center text-[13px]">
+                          <span className="text-gray-800 dark:text-gray-200">GST on platform fee</span>
+                          <span className="text-gray-900 dark:text-gray-100 font-medium">{RUPEE_SYMBOL}{gstOnPlatformFee.toFixed(2)}</span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-[14px] font-bold pt-3 mt-1 border-t border-gray-100 dark:border-gray-800">
+                        <span className="text-gray-900 dark:text-white">Total</span>
+                        <span className="text-gray-900 dark:text-white">{RUPEE_SYMBOL}{gstCharges.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    className="w-full py-3 text-center text-primary font-semibold text-sm hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors border-t border-gray-100 dark:border-gray-800"
+                    onClick={() => setShowGstModal(false)}
+                  >
+                    OKAY
+                  </button>
+                </motion.div>
+              </>
+            )}
+          </AnimatePresence>,
+          document.body
+        )}
 
       {/* Share Modal */}
       {typeof window !== "undefined" &&

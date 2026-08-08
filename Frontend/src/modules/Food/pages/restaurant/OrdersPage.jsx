@@ -190,15 +190,16 @@ export default function OrdersPage() {
 
     fetchOrders()
 
-    // Set up interval to refresh orders every 10 seconds (fallback if Socket.IO fails)
+    const pollMs = isConnected || window.restaurantSocketConnected ? 45000 : 15000
     const refreshInterval = setInterval(() => {
+      if (document.hidden) return
       fetchOrders()
-    }, 10000)
+    }, pollMs)
 
     return () => {
       clearInterval(refreshInterval)
     }
-  }, [])
+  }, [isConnected])
 
   // Refresh orders when new order notification is received
   useEffect(() => {
@@ -385,7 +386,7 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#f6e9dc] overflow-x-hidden">
+    <div className="min-h-full bg-[#f6e9dc] overflow-x-hidden">
       {/* Main Content */}
       <div className="max-w-7xl mx-auto px-4 py-6 pb-24 md:pb-6">
         {/* Title */}
@@ -395,11 +396,11 @@ export default function OrdersPage() {
 
         {/* Main Navigation Tabs */}
         <div className="flex gap-4 mb-6 border-b border-gray-200">
-          <div className="pb-3 px-2 text-sm md:text-base font-medium text-[#ff8100] relative">
+          <div className="pb-3 px-2 text-sm md:text-base font-medium text-primary relative">
             Regular Order
             <motion.div
               layoutId="activeMainTab"
-              className="absolute bottom-0 left-0 right-0 h-0.5 bg-[#ff8100]"
+              className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary"
               transition={{ type: "spring", stiffness: 500, damping: 30 }}
             />
           </div>
@@ -451,7 +452,7 @@ export default function OrdersPage() {
                 {activeFilterTab === tab.id && (
                   <motion.div
                     layoutId="activeFilterTab"
-                    className="absolute inset-0 bg-[#ff8100] rounded-full z-0"
+                    className="absolute inset-0 bg-primary rounded-full z-0"
                     transition={{ type: "spring", stiffness: 500, damping: 30 }}
                   />
                 )}

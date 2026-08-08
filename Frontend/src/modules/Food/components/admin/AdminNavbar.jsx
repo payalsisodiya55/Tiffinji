@@ -40,20 +40,19 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@food/components/ui/popover";
-import quickSpicyLogo from "@food/assets/quicky-spicy-logo.png";
+
 import { adminAPI } from "@food/api";
 import { clearModuleAuth } from "@food/utils/auth";
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings";
 import useAdminNotifications from "@food/hooks/useAdminNotifications";
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 
 export default function AdminNavbar({ onMenuClick }) {
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
-  const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState([]);
@@ -279,30 +278,24 @@ export default function AdminNavbar({ onMenuClick }) {
             >
               <Menu className="w-5 h-5" />
             </button>
-            {/* Logo */}
-            <div className="flex items-center gap-2">
-              <div className="w-24 h-12 rounded-lg bg-white flex items-center justify-center ring-neutral-200">
+            {/* Logo and Company Name */}
+            <div className="flex items-center cursor-pointer" onClick={() => navigate('/admin')}>
+              <div className="w-12 h-12 rounded-lg bg-white flex items-center justify-center">
                 {businessSettings?.logo?.url ? (
                   <img
                     src={businessSettings.logo.url}
                     alt={businessSettings.companyName || "Company"}
-                    className="w-24 h-10 object-contain"
+                    className="w-10 h-10 object-contain"
                     loading="lazy"
                     onError={(e) => {
-                      // Fallback to default logo if company logo fails to load
-                      e.target.src = quickSpicyLogo;
+                      e.target.style.display = "none";
                     }}
                   />
-                ) : (
-                  businessSettings?.companyName ? (
-                    <span className="text-sm font-semibold text-neutral-700 px-2 truncate">
-                      {businessSettings.companyName}
-                    </span>
-                  ) : (
-                    <img src={quickSpicyLogo} alt={businessSettings?.companyName || "Company"} className="w-24 h-10 object-contain" loading="lazy" />
-                  )
-                )}
+                ) : null}
               </div>
+              <span className="text-red-600 font-extrabold text-xl ml-1 tracking-tight">
+                {businessSettings?.companyName || "Tiffinji"}
+              </span>
             </div>
           </div>
 
@@ -424,32 +417,24 @@ export default function AdminNavbar({ onMenuClick }) {
                 <div className="p-4 border-b border-neutral-200">
                   <div className="flex items-center gap-3">
                     <div className="w-12 h-12 rounded-full bg-neutral-100 flex items-center justify-center overflow-hidden border border-neutral-300">
-                      {(() => {
-                        const imgUrl = typeof adminData?.profileImage === "string"
-                          ? adminData.profileImage.trim()
-                          : adminData?.profileImage?.url;
-                        if (imgUrl) {
-                          return (
-                            <img
-                              src={imgUrl}
-                              alt={adminData?.name || "Admin"}
-                              className="w-full h-full object-cover"
-                            />
-                          );
-                        }
-                        return (
-                          <span className="text-lg font-semibold text-neutral-600">
-                            {adminData?.name
-                              ? adminData.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("")
-                                .toUpperCase()
-                                .substring(0, 2)
-                              : "AD"}
-                          </span>
-                        );
-                      })()}
+                      {adminData?.profileImage ? (
+                        <img
+                          src={adminData.profileImage && adminData.profileImage.trim() ? adminData.profileImage : undefined}
+                          alt={adminData.name || "Admin"}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <span className="text-lg font-semibold text-neutral-600">
+                          {adminData?.name
+                            ? adminData.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")
+                              .toUpperCase()
+                              .substring(0, 2)
+                            : "AD"}
+                        </span>
+                      )}
                     </div>
                     <div>
                       <p className="text-sm font-semibold text-neutral-900">
@@ -473,27 +458,27 @@ export default function AdminNavbar({ onMenuClick }) {
                 </div>
                 <DropdownMenuGroup>
                   <DropdownMenuItem
-                    className="cursor-pointer hover:bg-neutral-100 focus:bg-neutral-100 text-neutral-900"
+                    className="cursor-pointer hover:bg-neutral-100 focus:bg-neutral-100"
                     onClick={() => navigate("/admin/food/profile")}
                   >
-                    <User className="mr-2 w-4 h-4 text-neutral-500" />
-                    <span className="text-neutral-900">Profile</span>
+                    <User className="mr-2 w-4 h-4" />
+                    <span>Profile</span>
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    className="cursor-pointer hover:bg-neutral-100 focus:bg-neutral-100 text-neutral-900"
+                    className="cursor-pointer hover:bg-neutral-100 focus:bg-neutral-100"
                     onClick={() => navigate("/admin/food/settings")}
                   >
-                    <Settings className="mr-2 w-4 h-4 text-neutral-500" />
-                    <span className="text-neutral-900">Settings</span>
+                    <Settings className="mr-2 w-4 h-4" />
+                    <span>Settings</span>
                   </DropdownMenuItem>
                 </DropdownMenuGroup>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   className="cursor-pointer text-red-600 hover:bg-red-50 focus:bg-red-50"
-                  onClick={() => setLogoutConfirmOpen(true)}
+                  onClick={handleLogout}
                 >
-                  <LogOut className="mr-2 w-4 h-4 text-red-600" />
-                  <span className="text-red-600">Logout</span>
+                  <LogOut className="mr-2 w-4 h-4" />
+                  <span>Logout</span>
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -625,41 +610,6 @@ export default function AdminNavbar({ onMenuClick }) {
                 )}
               </div>
             )}
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Logout Confirmation Dialog */}
-      <Dialog open={logoutConfirmOpen} onOpenChange={setLogoutConfirmOpen}>
-        <DialogContent className="max-w-md p-6 bg-white border border-neutral-200 rounded-xl shadow-lg">
-          <DialogHeader className="pb-4">
-            <DialogTitle className="text-lg font-bold text-neutral-900">
-              Confirm Logout
-            </DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <p className="text-sm text-neutral-600">
-              Are you sure you want to log out of the admin panel?
-            </p>
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={() => setLogoutConfirmOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-neutral-700 bg-neutral-100 hover:bg-neutral-200 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setLogoutConfirmOpen(false);
-                  handleLogout();
-                }}
-                className="px-4 py-2 text-sm font-medium text-white bg-red-600 hover:bg-red-700 rounded-lg transition-colors shadow-md shadow-red-500/10"
-              >
-                Logout
-              </button>
-            </div>
           </div>
         </DialogContent>
       </Dialog>

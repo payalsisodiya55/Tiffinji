@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
-import useRestaurantBackNavigation from "@food/hooks/useRestaurantBackNavigation"
 import { motion, AnimatePresence } from "framer-motion"
 import Lenis from "lenis"
 import { ArrowLeft, ChevronUp, ChevronDown, Clock, Edit2 } from "lucide-react"
@@ -55,7 +54,6 @@ const getDefaultDays = () => ({
 export default function OutletTimings() {
   const companyName = useCompanyName()
   const navigate = useNavigate()
-  const goBack = useRestaurantBackNavigation()
   const [expandedDay, setExpandedDay] = useState("Monday")
   const isInternalUpdate = useRef(false)
   const [days, setDays] = useState(getDefaultDays)
@@ -87,6 +85,8 @@ export default function OutletTimings() {
   // Save to backend whenever days change (debounced).
   useEffect(() => {
     if (loading) return
+    if (!isInternalUpdate.current) return // Only save if the user made a change
+    
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
     saveTimerRef.current = setTimeout(async () => {
       try {
@@ -171,7 +171,7 @@ export default function OutletTimings() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-white flex items-center justify-center">
+      <div className="min-h-full bg-white flex items-center justify-center">
         <div className="text-sm text-gray-600">Loading outlet timings...</div>
       </div>
     )
@@ -179,12 +179,12 @@ export default function OutletTimings() {
 
   return (
     <LocalizationProvider dateAdapter={AdapterDayjs}>
-      <div className="min-h-screen bg-white overflow-x-hidden">
+      <div className="min-h-full bg-white overflow-x-hidden">
         {/* Header */}
         <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-50">
           <div className="flex items-center gap-3">
             <button
-              onClick={goBack}
+              onClick={() => navigate("/food/restaurant/explore")}
               className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
               aria-label="Go back"
             >

@@ -105,22 +105,10 @@ const resolveRestaurantBackPath = ({ pathname, state }) => {
     return explicitBackPath || "/food/restaurant/feedback"
   }
 
-  if (normalizedPath === "/reservations") {
-    return explicitBackPath || "/food/restaurant/explore"
-  }
-
   if (
     normalizedPath === "/finance-details" ||
     normalizedPath === "/download-report"
   ) {
-    return explicitBackPath || "/food/restaurant/hub-finance"
-  }
-
-  if (normalizedPath === "/hub-finance") {
-    return explicitBackPath || "/food/restaurant/explore"
-  }
-
-  if (normalizedPath === "/withdrawal-history") {
     return explicitBackPath || "/food/restaurant/hub-finance"
   }
 
@@ -140,15 +128,6 @@ export default function useRestaurantBackNavigation() {
   const location = useLocation()
 
   return useCallback(() => {
-    const normalizedPath = getNormalizedRestaurantPath(location.pathname)
-    if (normalizedPath === "/help-centre/support") {
-      if (window.history.state && window.history.state.idx > 0) {
-        navigate(-1)
-      } else {
-        navigate("/food/restaurant")
-      }
-      return
-    }
     navigate(resolveRestaurantBackPath(location))
   }, [location, navigate])
 }

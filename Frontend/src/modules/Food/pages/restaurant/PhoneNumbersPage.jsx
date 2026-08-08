@@ -24,18 +24,15 @@ export default function PhoneNumbersPage() {
 
   // Country codes
   const countryCodes = [
-    { code: "+91", country: "India", flag: "🇮🇳", maxLength: 10 },
-    { code: "+1", country: "USA", flag: "🇺🇸", maxLength: 10 },
-    { code: "+44", country: "UK", flag: "🇬🇧", maxLength: 10 },
-    { code: "+971", country: "UAE", flag: "🇦🇪", maxLength: 9 },
-    { code: "+65", country: "Singapore", flag: "🇸🇬", maxLength: 8 },
-    { code: "+86", country: "China", flag: "🇨🇳", maxLength: 11 },
-    { code: "+81", country: "Japan", flag: "🇯🇵", maxLength: 10 },
-    { code: "+61", country: "Australia", flag: "🇦🇺", maxLength: 9 },
+    { code: "+91", country: "India", flag: "🇮🇳" },
+    { code: "+1", country: "USA", flag: "🇺🇸" },
+    { code: "+44", country: "UK", flag: "🇬🇧" },
+    { code: "+971", country: "UAE", flag: "🇦🇪" },
+    { code: "+65", country: "Singapore", flag: "🇸🇬" },
+    { code: "+86", country: "China", flag: "🇨🇳" },
+    { code: "+81", country: "Japan", flag: "🇯🇵" },
+    { code: "+61", country: "Australia", flag: "🇦🇺" },
   ]
-
-  const activeCountryConfig = countryCodes.find(c => c.code === countryCode) || { maxLength: 10, country: "India" }
-  const currentMaxLength = activeCountryConfig.maxLength
 
   const handleEditClick = (type) => {
     const currentNumber = phoneData[type]
@@ -130,7 +127,7 @@ export default function PhoneNumbersPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="restaurant-page min-h-full bg-gray-100">
       {/* Header */}
       <div className="sticky top-0 z-40 bg-white border-b border-gray-200">
         <div className="px-4 py-3 flex items-center gap-3">
@@ -145,7 +142,7 @@ export default function PhoneNumbersPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-6">
+      <div className="px-4 py-6">
 
         {/* Order reminder numbers */}
         <div className="bg-white rounded-lg p-4 mb-4">
@@ -240,7 +237,7 @@ export default function PhoneNumbersPage() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 max-h-[70vh] flex flex-col"
+              className="restaurant-modal-sheet bg-white rounded-t-2xl shadow-2xl z-50 max-h-[70vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
@@ -252,7 +249,7 @@ export default function PhoneNumbersPage() {
                   <X className="w-5 h-5 text-gray-600" />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto px-4 py-4">
+              <div className="px-4 py-4">
                 <div className="space-y-4">
                   {/* Country Code Selector */}
                   <div>
@@ -281,19 +278,10 @@ export default function PhoneNumbersPage() {
                     <input
                       type="tel"
                       value={phoneNumber}
-                      onChange={(e) => {
-                        const val = e.target.value.replace(/\D/g, '')
-                        if (val.length <= currentMaxLength) {
-                          setPhoneNumber(val)
-                        }
-                      }}
-                      placeholder={`Enter ${currentMaxLength}-digit phone number`}
-                      maxLength={currentMaxLength}
+                      onChange={(e) => setPhoneNumber(e.target.value.replace(/\D/g, ''))}
+                      placeholder="Enter phone number"
                       className="w-full px-4 py-3 border border-gray-300 rounded-lg text-sm text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     />
-                    <p className="text-[11px] text-gray-500 mt-1">
-                      Expected length: {currentMaxLength} digits for {activeCountryConfig.country}
-                    </p>
                   </div>
                 </div>
               </div>
@@ -306,9 +294,9 @@ export default function PhoneNumbersPage() {
                 </button>
                 <button
                   onClick={handleSaveEdit}
-                  disabled={phoneNumber.trim().length !== currentMaxLength}
+                  disabled={!phoneNumber.trim()}
                   className={`flex-1 py-3 px-4 rounded-lg text-sm font-semibold transition-colors ${
-                    phoneNumber.trim().length === currentMaxLength
+                    phoneNumber.trim()
                       ? "bg-black text-white hover:bg-gray-800"
                       : "bg-gray-300 text-gray-500 cursor-not-allowed"
                   }`}
@@ -337,7 +325,7 @@ export default function PhoneNumbersPage() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-[60] max-h-[60vh] flex flex-col"
+              className="restaurant-modal-sheet bg-white rounded-t-2xl shadow-2xl z-[60] max-h-[60vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
@@ -349,7 +337,7 @@ export default function PhoneNumbersPage() {
                   <X className="w-5 h-5 text-gray-600" />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto px-4 py-4">
+              <div className="px-4 py-4">
                 <div className="space-y-2">
                   {countryCodes.map((country) => (
                     <button
@@ -394,7 +382,7 @@ export default function PhoneNumbersPage() {
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 30, stiffness: 300 }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 max-h-[70vh] flex flex-col"
+              className="restaurant-modal-sheet bg-white rounded-t-2xl shadow-2xl z-50 max-h-[70vh] flex flex-col"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex items-center justify-between px-4 py-4 border-b border-gray-200">
@@ -406,7 +394,7 @@ export default function PhoneNumbersPage() {
                   <X className="w-5 h-5 text-gray-600" />
                 </button>
               </div>
-              <div className="flex-1 overflow-y-auto px-4 py-6">
+              <div className="px-4 py-6">
                 <div className="space-y-6">
                   <div className="text-center">
                     <p className="text-sm text-gray-600 mb-2">

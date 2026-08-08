@@ -8,10 +8,8 @@ import { Card, CardContent } from "@food/components/ui/card"
 import { orderAPI, restaurantAPI, supportAPI, authAPI } from "@food/api"
 import { toast } from "sonner"
 import { ArrowLeft, Building2, HelpCircle, ShoppingBag, ChevronRight } from "lucide-react"
-import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 
 export default function Support() {
-  const goBack = useAppBackNavigation()
   const [step, setStep] = useState("pick")
   const [type, setType] = useState("")
   const [orders, setOrders] = useState([])
@@ -114,11 +112,16 @@ export default function Support() {
   }
 
   const getOrderLabel = (order) => {
-    const restaurantName = order?.restaurantName || order?.restaurant?.restaurantName || "Restaurant"
+    const restaurantName = order?.restaurantId?.restaurantName || order?.restaurantId?.name || order?.restaurantName || order?.restaurant?.restaurantName || "Restaurant"
     const dateValue = order?.createdAt || order?.date
     const dateLabel = dateValue ? new Date(dateValue).toLocaleDateString() : "No date"
     const amount = order?.pricing?.total ?? order?.total ?? 0
-    return `${restaurantName} • ${dateLabel} • ₹${amount}`
+    
+    const items = order?.items || []
+    const itemNames = items.map(i => i?.name || i?.foodName).filter(Boolean).join(", ")
+    const itemString = itemNames ? ` • ${itemNames}` : ""
+
+    return `${restaurantName}${itemString} • ${dateLabel} • ₹${amount}`
   }
 
   const getRestaurantLabel = (restaurant) => {
@@ -130,9 +133,12 @@ export default function Support() {
   const filteredOrders = orders.filter((order) => {
     const q = orderSearch.trim().toLowerCase()
     if (!q) return true
-    const restaurantName = (order?.restaurantName || order?.restaurant?.restaurantName || "").toLowerCase()
+    const restaurantName = (order?.restaurantId?.restaurantName || order?.restaurantId?.name || order?.restaurantName || order?.restaurant?.restaurantName || "").toLowerCase()
     const orderId = String(order?._id || order?.id || "").toLowerCase()
-    return restaurantName.includes(q) || orderId.includes(q)
+    const items = order?.items || []
+    const itemsString = items.map(i => i?.name || i?.foodName).filter(Boolean).join(" ").toLowerCase()
+    
+    return restaurantName.includes(q) || orderId.includes(q) || itemsString.includes(q)
   })
 
   const filteredRestaurants = restaurants.filter((restaurant) => {
@@ -210,9 +216,17 @@ export default function Support() {
     <AnimatedPage className="min-h-screen bg-[#f5f5f5] dark:bg-[#0a0a0a]">
       <div className="max-w-md md:max-w-2xl lg:max-w-4xl xl:max-w-5xl mx-auto px-4 sm:px-6 md:px-8 lg:px-10 xl:px-12 py-4 sm:py-6 md:py-8 pb-20">
         <div className="mb-4">
-          <Button variant="ghost" size="icon" onClick={goBack} className="h-8 w-8 p-0">
-            <ArrowLeft className="h-5 w-5 text-black dark:text-white" />
-          </Button>
+          {step === "pick" ? (
+            <Link to="/food/user/profile">
+              <Button variant="ghost" size="icon" className="h-8 w-8 p-0">
+                <ArrowLeft className="h-5 w-5 text-black dark:text-white" />
+              </Button>
+            </Link>
+          ) : (
+            <Button variant="ghost" size="icon" className="h-8 w-8 p-0" onClick={() => setStep("pick")}>
+              <ArrowLeft className="h-5 w-5 text-black dark:text-white" />
+            </Button>
+          )}
         </div>
 
         <Card className="bg-white dark:bg-[#1a1a1a] rounded-xl shadow-sm border border-slate-200 dark:border-gray-800 mb-3">

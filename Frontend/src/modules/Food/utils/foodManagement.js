@@ -1,6 +1,6 @@
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 /**
  * Food Management Utility Functions
@@ -26,7 +26,7 @@ const DEFAULT_FOODS = [
     foodType: "Non-Veg",
     availabilityTimeStart: "12:01 AM",
     availabilityTimeEnd: "11:57 PM",
-    description: "Fada list consists of crispy, thin, soft and delicious lentil pancakes from South Indian cuisine.",
+    description: "Fada list consists of crispy, thin, soft and delicious lentil pancakes from South tiffinji cuisine.",
     discountType: "Percent",
     discountAmount: 0.0,
     isAvailable: true,

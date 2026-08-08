@@ -58,7 +58,7 @@ export default function AllZonesMap() {
   // Draw zones and restaurant markers when map and data are ready
   useEffect(() => {
     if (!mapLoading && mapInstanceRef.current && window.google) {
-      if (zones.length > 0) {
+      if (zones.length > 0 && restaurants.length > 0) {
         drawAllZonesOnMap(window.google, mapInstanceRef.current)
       }
       if (restaurants.length > 0) {
@@ -98,11 +98,22 @@ export default function AllZonesMap() {
       const apiKey = await getGoogleMapsApiKey()
       setGoogleMapsApiKey(apiKey || "loaded")
       
+      // Wait for Google Maps to be loaded from main.jsx if it's loading
+      let retries = 0
+      const maxRetries = 50 // Wait up to 5 seconds (50 * 100ms)
+      
+      while (!window.google && retries < maxRetries) {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        retries++
+      }
+
+      // If Google Maps is already loaded (from main.jsx), use it directly
       if (window.google && window.google.maps) {
         initializeMap(window.google)
         return
       }
 
+      // If Google Maps is not loaded yet and we have an API key, use Loader as fallback
       if (apiKey) {
         const loader = new Loader({
           apiKey: apiKey,

@@ -3,7 +3,6 @@ import { useNavigate } from "react-router-dom"
 import useRestaurantBackNavigation from "@food/hooks/useRestaurantBackNavigation"
 import { ChevronLeft, Loader2, Send } from "lucide-react"
 import { restaurantAPI } from "@food/api"
-import BottomNavOrders from "@food/components/restaurant/BottomNavOrders"
 import { toast } from "sonner"
 
 const CATEGORY_OPTIONS = [
@@ -86,14 +85,6 @@ export default function RestaurantSupport() {
       toast.error("Issue type is required")
       return
     }
-    if (!form.subject.trim()) {
-      toast.error("Subject is required")
-      return
-    }
-    if (!form.description.trim()) {
-      toast.error("Description is required")
-      return
-    }
     try {
       setSubmitting(true)
       await restaurantAPI.createSupportTicket({
@@ -115,7 +106,7 @@ export default function RestaurantSupport() {
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="restaurant-page min-h-full bg-slate-50 md:max-w-4xl md:mx-auto md:border-x md:border-slate-200">
       <div className="sticky top-0 z-40 bg-white border-b border-slate-200">
         <div className="px-4 py-3 flex items-center gap-3">
           <button
@@ -132,7 +123,7 @@ export default function RestaurantSupport() {
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4 pb-28">
+      <div className="px-4 py-4 space-y-4 pb-28">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
           <div className="rounded-xl border border-slate-200 bg-white p-3">
             <p className="text-xs text-slate-500">Total</p>
@@ -188,7 +179,7 @@ export default function RestaurantSupport() {
           <input
             value={form.subject}
             onChange={(e) => setForm((prev) => ({ ...prev, subject: e.target.value }))}
-            placeholder="Short subject (required)"
+            placeholder="Short subject"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm"
             maxLength={180}
           />
@@ -202,7 +193,7 @@ export default function RestaurantSupport() {
           <textarea
             value={form.description}
             onChange={(e) => setForm((prev) => ({ ...prev, description: e.target.value }))}
-            placeholder="Describe your issue (required)"
+            placeholder="Describe your issue"
             className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm min-h-24 resize-none"
             maxLength={1000}
           />
@@ -284,7 +275,6 @@ export default function RestaurantSupport() {
         </div>
       </div>
 
-      <BottomNavOrders />
     </div>
   )
 }

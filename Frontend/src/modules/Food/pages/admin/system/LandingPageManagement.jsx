@@ -8,9 +8,9 @@ import { Label } from "@food/components/ui/label"
 import { Button } from "@food/components/ui/button"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@food/components/ui/dialog"
 import { Checkbox } from "@food/components/ui/checkbox"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 
 export default function LandingPageManagement() {
@@ -59,8 +59,36 @@ export default function LandingPageManagement() {
   const [diningBannersDeleting, setDiningBannersDeleting] = useState(null)
   const diningBannersFileInputRef = useRef(null)
 
-  // Settings
-  const [settings, setSettings] = useState({ exploreMoreHeading: "Explore More", recommendedRestaurantIds: [], under250PriceLimit: 250, festBannerVideoUrl: "" })
+  const [settings, setSettings] = useState({
+    exploreMoreHeading: "Explore More",
+    recommendedRestaurantIds: [],
+    under250PriceLimit: 250,
+    festBannerImages: [],
+    stats: { restaurants: '3,00,000+', cities: '800+', orders: '3 billion+' },
+    appLinks: { playStore: 'https://play.google.com/store/apps/details?id=com.tiffinji.bite.user', appStore: '' },
+    socialLinks: { instagram: '', twitter: '', facebook: '', linkedin: '', youtube: '' },
+    footerLinks: {
+      about: [
+        { label: 'Who We Are', url: '#' },
+        { label: 'Blog', url: '#' },
+        { label: 'Work With Us', url: '#' },
+        { label: 'Investor Relations', url: '#' },
+        { label: 'Report Fraud', url: '#' }
+      ],
+      forRestaurants: [
+        { label: 'Partner With Us', url: '#' },
+        { label: 'Apps For You', url: '#' }
+      ],
+      learnMore: [
+        { label: 'Privacy', url: '#' },
+        { label: 'Security', url: '#' },
+        { label: 'Terms', url: '#' },
+        { label: 'Sitemap', url: '#' }
+      ]
+    },
+    copyrightText: '© 2026 Tiffinji™ Ltd. All rights reserved.',
+    heroSlides: []
+  })
   const [settingsLoading, setSettingsLoading] = useState(true)
   const [settingsSaving, setSettingsSaving] = useState(false)
   const [recommendedSearchQuery, setRecommendedSearchQuery] = useState("")
@@ -75,10 +103,13 @@ export default function LandingPageManagement() {
   const [gourmetLoading, setGourmetLoading] = useState(true)
   const [gourmetDeleting, setGourmetDeleting] = useState(null)
   const [selectedRestaurantGourmet, setSelectedRestaurantGourmet] = useState("")
+  const [selectedZoneGourmet, setSelectedZoneGourmet] = useState("")
 
   // Common
   const [error, setError] = useState(null)
   const [success, setSuccess] = useState(null)
+  const [zones, setZones] = useState([])
+  const [selectedZoneForRecommended, setSelectedZoneForRecommended] = useState("")
 
   // Restaurant Selection Modal for Banner Advertising
   const [showRestaurantModal, setShowRestaurantModal] = useState(false)
@@ -144,7 +175,19 @@ export default function LandingPageManagement() {
     fetchDiningBanners()
     fetchAllRestaurants()
     fetchSettings()
+    fetchZones()
   }, [])
+
+  const fetchZones = async () => {
+    try {
+      const response = await adminAPI.getZones()
+      if (response.data?.success && response.data.data?.zones) {
+        setZones(response.data.data.zones)
+      }
+    } catch (err) {
+      debugError("Failed to fetch zones", err)
+    }
+  }
 
   // Fetch Top 10 and Gourmet when Explore More tab is active; refetch restaurants so dropdown is populated
   useEffect(() => {
@@ -193,8 +236,8 @@ export default function LandingPageManagement() {
   const handleBannerFileSelect = (e) => {
     const files = Array.from(e.target?.files || e.files || [])
     if (files.length === 0) return
-    if (files.length > 5) {
-      setError('You can upload a maximum of 5 images at once')
+    if (files.length > 25) {
+      setError('You can upload a maximum of 25 files at once')
       return
     }
     uploadBanners(files)
@@ -383,12 +426,16 @@ export default function LandingPageManagement() {
     const query = recommendedSearchQuery.trim().toLowerCase()
     return allRestaurants
       .filter((restaurant) => {
+        const rZoneId = restaurant.zoneId?._id || restaurant.zoneId;
+        if (selectedZoneForRecommended && String(rZoneId) !== selectedZoneForRecommended) {
+          return false;
+        }
         if (!query) return true
         return restaurant.name?.toLowerCase().includes(query) ||
           restaurant.restaurantId?.toLowerCase().includes(query)
       })
       .slice(0, 80)
-  }, [allRestaurants, recommendedSearchQuery])
+  }, [allRestaurants, recommendedSearchQuery, selectedZoneForRecommended])
 
   const recommendedRestaurantsSelected = useMemo(() => {
     const selectedIds = new Set(settings.recommendedRestaurantIds || [])
@@ -804,8 +851,8 @@ export default function LandingPageManagement() {
   const handleUnder250BannerFileSelect = (e) => {
     const files = Array.from(e.target?.files || e.files || [])
     if (files.length === 0) return
-    if (files.length > 5) {
-      setError('You can upload a maximum of 5 images at once')
+    if (files.length > 25) {
+      setError('You can upload a maximum of 25 images at once')
       return
     }
     uploadUnder250Banners(files)
@@ -930,8 +977,8 @@ export default function LandingPageManagement() {
   const handleDiningBannerFileSelect = (e) => {
     const files = Array.from(e.target?.files || e.files || [])
     if (files.length === 0) return
-    if (files.length > 5) {
-      setError('You can upload a maximum of 5 images at once')
+    if (files.length > 25) {
+      setError('You can upload a maximum of 25 images at once')
       return
     }
     uploadDiningBanners(files)
@@ -952,7 +999,7 @@ export default function LandingPageManagement() {
 
       const formData = new FormData()
       files.forEach((file) => {
-        formData.append('images', file)
+        formData.append('files', file)
       })
 
       const response = await api.post('/food/hero-banners/dining/multiple', formData, getAuthConfig({
@@ -960,12 +1007,12 @@ export default function LandingPageManagement() {
       }))
 
       if (response.data.success) {
-        setSuccess(`${response.data.data.banners?.length || files.length} dining banner(s) uploaded successfully!`)
+        setSuccess(`${response.data.data.banners?.length || files.length} ads banner(s) uploaded successfully!`)
         await fetchDiningBanners()
         setTimeout(() => setSuccess(null), 3000)
       }
     } catch (err) {
-      const errorMessage = err.response?.data?.message || 'Failed to upload dining banners'
+      const errorMessage = err.response?.data?.message || 'Failed to upload ads banners'
       setErrorSafely(errorMessage)
       setDiningBannersUploadProgress({ current: 0, total: 0 })
     } finally {
@@ -974,14 +1021,14 @@ export default function LandingPageManagement() {
   }
 
   const handleDeleteDiningBanner = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this dining banner?')) return
+    if (!window.confirm('Are you sure you want to delete this ads banner?')) return
     try {
       setDiningBannersDeleting(id)
       setError(null)
       setSuccess(null)
       const response = await api.delete(`/food/hero-banners/dining/${id}`, getAuthConfig())
       if (response.data.success) {
-        setSuccess('Dining banner deleted successfully!')
+        setSuccess('Ads banner deleted successfully!')
         await fetchDiningBanners()
         setTimeout(() => setSuccess(null), 3000)
       }
@@ -1032,18 +1079,42 @@ export default function LandingPageManagement() {
       setError(null)
       const response = await api.get('/food/hero-banners/landing/settings', getAuthConfig())
       if (response.data.success) {
-        const nextSettings = response.data.data.settings || {}
+        const nextSettings = response.data.data || {}
         setSettings({
           exploreMoreHeading: nextSettings.exploreMoreHeading || "Explore More",
           recommendedRestaurantIds: Array.isArray(nextSettings.recommendedRestaurantIds) ? nextSettings.recommendedRestaurantIds : [],
           under250PriceLimit: Number(nextSettings.under250PriceLimit) || 250,
-          festBannerVideoUrl: typeof nextSettings.festBannerVideoUrl === "string" ? nextSettings.festBannerVideoUrl : ""
+          festBannerImages: Array.isArray(nextSettings.festBannerImages) ? nextSettings.festBannerImages : [],
+          stats: nextSettings.stats || { restaurants: '3,00,000+', cities: '800+', orders: '3 billion+' },
+          appLinks: nextSettings.appLinks || { playStore: 'https://play.google.com/store/apps/details?id=com.tiffinji.bite.user', appStore: '' },
+          socialLinks: nextSettings.socialLinks || { instagram: '', twitter: '', facebook: '', linkedin: '', youtube: '' },
+          footerLinks: nextSettings.footerLinks || {
+            about: [
+              { label: 'Who We Are', url: '#' },
+              { label: 'Blog', url: '#' },
+              { label: 'Work With Us', url: '#' },
+              { label: 'Investor Relations', url: '#' },
+              { label: 'Report Fraud', url: '#' }
+            ],
+            forRestaurants: [
+              { label: 'Partner With Us', url: '#' },
+              { label: 'Apps For You', url: '#' }
+            ],
+            learnMore: [
+              { label: 'Privacy', url: '#' },
+              { label: 'Security', url: '#' },
+              { label: 'Terms', url: '#' },
+              { label: 'Sitemap', url: '#' }
+            ]
+          },
+          copyrightText: nextSettings.copyrightText || '© 2026 Tiffinji™ Ltd. All rights reserved.',
+          heroSlides: Array.isArray(nextSettings.heroSlides) ? nextSettings.heroSlides : []
         })
       }
     } catch (err) {
       // Silently handle 401/404 errors - endpoints may not exist yet, use default settings
       if (err.response?.status === 401 || err.response?.status === 404) {
-        setSettings({ exploreMoreHeading: "Explore More", recommendedRestaurantIds: [], under250PriceLimit: 250, festBannerVideoUrl: "" }) // Use default settings
+        // Do not override with empty defaults on error, let the initial state persist
         setError(null) // Clear any previous error
       } else {
         // Filter out token-related errors
@@ -1064,10 +1135,16 @@ export default function LandingPageManagement() {
         exploreMoreHeading: settings.exploreMoreHeading,
         recommendedRestaurantIds: Array.isArray(settings.recommendedRestaurantIds) ? settings.recommendedRestaurantIds : [],
         under250PriceLimit: Number(settings.under250PriceLimit) || 250,
-        festBannerVideoUrl: settings.festBannerVideoUrl || ""
+        festBannerImages: settings.festBannerImages || [],
+        stats: settings.stats,
+        appLinks: settings.appLinks,
+        socialLinks: settings.socialLinks,
+        footerLinks: settings.footerLinks,
+        copyrightText: settings.copyrightText,
+        heroSlides: settings.heroSlides
       }, getAuthConfig())
       if (response.data.success) {
-        const savedSettings = response.data.data?.settings || {}
+        const savedSettings = response.data.data || {}
         setSettings((prev) => ({
           ...prev,
           exploreMoreHeading: savedSettings.exploreMoreHeading || prev.exploreMoreHeading,
@@ -1075,9 +1152,15 @@ export default function LandingPageManagement() {
             ? savedSettings.recommendedRestaurantIds
             : prev.recommendedRestaurantIds,
           under250PriceLimit: Number(savedSettings.under250PriceLimit) || prev.under250PriceLimit,
-          festBannerVideoUrl: typeof savedSettings.festBannerVideoUrl === "string"
-            ? savedSettings.festBannerVideoUrl
-            : prev.festBannerVideoUrl
+          festBannerImages: Array.isArray(savedSettings.festBannerImages)
+            ? savedSettings.festBannerImages
+            : prev.festBannerImages,
+          stats: savedSettings.stats || prev.stats,
+          appLinks: savedSettings.appLinks || prev.appLinks,
+          socialLinks: savedSettings.socialLinks || prev.socialLinks,
+          footerLinks: savedSettings.footerLinks || prev.footerLinks,
+          copyrightText: savedSettings.copyrightText || prev.copyrightText,
+          heroSlides: Array.isArray(savedSettings.heroSlides) ? savedSettings.heroSlides : prev.heroSlides
         }))
         setSuccess('Settings saved successfully!')
         setTimeout(() => setSuccess(null), 3000)
@@ -1089,16 +1172,19 @@ export default function LandingPageManagement() {
     }
   }
 
-  const handleFestBannerVideoSelect = async (e) => {
-    const file = e.target?.files?.[0] || null
-    if (!file) return
+  const handleFestBannerImageSelect = async (e) => {
+    const files = Array.from(e.target?.files || [])
+    if (!files.length) return
 
-    if (!file.type.startsWith('video/')) {
-      setErrorSafely('Please select a valid video file')
+    const currentImagesCount = settings.festBannerImages?.length || 0
+    if (currentImagesCount + files.length > 25) {
+      setErrorSafely('You can upload a maximum of 25 files.')
       return
     }
-    if (file.size > 30 * 1024 * 1024) {
-      setErrorSafely('Video must be 30MB or smaller')
+
+    const validFiles = files.filter(f => f.type.startsWith('image/') || f.type.startsWith('video/'))
+    if (validFiles.length !== files.length) {
+      setErrorSafely('Please select only image or video files')
       return
     }
 
@@ -1107,25 +1193,61 @@ export default function LandingPageManagement() {
       setError(null)
       setSuccess(null)
 
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('folder', 'food/landing/fest-banner')
+      const newUrls = []
 
-      const response = await api.post('/uploads/video', formData, getAuthConfig())
-      const url = response?.data?.data?.url || ''
-      if (!url) {
-        setErrorSafely('Failed to upload video')
-        return
+      for (const file of validFiles) {
+        const isVideo = file.type.startsWith('video/')
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('folder', 'food/landing/fest-banner')
+        const response = await api.post(isVideo ? '/uploads/video' : '/uploads/image', formData, getAuthConfig())
+        const url = response?.data?.data?.url || ''
+        if (url) {
+          newUrls.push(url)
+        }
       }
 
-      setSettings((prev) => ({ ...prev, festBannerVideoUrl: url }))
-      setSuccess('Video uploaded. Click Save Settings to publish.')
+      const updatedImages = [...(settings.festBannerImages || []), ...newUrls]
+      setSettings((prev) => ({ ...prev, festBannerImages: updatedImages }))
+
+      // Auto-save to DB
+      await api.patch('/food/hero-banners/landing/settings', {
+        exploreMoreHeading: settings.exploreMoreHeading,
+        recommendedRestaurantIds: Array.isArray(settings.recommendedRestaurantIds) ? settings.recommendedRestaurantIds : [],
+        under250PriceLimit: Number(settings.under250PriceLimit) || 250,
+        festBannerImages: updatedImages
+      }, getAuthConfig())
+
+      setSuccess('Images uploaded and saved successfully!')
       if (festBannerFileInputRef.current) festBannerFileInputRef.current.value = ''
       setTimeout(() => setSuccess(null), 3000)
     } catch (err) {
-      setErrorSafely(err.response?.data?.message || 'Failed to upload video')
+      setErrorSafely(err.response?.data?.message || 'Failed to upload images')
     } finally {
       setFestBannerUploading(false)
+    }
+  }
+
+  const handleRemoveFestBannerImage = async (indexToRemove) => {
+    try {
+      const updatedImages = settings.festBannerImages.filter((_, idx) => idx !== indexToRemove)
+      setSettings(prev => ({
+        ...prev,
+        festBannerImages: updatedImages
+      }))
+
+      // Auto-save to DB
+      await api.patch('/food/hero-banners/landing/settings', {
+        exploreMoreHeading: settings.exploreMoreHeading,
+        recommendedRestaurantIds: Array.isArray(settings.recommendedRestaurantIds) ? settings.recommendedRestaurantIds : [],
+        under250PriceLimit: Number(settings.under250PriceLimit) || 250,
+        festBannerImages: updatedImages
+      }, getAuthConfig())
+
+      setSuccess('Image removed successfully!')
+      setTimeout(() => setSuccess(null), 3000)
+    } catch (err) {
+      setErrorSafely('Failed to remove image')
     }
   }
 
@@ -1256,8 +1378,9 @@ export default function LandingPageManagement() {
   const tabs = [
     { id: 'banners', label: 'Hero Banners', icon: ImageIcon },
     { id: 'under-250', label: '250 Banner', icon: Tag },
-    { id: 'dining', label: 'Dining', icon: UtensilsCrossed },
+    { id: 'dining', label: 'Ads Banner', icon: Megaphone },
     { id: 'explore-more', label: 'Explore More', icon: Layout },
+    { id: 'brand-landing', label: 'Brand Landing Page', icon: Layout },
   ]
 
   const exploreMoreTabs = [
@@ -1339,7 +1462,7 @@ export default function LandingPageManagement() {
                 <input
                   ref={bannersFileInputRef}
                   type="file"
-                  accept="image/*"
+                  accept="image/*,video/*"
                   multiple
                   onChange={handleBannerFileSelect}
                   className="hidden"
@@ -1349,7 +1472,7 @@ export default function LandingPageManagement() {
                   <div className="flex flex-col items-center gap-3">
                     <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
                     <p className="text-blue-600 font-medium">
-                      Uploading image {bannersUploadProgress.current} of {bannersUploadProgress.total}...
+                      Uploading file {bannersUploadProgress.current} of {bannersUploadProgress.total}...
                     </p>
                     {bannersUploadProgress.total > 0 && (
                       <div className="w-full max-w-xs">
@@ -1375,7 +1498,7 @@ export default function LandingPageManagement() {
                       </button>
                       <span className="text-slate-600"> or drag and drop</span>
                     </div>
-                    <p className="text-xs text-slate-500">PNG, JPG, WEBP up to 5MB each (Max 5 images at once)</p>
+                    <p className="text-xs text-slate-500">PNG, JPG, WEBP, MP4 up to 50MB each (Max 25 files at once)</p>
                   </div>
                 )}
               </div>
@@ -1397,8 +1520,12 @@ export default function LandingPageManagement() {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {banners.map((banner, index) => (
                     <div key={banner._id} className="border border-slate-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                      <div className="relative aspect-video bg-slate-100">
-                        <img src={banner.imageUrl} alt={`Hero Banner ${index + 1}`} className="w-full h-full object-cover" />
+                      <div className="relative aspect-video bg-slate-100 flex items-center justify-center overflow-hidden">
+                        {banner.imageUrl && (banner.imageUrl.endsWith('.mp4') || banner.imageUrl.includes('/video/') || banner.type === 'video') ? (
+                          <video src={banner.imageUrl} className="w-full h-full object-cover" muted autoPlay loop playsInline />
+                        ) : (
+                          <img src={banner.imageUrl} alt={`Hero Banner ${index + 1}`} className="w-full h-full object-cover" />
+                        )}
                         <div className="absolute top-2 right-2">
                           <span className={`px-2 py-1 rounded text-xs font-medium ${banner.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                             {banner.isActive ? 'Active' : 'Inactive'}
@@ -1521,7 +1648,7 @@ export default function LandingPageManagement() {
                       </button>
                       <span className="text-slate-600"> or drag and drop</span>
                     </div>
-                    <p className="text-xs text-slate-500">PNG, JPG, WEBP up to 5MB each (Max 5 images at once)</p>
+                    <p className="text-xs text-slate-500">PNG, JPG, WEBP up to 5MB each (Max 25 images at once)</p>
                   </div>
                 )}
               </div>
@@ -1585,7 +1712,7 @@ export default function LandingPageManagement() {
           <>
             {/* Upload Section */}
             <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6 mb-6">
-              <h2 className="text-lg font-bold text-slate-900 mb-4">Upload New Dining Banner(s)</h2>
+              <h2 className="text-lg font-bold text-slate-900 mb-4">Upload New Ads Banner(s)</h2>
               <div
                 className="border-2 border-dashed border-blue-300 rounded-lg p-8 text-center bg-blue-50/30 cursor-pointer transition-colors hover:border-blue-400 hover:bg-blue-50/50"
                 onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); }}
@@ -1637,7 +1764,7 @@ export default function LandingPageManagement() {
                       </button>
                       <span className="text-slate-600"> or drag and drop</span>
                     </div>
-                    <p className="text-xs text-slate-500">PNG, JPG, WEBP up to 5MB each (Max 5 images at once)</p>
+                    <p className="text-xs text-slate-500">PNG, JPG, WEBP up to 5MB each (Max 25 images at once)</p>
                   </div>
                 )}
               </div>
@@ -1652,15 +1779,15 @@ export default function LandingPageManagement() {
                 </div>
               ) : diningBanners.length === 0 ? (
                 <div className="text-center py-12 text-slate-500">
-                  <UtensilsCrossed className="w-12 h-12 mx-auto mb-3 text-slate-400" />
-                  <p>No dining banners uploaded yet.</p>
+                  <Megaphone className="w-12 h-12 mx-auto mb-3 text-slate-400" />
+                  <p>No ads banners uploaded yet.</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {diningBanners.map((banner, index) => (
                     <div key={banner._id} className="border border-slate-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
                       <div className="relative aspect-video bg-slate-100">
-                        <img src={banner.imageUrl} alt={`Dining Banner ${index + 1}`} className="w-full h-full object-cover" />
+                        <img src={banner.imageUrl} alt={`Ads Banner ${index + 1}`} className="w-full h-full object-cover" />
                         <div className="absolute top-2 right-2">
                           <span className={`px-2 py-1 rounded text-xs font-medium ${banner.isActive ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}`}>
                             {banner.isActive ? 'Active' : 'Inactive'}
@@ -1745,44 +1872,51 @@ export default function LandingPageManagement() {
                   </div>
 
                   <div>
-                    <Label>Fest Banner Video (User Home)</Label>
+                    <Label>Fest Banner Media (Max 25)</Label>
                     <p className="text-xs text-slate-500 mt-1 mb-3">
-                      Upload a promo video for the home fest banner. If empty, the default design is shown.
+                      Upload up to 25 promo images or videos for the home fest banner slider.
                     </p>
                     <div className="flex flex-col gap-3">
                       <input
                         ref={festBannerFileInputRef}
                         type="file"
-                        accept="video/*"
-                        onChange={handleFestBannerVideoSelect}
+                        accept="image/*,video/*"
+                        multiple
+                        onChange={handleFestBannerImageSelect}
                         className="hidden"
-                        disabled={festBannerUploading}
+                        disabled={festBannerUploading || (settings.festBannerImages?.length || 0) >= 25}
                       />
                       <div className="flex flex-wrap items-center gap-3">
                         <Button
                           type="button"
                           onClick={() => festBannerFileInputRef.current?.click()}
-                          disabled={festBannerUploading}
+                          disabled={festBannerUploading || (settings.festBannerImages?.length || 0) >= 25}
                           className="bg-slate-900 hover:bg-slate-800 text-white"
                         >
                           {festBannerUploading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : null}
-                          {festBannerUploading ? 'Uploading...' : 'Upload Video'}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          onClick={() => setSettings((prev) => ({ ...prev, festBannerVideoUrl: "" }))}
-                          disabled={festBannerUploading || !settings.festBannerVideoUrl}
-                        >
-                          Remove Video
+                          {festBannerUploading ? 'Uploading...' : `Upload Media (${settings.festBannerImages?.length || 0}/25)`}
                         </Button>
                       </div>
-                      {settings.festBannerVideoUrl ? (
-                        <div className="rounded-lg border border-slate-200 bg-slate-50 p-3 text-xs text-slate-700 break-all">
-                          {settings.festBannerVideoUrl}
+
+                      {settings.festBannerImages && settings.festBannerImages.length > 0 && (
+                        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mt-3">
+                          {settings.festBannerImages.map((imgUrl, idx) => (
+                            <div key={idx} className="relative aspect-[4/3] rounded overflow-hidden border border-slate-200 flex items-center justify-center bg-slate-50">
+                              {imgUrl && (imgUrl.endsWith('.mp4') || imgUrl.includes('/video/')) ? (
+                                <video src={imgUrl} className="w-full h-full object-cover" muted autoPlay loop playsInline />
+                              ) : (
+                                <img src={imgUrl} alt={`Fest banner ${idx}`} className="w-full h-full object-cover" />
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFestBannerImage(idx)}
+                                className="absolute top-1 right-1 bg-red-500 text-white p-1 rounded-full hover:bg-red-600 shadow-md"
+                              >
+                                <Trash2 className="w-3 h-3" />
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      ) : (
-                        <p className="text-xs text-slate-500">No video uploaded.</p>
                       )}
                     </div>
                   </div>
@@ -1793,15 +1927,27 @@ export default function LandingPageManagement() {
                       Choose multiple restaurants to display below filters on the user home page.
                     </p>
 
-                    <div className="relative mb-3">
-                      <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
-                      <Input
-                        id="recommended-search"
-                        value={recommendedSearchQuery}
-                        onChange={(e) => setRecommendedSearchQuery(e.target.value)}
-                        placeholder="Search restaurants..."
-                        className="pl-9"
-                      />
+                    <div className="flex gap-3 mb-3">
+                      <select
+                        className="flex-1 max-w-[200px] h-10 px-3 border border-slate-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        value={selectedZoneForRecommended}
+                        onChange={(e) => setSelectedZoneForRecommended(e.target.value)}
+                      >
+                        <option value="">All Zones</option>
+                        {zones.map((zone) => (
+                          <option key={zone._id || zone.id} value={zone._id || zone.id}>{zone.name}</option>
+                        ))}
+                      </select>
+                      <div className="relative flex-1">
+                        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-slate-400" />
+                        <Input
+                          id="recommended-search"
+                          value={recommendedSearchQuery}
+                          onChange={(e) => setRecommendedSearchQuery(e.target.value)}
+                          placeholder="Search restaurants..."
+                          className="pl-9 h-10"
+                        />
+                      </div>
                     </div>
 
                     {recommendedRestaurantsSelected.length > 0 && (
@@ -1833,7 +1979,7 @@ export default function LandingPageManagement() {
                             >
                               <div className="min-w-0">
                                 <p className="text-sm font-medium text-slate-800 truncate">{restaurant.name}</p>
-                                 <p className="text-xs text-slate-500 truncate">{restaurant._id || "No ID"}</p>
+                                <p className="text-xs text-slate-500 truncate">{restaurant._id || "No ID"}</p>
                               </div>
                               <Checkbox
                                 checked={isChecked}
@@ -1945,6 +2091,24 @@ export default function LandingPageManagement() {
                   <h2 className="text-lg font-bold text-slate-900 mb-4">Add Restaurant to Gourmet</h2>
                   <div className="space-y-4">
                     <div>
+                      <Label htmlFor="zone-gourmet">Select Zone</Label>
+                      <select
+                        id="zone-gourmet"
+                        value={selectedZoneGourmet}
+                        onChange={(e) => {
+                          setSelectedZoneGourmet(e.target.value)
+                          setSelectedRestaurantGourmet("") // Reset restaurant selection when zone changes
+                        }}
+                        className="mt-1 w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        disabled={restaurantsLoading}
+                      >
+                        <option value="">All Zones</option>
+                        {zones.map((zone) => (
+                          <option key={zone._id || zone.id} value={zone._id || zone.id}>{zone.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
                       <Label htmlFor="restaurant-gourmet">Select Restaurant</Label>
                       <select
                         id="restaurant-gourmet"
@@ -1956,6 +2120,11 @@ export default function LandingPageManagement() {
                         <option value="">Select a restaurant...</option>
                         {allRestaurants
                           .filter(r => !gourmetRestaurants.some(gr => gr.restaurant?._id === r._id))
+                          .filter(r => {
+                            if (!selectedZoneGourmet) return true;
+                            const rZoneId = r.zoneId?._id || r.zoneId;
+                            return String(rZoneId) === selectedZoneGourmet;
+                          })
                           .map((restaurant) => (
                             <option key={restaurant._id} value={restaurant._id}>
                               {restaurant.name}
@@ -2043,6 +2212,220 @@ export default function LandingPageManagement() {
               </>
             )}
           </>
+        )}
+
+        {/* Brand Landing Page Tab */}
+        {activeTab === 'brand-landing' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 p-6">
+              <h2 className="text-lg font-bold text-slate-900 mb-4">Master Landing Page Settings</h2>
+
+              <div className="mb-6 space-y-6">
+                <h3 className="text-md font-semibold text-slate-800 border-b pb-2">Hero Slider (Banners/Videos)</h3>
+
+                <div className="space-y-4">
+                  {(settings.heroSlides || []).map((slide, idx) => (
+                    <div key={idx} className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex gap-4 items-start">
+                      <div className="w-40 h-24 bg-slate-200 rounded-md overflow-hidden shrink-0 flex items-center justify-center relative">
+                        {slide.type === 'video' ? (
+                          <video src={slide.url || slide.image} className="w-full h-full object-cover" muted />
+                        ) : slide.url || slide.image ? (
+                          <img src={slide.url || slide.image} className="w-full h-full object-cover" alt="slide" />
+                        ) : (
+                          <ImageIcon className="w-8 h-8 text-slate-400" />
+                        )}
+                        <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity cursor-pointer">
+                          <Upload className="w-6 h-6 text-white" />
+                          <input type="file" className="hidden" accept="image/*,video/*" onChange={async (e) => {
+                            if (!e.target.files?.[0]) return;
+                            const file = e.target.files[0];
+                            const isVideo = file.type.startsWith('video/');
+                            const formData = new FormData();
+                            formData.append('file', file);
+                            formData.append('folder', 'food/landing/hero');
+                            try {
+                              const res = await api.post(isVideo ? '/uploads/video' : '/uploads/image', formData, getAuthConfig());
+                              const url = res.data?.data?.url;
+                              if (url) {
+                                const newSlides = [...settings.heroSlides];
+                                newSlides[idx] = { ...newSlides[idx], url: url, image: url, type: isVideo ? 'video' : 'image' };
+                                setSettings({ ...settings, heroSlides: newSlides });
+                              }
+                            } catch (err) {
+                              console.error(err);
+                              alert("Upload failed");
+                            }
+                          }} />
+                        </label>
+                      </div>
+                      <div className="flex-1 space-y-3">
+                        <Input
+                          placeholder="Title"
+                          value={slide.title || ''}
+                          onChange={(e) => {
+                            const newSlides = [...settings.heroSlides];
+                            newSlides[idx].title = e.target.value;
+                            setSettings({ ...settings, heroSlides: newSlides });
+                          }}
+                        />
+                        <Input
+                          placeholder="Subtitle"
+                          value={slide.subtitle || ''}
+                          onChange={(e) => {
+                            const newSlides = [...settings.heroSlides];
+                            newSlides[idx].subtitle = e.target.value;
+                            setSettings({ ...settings, heroSlides: newSlides });
+                          }}
+                        />
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => {
+                        const newSlides = [...settings.heroSlides];
+                        newSlides.splice(idx, 1);
+                        setSettings({ ...settings, heroSlides: newSlides });
+                      }} className="text-red-500 hover:text-red-700 hover:bg-red-50">
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  ))}
+
+                  <Button variant="outline" size="sm" onClick={() => {
+                    const newSlides = [...(settings.heroSlides || []), { title: '', subtitle: '', type: 'image', url: '' }];
+                    setSettings({ ...settings, heroSlides: newSlides });
+                  }} className="text-blue-600 border-blue-200 hover:bg-blue-50">
+                    + Add Slide
+                  </Button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div>
+                  <Label>Restaurants Stat</Label>
+                  <Input value={settings.stats?.restaurants || ''} onChange={(e) => setSettings({ ...settings, stats: { ...settings.stats, restaurants: e.target.value } })} placeholder="e.g. 3,00,000+" />
+                </div>
+                <div>
+                  <Label>Cities Stat</Label>
+                  <Input value={settings.stats?.cities || ''} onChange={(e) => setSettings({ ...settings, stats: { ...settings.stats, cities: e.target.value } })} placeholder="e.g. 800+" />
+                </div>
+                <div>
+                  <Label>Orders Delivered Stat</Label>
+                  <Input value={settings.stats?.orders || ''} onChange={(e) => setSettings({ ...settings, stats: { ...settings.stats, orders: e.target.value } })} placeholder="e.g. 3 billion+" />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div>
+                  <Label>Play Store Link</Label>
+                  <Input value={settings.appLinks?.playStore || ''} onChange={(e) => setSettings({ ...settings, appLinks: { ...settings.appLinks, playStore: e.target.value } })} placeholder="https://play.google.com/..." />
+                </div>
+                <div>
+                  <Label>App Store Link</Label>
+                  <Input value={settings.appLinks?.appStore || ''} onChange={(e) => setSettings({ ...settings, appLinks: { ...settings.appLinks, appStore: e.target.value } })} placeholder="https://apps.apple.com/..." />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
+                <div>
+                  <Label>Instagram Link</Label>
+                  <Input value={settings.socialLinks?.instagram || ''} onChange={(e) => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, instagram: e.target.value } })} placeholder="https://instagram.com/..." />
+                </div>
+                <div>
+                  <Label>Facebook Link</Label>
+                  <Input value={settings.socialLinks?.facebook || ''} onChange={(e) => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, facebook: e.target.value } })} placeholder="https://facebook.com/..." />
+                </div>
+                <div>
+                  <Label>Twitter Link</Label>
+                  <Input value={settings.socialLinks?.twitter || ''} onChange={(e) => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, twitter: e.target.value } })} placeholder="https://twitter.com/..." />
+                </div>
+                <div>
+                  <Label>LinkedIn Link</Label>
+                  <Input value={settings.socialLinks?.linkedin || ''} onChange={(e) => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, linkedin: e.target.value } })} placeholder="https://linkedin.com/..." />
+                </div>
+                <div>
+                  <Label>YouTube Link</Label>
+                  <Input value={settings.socialLinks?.youtube || ''} onChange={(e) => setSettings({ ...settings, socialLinks: { ...settings.socialLinks, youtube: e.target.value } })} placeholder="https://youtube.com/..." />
+                </div>
+              </div>
+
+              <div className="mb-6">
+                <Label>Copyright Text</Label>
+                <Input value={settings.copyrightText || ''} onChange={(e) => setSettings({ ...settings, copyrightText: e.target.value })} placeholder="© 2026 Tiffinji™ Ltd." />
+              </div>
+
+              <div className="mb-6 space-y-6 mt-8">
+                <h3 className="text-md font-semibold text-slate-800 border-b pb-2">Footer Menus</h3>
+
+                {['about', 'forRestaurants', 'learnMore'].map(sectionKey => {
+                  const sectionLabels = {
+                    about: 'About IB',
+                    forRestaurants: 'For Restaurants',
+                    learnMore: 'Learn More'
+                  };
+                  return (
+                    <div key={sectionKey} className="bg-slate-50 p-4 rounded-lg border border-slate-200">
+                      <h4 className="font-medium text-slate-900 mb-3">{sectionLabels[sectionKey]}</h4>
+                      <div className="space-y-3 mb-4">
+                        {(settings.footerLinks?.[sectionKey] || []).map((link, idx) => (
+                          <div key={idx} className="flex items-center gap-3">
+                            <Input
+                              value={link.label}
+                              onChange={(e) => {
+                                const newLinks = [...(settings.footerLinks[sectionKey] || [])];
+                                newLinks[idx].label = e.target.value;
+                                setSettings({ ...settings, footerLinks: { ...settings.footerLinks, [sectionKey]: newLinks } });
+                              }}
+                              placeholder="Label"
+                              className="flex-1"
+                            />
+                            <Input
+                              value={link.url}
+                              onChange={(e) => {
+                                const newLinks = [...(settings.footerLinks[sectionKey] || [])];
+                                newLinks[idx].url = e.target.value;
+                                setSettings({ ...settings, footerLinks: { ...settings.footerLinks, [sectionKey]: newLinks } });
+                              }}
+                              placeholder="URL (#)"
+                              className="flex-1"
+                            />
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => {
+                                const newLinks = [...(settings.footerLinks[sectionKey] || [])];
+                                newLinks.splice(idx, 1);
+                                setSettings({ ...settings, footerLinks: { ...settings.footerLinks, [sectionKey]: newLinks } });
+                              }}
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 px-2 shrink-0"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        ))}
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const newLinks = [...(settings.footerLinks?.[sectionKey] || []), { label: 'New Link', url: '#' }];
+                          setSettings({ ...settings, footerLinks: { ...settings.footerLinks, [sectionKey]: newLinks } });
+                        }}
+                        className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                      >
+                        + Add Link
+                      </Button>
+                    </div>
+                  )
+                })}
+              </div>
+
+              <div className="flex justify-end pt-4 border-t border-slate-200">
+                <Button onClick={handleSaveSettings} disabled={settingsSaving} className="bg-blue-600 hover:bg-blue-700 text-white min-w-[120px]">
+                  {settingsSaving ? (
+                    <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving...</>
+                  ) : 'Save Settings'}
+                </Button>
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Restaurant Selection Modal */}

@@ -299,40 +299,52 @@ export default function RestaurantComplaints() {
 
       {/* Update Modal */}
       <Dialog open={!!editingComplaint} onOpenChange={(open) => !open && setEditingComplaint(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Update Complaint</DialogTitle>
-            <DialogDescription>
+        <DialogContent className="sm:max-w-[480px] w-[calc(100vw-2rem)] p-6 rounded-2xl bg-white dark:bg-[#1a1a1a] shadow-2xl border border-gray-100 dark:border-gray-800">
+          <DialogHeader className="pr-6 space-y-1">
+            <DialogTitle className="text-xl font-bold text-gray-900 dark:text-white">Update Complaint</DialogTitle>
+            <DialogDescription className="text-sm text-gray-500 dark:text-gray-400">
               Update the status and provide a response for this complaint.
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Status</label>
+          <div className="space-y-4 py-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-gray-800 dark:text-gray-200">Status</label>
               <Select value={updateData.status} onValueChange={(val) => setUpdateData({ ...updateData, status: val })}>
-                <SelectTrigger>
+                <SelectTrigger className="w-full h-11 px-3.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl font-medium text-sm text-gray-900 dark:text-white flex items-center justify-between focus:ring-2 focus:ring-amber-500">
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
-                <SelectContent>
+                <SelectContent className="bg-white dark:bg-[#1a1a1a] border border-gray-100 dark:border-gray-800 rounded-xl shadow-xl z-[150]">
                   {STATUS_OPTIONS.filter(o => o.value !== 'all').map(o => (
-                    <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    <SelectItem key={o.value} value={o.value} className="cursor-pointer hover:bg-amber-500/10 focus:bg-amber-500/10">
+                      {o.label}
+                    </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Admin Response</label>
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold text-gray-800 dark:text-gray-200">Admin Response</label>
               <textarea
-                className="w-full min-h-[100px] p-3 border rounded-md"
+                className="w-full min-h-[120px] p-3.5 bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-xl outline-none focus:ring-2 focus:ring-amber-500 text-sm text-gray-900 dark:text-white placeholder:text-gray-400 transition-all resize-none"
                 placeholder="Type your response here..."
                 value={updateData.adminResponse}
                 onChange={(e) => setUpdateData({ ...updateData, adminResponse: e.target.value })}
               />
             </div>
           </div>
-          <DialogFooter>
-            <button onClick={() => setEditingComplaint(null)} className="px-4 py-2 border rounded-md">Cancel</button>
-            <button onClick={handleUpdateComplaint} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">Save Changes</button>
+          <DialogFooter className="flex items-center justify-end gap-2.5 pt-2">
+            <button 
+              onClick={() => setEditingComplaint(null)} 
+              className="px-5 py-2.5 rounded-xl border border-gray-200 dark:border-gray-700 font-semibold text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800 transition-all"
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleUpdateComplaint} 
+              className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-600 font-bold text-sm text-white shadow-md shadow-amber-500/20 transition-all"
+            >
+              Save Changes
+            </button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

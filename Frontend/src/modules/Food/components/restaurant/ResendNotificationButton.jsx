@@ -24,12 +24,22 @@ export default function ResendNotificationButton({ orderId, mongoId, onSuccess }
       if (response.data?.success) {
         const notifiedCount = Number(response.data.data?.notifiedCount || 0);
         const shortlistedCount = Number(response.data.data?.shortlistedCount || 0);
-        const connectedSocketCount = Number(response.data.data?.connectedSocketCount || 0);
-        toast.success(
-          notifiedCount > 0
-            ? `Notification sent to ${notifiedCount} delivery partners (live sockets: ${connectedSocketCount})`
-            : `Notification sent to 0 delivery partners${shortlistedCount > 0 ? ` (shortlisted: ${shortlistedCount}, live sockets: ${connectedSocketCount})` : ''}`,
-        );
+        const connectedSocketCount = response.data.data?.connectedSocketCount;
+        const searchRadiusKm = response.data.data?.searchRadiusKm;
+        const stats = response.data.data?.resendSearchStats;
+        const radiusLabel = searchRadiusKm ? ` within ${searchRadiusKm} km` : '';
+        const busyLabel = stats?.busy ? ` (${stats.busy} busy skipped)` : '';
+        if (notifiedCount > 0) {
+          toast.success(
+            `Notification sent to ${notifiedCount} delivery partner${notifiedCount === 1 ? '' : 's'}${radiusLabel}${busyLabel}${connectedSocketCount != null ? ` (live sockets: ${connectedSocketCount})` : ''}`,
+          );
+        } else {
+          toast.warning(
+            shortlistedCount > 0
+              ? `No delivery partners received the alert${radiusLabel}. Shortlisted: ${shortlistedCount}${busyLabel}${connectedSocketCount != null ? `, live sockets: ${connectedSocketCount}` : ''}.`
+              : `No free online delivery partners found in this zone${radiusLabel}${stats?.online ? ` (${stats.online} online, ${stats.busy || 0} busy)` : ''}.`,
+          );
+        }
         // Refresh orders if onSuccess callback is provided
         if (onSuccess) {
            onSuccess();

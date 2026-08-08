@@ -1,40 +1,49 @@
 import { Link, useLocation } from "react-router-dom"
-import { Tag, User, Truck, UtensilsCrossed } from "lucide-react"
+import { Tag, User, Home as HomeIcon, UtensilsCrossed, ShoppingBag } from "lucide-react"
 import { useState, useEffect } from "react"
-import api from "@food/api"
+import { getPublicLandingSettings } from "@food/api"
+import { useAppLocation } from "@food/hooks/useAppLocation"
 
 export default function BottomNavigation() {
   const location = useLocation()
   const pathname = location.pathname
+  const { zoneId } = useAppLocation()
   const [under250PriceLimit, setUnder250PriceLimit] = useState(250)
+  const [showDining, setShowDining] = useState(true)
 
-  // Fetch landing settings to get dynamic price limit
+  // Fetch landing settings to get dynamic price limit and features
   useEffect(() => {
     let cancelled = false
-    api.get('/food/landing/settings/public')
-      .then((res) => {
-        if (cancelled) return
-        const settings = res?.data?.data
-        if (settings && typeof settings.under250PriceLimit === 'number') {
+    getPublicLandingSettings(zoneId || null)
+      .then((settings) => {
+        if (cancelled || !settings) return
+        if (typeof settings.under250PriceLimit === 'number') {
           setUnder250PriceLimit(settings.under250PriceLimit)
+        }
+        if (typeof settings.showDining === 'boolean') {
+          setShowDining(settings.showDining)
         }
       })
       .catch(() => {
-        if (!cancelled) setUnder250PriceLimit(250)
+        if (!cancelled) {
+          setUnder250PriceLimit(250)
+          setShowDining(true)
+        }
       })
     return () => { cancelled = true }
-  }, [])
+  }, [zoneId])
 
   // Check active routes - support both /user/* and /* paths
-  const isDining = pathname === "/food/dining" || pathname.startsWith("/food/user/dining") || pathname.startsWith("/food/dining")
-  const isUnder250 = pathname === "/food/under-250" || pathname.startsWith("/food/user/under-250") || pathname.startsWith("/food/under-250")
-  const isProfile = pathname.startsWith("/food/profile") || pathname.startsWith("/food/user/profile")
-  const isDelivery =
+  const isDining = pathname === "/food/dining" || pathname.startsWith("/food/user/dining")
+  const isUnder250 = pathname === "/food/under-250" || pathname.startsWith("/food/user/under-250")
+  const isOrders = pathname === "/food/orders" || pathname.startsWith("/food/user/orders")
+  const isProfile = pathname === "/food/profile" || pathname.startsWith("/food/user/profile")
+  const isHome =
     !isDining &&
     !isUnder250 &&
+    !isOrders &&
     !isProfile &&
-    (pathname === "/" ||
-      pathname === "/food" ||
+    (pathname === "/food" ||
       pathname === "/food/" ||
       pathname === "/food/user" ||
       (pathname.startsWith("/food/user") &&
@@ -43,85 +52,62 @@ export default function BottomNavigation() {
         !pathname.includes("/profile")))
 
   return (
-    <div
-      className="md:hidden fixed bottom-0 left-0 right-0 bg-white dark:bg-[#1a1a1a] border-t border-gray-200 dark:border-gray-800 z-50 shadow-lg"
-    >
-      <div className="flex items-center justify-around h-auto px-2 sm:px-4">
-        {/* Delivery Tab */}
+    <div className="md:hidden fixed bottom-3 left-3 right-3 bg-white dark:bg-[#1a1a1a] rounded-[2rem] z-50 shadow-[0_8px_30px_rgba(0,0,0,0.12)] border border-gray-100 dark:border-gray-800">
+      <div className="flex items-center justify-between px-2 py-1.5">
+        {/* Home Tab */}
         <Link
-          to="/"
-          className={`flex flex-1 flex-col items-center gap-1.5 px-2 sm:px-3 py-2 transition-all duration-200 relative ${isDelivery
-              ? "text-[#D51F10]"
-              : "text-gray-600 dark:text-gray-400"
+          to="/food/user/"
+          className={`flex flex-col items-center justify-center gap-1 w-[22%] py-2 rounded-[1.5rem] transition-all duration-300 ${isHome
+              ? "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 font-bold shadow-xs"
+              : "text-slate-500 dark:text-gray-400"
             }`}
         >
-          < Truck className={`h-5 w-5 ${isDelivery ? "text-[#D51F10] fill-[#D51F10]/10" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
-          <span className={`text-xs sm:text-sm font-medium ${isDelivery ? "text-[#D51F10] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
-            Delivery
+          <HomeIcon className={`h-5 w-5 ${isHome ? "text-amber-500" : "text-slate-500 dark:text-gray-400"}`} strokeWidth={isHome ? 2.5 : 2} />
+          <span className={`text-[10px] sm:text-xs font-bold ${isHome ? "text-amber-600 dark:text-amber-400" : "text-slate-500 dark:text-gray-400 font-semibold"}`}>
+            Home
           </span>
-          {isDelivery && (
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#D51F10] rounded-b-full" />
-          )}
         </Link>
-
-        {/* Divider */}
-        <div className="h-8 w-px bg-gray-300 dark:bg-gray-700" />
-
-        {/* Dining Tab */}
-        <Link
-          to="/food/user/dining"
-          className={`flex flex-1 flex-col items-center gap-1.5 px-2 sm:px-3 py-2 transition-all duration-200 relative ${isDining
-              ? "text-[#D51F10]"
-              : "text-gray-600 dark:text-gray-400"
-            }`}
-        >
-          <UtensilsCrossed className={`h-5 w-5 ${isDining ? "text-[#D51F10]" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
-          <span className={`text-xs sm:text-sm font-medium ${isDining ? "text-[#D51F10] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
-            Dining
-          </span>
-          {isDining && (
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#D51F10] rounded-b-full" />
-          )}
-        </Link>
-
-        {/* Divider */}
-        <div className="h-8 w-px bg-gray-300 dark:bg-gray-700" />
 
         {/* Under 250 Tab */}
         <Link
           to="/food/user/under-250"
-          className={`flex flex-1 flex-col items-center gap-1.5 px-2 sm:px-3 py-2 transition-all duration-200 relative ${isUnder250
-              ? "text-[#D51F10]"
-              : "text-gray-600 dark:text-gray-400"
+          className={`flex flex-col items-center justify-center gap-1 w-[22%] py-2 rounded-[1.5rem] transition-all duration-300 ${isUnder250
+              ? "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 font-bold shadow-xs"
+              : "text-slate-500 dark:text-gray-400"
             }`}
         >
-          <Tag className={`h-5 w-5 ${isUnder250 ? "text-[#D51F10] fill-[#D51F10]/10" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
-          <span className={`text-xs sm:text-sm font-medium ${isUnder250 ? "text-[#D51F10] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
+          <Tag className={`h-5 w-5 ${isUnder250 ? "text-amber-500" : "text-slate-500 dark:text-gray-400"}`} strokeWidth={isUnder250 ? 2.5 : 2} />
+          <span className={`text-[10px] sm:text-xs font-bold ${isUnder250 ? "text-amber-600 dark:text-amber-400" : "text-slate-500 dark:text-gray-400 font-semibold"}`}>
             Under ₹{under250PriceLimit}
           </span>
-          {isUnder250 && (
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#D51F10] rounded-b-full" />
-          )}
         </Link>
 
-        {/* Divider */}
-        <div className="h-8 w-px bg-gray-300 dark:bg-gray-700" />
+        {/* Orders Tab */}
+        <Link
+          to="/food/user/orders"
+          className={`flex flex-col items-center justify-center gap-1 w-[22%] py-2 rounded-[1.5rem] transition-all duration-300 ${isOrders
+              ? "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 font-bold shadow-xs"
+              : "text-slate-500 dark:text-gray-400"
+            }`}
+        >
+          <ShoppingBag className={`h-5 w-5 ${isOrders ? "text-amber-500" : "text-slate-500 dark:text-gray-400"}`} strokeWidth={isOrders ? 2.5 : 2} />
+          <span className={`text-[10px] sm:text-xs font-bold ${isOrders ? "text-amber-600 dark:text-amber-400" : "text-slate-500 dark:text-gray-400 font-semibold"}`}>
+            Orders
+          </span>
+        </Link>
 
         {/* Profile Tab */}
         <Link
           to="/food/user/profile"
-          className={`flex flex-1 flex-col items-center gap-1.5 px-2 sm:px-3 py-2 transition-all duration-200 relative ${isProfile
-              ? "text-[#D51F10]"
-              : "text-gray-600 dark:text-gray-400"
+          className={`flex flex-col items-center justify-center gap-1 w-[22%] py-2 rounded-[1.5rem] transition-all duration-300 ${isProfile
+              ? "bg-amber-50 dark:bg-amber-950/30 text-amber-600 dark:text-amber-400 font-bold shadow-xs"
+              : "text-slate-500 dark:text-gray-400"
             }`}
         >
-          <User className={`h-5 w-5 ${isProfile ? "text-[#D51F10] fill-[#D51F10]/10" : "text-gray-600 dark:text-gray-400"}`} />
-          <span className={`text-xs sm:text-sm font-medium ${isProfile ? "text-[#D51F10] font-bold" : "text-gray-600 dark:text-gray-400"}`}>
+          <User className={`h-5 w-5 ${isProfile ? "text-amber-500" : "text-slate-500 dark:text-gray-400"}`} strokeWidth={isProfile ? 2.5 : 2} />
+          <span className={`text-[10px] sm:text-xs font-bold ${isProfile ? "text-amber-600 dark:text-amber-400" : "text-slate-500 dark:text-gray-400 font-semibold"}`}>
             Profile
           </span>
-          {isProfile && (
-            <div className="absolute top-0 left-0 right-0 h-0.5 bg-[#D51F10] rounded-b-full" />
-          )}
         </Link>
       </div>
     </div>

@@ -24,7 +24,7 @@ export const extractPhoneDigits = (phone) => {
   // Remove all non-digit characters
   const digits = phone.replace(/\D/g, '');
   // If starts with country code (like 91), remove it to get last 10 digits
-  // For Indian numbers, country code is 91, so we take last 10 digits
+  // For tiffinji numbers, country code is 91, so we take last 10 digits
   if (digits.length > 10 && digits.startsWith('91')) {
     return digits.slice(-10);
   }

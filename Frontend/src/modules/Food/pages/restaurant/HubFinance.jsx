@@ -1,10 +1,8 @@
 import { useState, useMemo, useRef, useEffect } from "react"
 import { useNavigate, useSearchParams } from "react-router-dom"
 import { motion, AnimatePresence } from "framer-motion"
-import { Bell, Menu, ChevronDown, Calendar, Download, ArrowRight, ArrowLeft, FileText, Wallet, X } from "lucide-react"
-import BottomNavOrders from "@food/components/restaurant/BottomNavOrders"
+import { Bell, Menu, ChevronDown, Calendar, Download, ArrowRight, FileText, Wallet, X } from "lucide-react"
 import { restaurantAPI } from "@food/api"
-import useRestaurantBackNavigation from "@food/hooks/useRestaurantBackNavigation"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -12,7 +10,6 @@ const debugError = (...args) => {}
 
 export default function HubFinance() {
   const navigate = useNavigate()
-  const goBack = useRestaurantBackNavigation()
   const [searchParams] = useSearchParams()
   const [activeTab, setActiveTab] = useState(() => {
     const tabParam = searchParams.get("tab")
@@ -181,7 +178,7 @@ export default function HubFinance() {
   }, [invoiceOrders])
 
   const handleViewDetails = () => {
-    navigate("/food/restaurant/finance-details", { state: { financeData, restaurantData } })
+    navigate("/restaurant/finance-details", { state: { financeData, restaurantData } })
   }
 
   const getWithdrawalStatusClass = (statusRaw) => {
@@ -701,18 +698,11 @@ export default function HubFinance() {
   }, [showDownloadMenu])
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="restaurant-page min-h-full bg-gray-100">
       {/* Navbar */}
       <div className="sticky bg-white top-0 z-40 px-4 py-3 border-b border-gray-200">
         <div className="flex items-center justify-between">
-          <div className="flex-1 min-w-0 flex items-center gap-2">
-            <button
-              onClick={goBack}
-              className="p-1.5 hover:bg-gray-100 rounded-full transition-colors shrink-0"
-              aria-label="Go back"
-            >
-              <ArrowLeft className="w-5 h-5 text-gray-700" />
-            </button>
+          <div className="flex-1 min-w-0 flex items-start gap-2">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-1">
                 <p className="text-lg font-bold text-gray-900 truncate">
@@ -741,20 +731,20 @@ export default function HubFinance() {
           <div className="flex items-center gap-1 ml-2">
             <button
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              onClick={() => navigate("/food/restaurant/withdrawal-history")}
+              onClick={() => navigate("/restaurant/withdrawal-history")}
               title="Withdrawal History"
             >
               <Wallet className="w-5 h-5 text-gray-700" />
             </button>
             <button
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              onClick={() => navigate("/food/restaurant/notifications")}
+              onClick={() => navigate("/restaurant/notifications")}
             >
               <Bell className="w-5 h-5 text-gray-700" />
             </button>
             <button
               className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-              onClick={() => navigate("/food/restaurant/explore")}
+              onClick={() => navigate("/restaurant/explore")}
             >
               <Menu className="w-5 h-5 text-gray-700" />
             </button>
@@ -789,7 +779,7 @@ export default function HubFinance() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 pt-6 pb-28">
+      <div className="px-4 pt-6 pb-28">
         {activeTab === "payouts" && (
           <div className="space-y-6">
             {/* Current cycle */}
@@ -1188,9 +1178,9 @@ export default function HubFinance() {
                         </div>
                         <div className="text-right">
                           <p className="text-sm font-semibold text-gray-900">
-                            ₹{(order.totalAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                            ₹{(order.payout || order.restaurantEarning || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </p>
-                          <p className="text-xs text-gray-500">Total</p>
+                          <p className="text-xs text-gray-500">Earning</p>
                         </div>
                       </div>
                     </div>
@@ -1220,7 +1210,7 @@ export default function HubFinance() {
               className="fixed inset-0 z-50 flex items-center justify-center p-4"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+              <div className="bg-white rounded-lg shadow-xl restaurant-modal-inline max-w-md p-6">
                 <div className="flex items-center justify-between mb-4">
                   <h2 className="text-xl font-bold text-gray-900">Withdraw Amount</h2>
                   <button
@@ -1320,7 +1310,6 @@ export default function HubFinance() {
         )}
       </AnimatePresence>
 
-      <BottomNavOrders />
     </div>
   )
 }

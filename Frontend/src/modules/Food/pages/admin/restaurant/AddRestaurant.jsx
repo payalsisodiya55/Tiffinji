@@ -8,15 +8,15 @@ import { Label } from "@food/components/ui/label"
 import { Button } from "@food/components/ui/button"
 import { adminAPI, uploadAPI, zoneAPI } from "@food/api"
 import { toast } from "sonner"
-const EMAIL_REGEX = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/i
-const debugLog = (...args) => {}
+import { EMAIL_REGEX } from "@/shared/utils/emailValidation"
+const debugLog = (...args) => { }
 const debugWarn = (...args) => { console.warn(...args) }
 const debugError = (...args) => { console.error(...args) }
 
 
 const cuisinesOptions = [
-  "North Indian",
-  "South Indian",
+  "North tiffinji",
+  "South tiffinji",
   "Chinese",
   "Pizza",
   "Burgers",
@@ -300,7 +300,7 @@ export default function AddRestaurant() {
         ),
         profileImage:
           !isUploadableFile(step2.profileImage) &&
-          (step2.profileImage?.url || (typeof step2.profileImage === "string" && step2.profileImage.trim()))
+            (step2.profileImage?.url || (typeof step2.profileImage === "string" && step2.profileImage.trim()))
             ? step2.profileImage
             : null,
       }
@@ -309,17 +309,17 @@ export default function AddRestaurant() {
         ...step3,
         panImage:
           !isUploadableFile(step3.panImage) &&
-          (step3.panImage?.url || (typeof step3.panImage === "string" && step3.panImage.trim()))
+            (step3.panImage?.url || (typeof step3.panImage === "string" && step3.panImage.trim()))
             ? step3.panImage
             : null,
         gstImage:
           !isUploadableFile(step3.gstImage) &&
-          (step3.gstImage?.url || (typeof step3.gstImage === "string" && step3.gstImage.trim()))
+            (step3.gstImage?.url || (typeof step3.gstImage === "string" && step3.gstImage.trim()))
             ? step3.gstImage
             : null,
         fssaiImage:
           !isUploadableFile(step3.fssaiImage) &&
-          (step3.fssaiImage?.url || (typeof step3.fssaiImage === "string" && step3.fssaiImage.trim()))
+            (step3.fssaiImage?.url || (typeof step3.fssaiImage === "string" && step3.fssaiImage.trim()))
             ? step3.fssaiImage
             : null,
       }
@@ -420,60 +420,15 @@ export default function AddRestaurant() {
       errors.push("Owner name must contain valid characters")
     }
     if (!step1.ownerEmail?.trim()) errors.push("Owner email is required")
-    if (step1.ownerEmail?.trim() && !/^[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$/.test(step1.ownerEmail.trim())) {
-      errors.push("Please enter a valid email address (lowercase letters only)")
-    }
+    if (step1.ownerEmail?.trim() && !EMAIL_REGEX.test(step1.ownerEmail.trim())) errors.push("Please enter a valid email address")
     if (!step1.ownerPhone?.trim()) errors.push("Owner phone number is required")
     if (step1.ownerPhone?.trim() && !PHONE_REGEX.test(step1.ownerPhone.trim())) errors.push("Owner phone number must be 10 digits")
     if (!step1.primaryContactNumber?.trim()) errors.push("Primary contact number is required")
     if (step1.primaryContactNumber?.trim() && !PHONE_REGEX.test(step1.primaryContactNumber.trim())) errors.push("Primary contact number must be 10 digits")
     if (!step1.zoneId?.trim()) errors.push("Service zone is required")
-    
-    // Address fields validation
-    const area = step1.location?.area || ""
-    const city = step1.location?.city || ""
-    const state = step1.location?.state || ""
-    const pincode = step1.location?.pincode || ""
-
-    if (!area.trim()) {
-      errors.push("Area/Sector/Locality is required")
-    } else if (/[^A-Za-z0-9\s]/.test(area)) {
-      errors.push("Area/Sector/Locality must not contain special characters")
-    }
-
-    if (!city.trim()) {
-      errors.push("City is required")
-    } else if (/[^A-Za-z\s]/.test(city)) {
-      errors.push("City must contain characters only")
-    }
-
-    if (state.trim() && /[^A-Za-z\s]/.test(state)) {
-      errors.push("State must contain characters only")
-    }
-
-    if (pincode.trim() && !/^\d{6}$/.test(pincode.trim())) {
-      errors.push("Pincode must be exactly 6 digits")
-    }
-
+    if (!step1.location?.area?.trim()) errors.push("Area/Sector/Locality is required")
+    if (!step1.location?.city?.trim()) errors.push("City is required")
     return errors
-  }
-
-  const handleTimingValidation = (updatedOpening = step2.openingTime, updatedClosing = step2.closingTime) => {
-    if (!updatedOpening || !updatedClosing) return
-
-    const openingMinutes = timeStringToMinutes(updatedOpening)
-    let closingMinutes = timeStringToMinutes(updatedClosing)
-
-    if (openingMinutes !== null && closingMinutes !== null) {
-      if (closingMinutes === 0 && openingMinutes !== 0) {
-        closingMinutes = 1440
-      }
-      if (openingMinutes === closingMinutes) {
-        toast.error("Opening time and closing time cannot be same", { id: "timing-error" })
-      } else {
-        toast.dismiss("timing-error")
-      }
-    }
   }
 
   const validateStep2 = () => {
@@ -481,21 +436,16 @@ export default function AddRestaurant() {
     if (!step2.menuImages || step2.menuImages.length === 0) errors.push("At least one menu image is required")
     if (!step2.profileImage) errors.push("Restaurant profile image is required")
     if (!step2.cuisines || step2.cuisines.length === 0) errors.push("Please select at least one cuisine")
-    if (!step2.estimatedDeliveryTime?.trim()) {
-      errors.push("Estimated delivery time is required")
-    } else if (/\D/.test(step2.estimatedDeliveryTime.trim())) {
-      errors.push("Estimated delivery time must contain digits only")
-    }
+    if (!step2.estimatedDeliveryTime?.trim()) errors.push("Estimated delivery time is required")
     if (!step2.openingTime?.trim()) errors.push("Opening time is required")
     if (!step2.closingTime?.trim()) errors.push("Closing time is required")
     const openingMinutes = timeStringToMinutes(step2.openingTime)
-    let closingMinutes = timeStringToMinutes(step2.closingTime)
+    const closingMinutes = timeStringToMinutes(step2.closingTime)
     if (openingMinutes !== null && closingMinutes !== null) {
-      if (closingMinutes === 0 && openingMinutes !== 0) {
-        closingMinutes = 1440
-      }
       if (openingMinutes === closingMinutes) {
         errors.push("Opening time and closing time cannot be same")
+      } else if (closingMinutes < openingMinutes) {
+        errors.push("Closing time cannot be less than opening time")
       }
     }
     if (!step2.openDays || step2.openDays.length === 0) errors.push("Please select at least one open day")
@@ -724,7 +674,7 @@ export default function AddRestaurant() {
         }
         await new Promise((r) => setTimeout(r, 100))
       }
-      
+
       if (!inputElement || cancelled) return
 
       const loadMaps = async () => {
@@ -749,15 +699,15 @@ export default function AddRestaurant() {
         // 4. Check for any existing script and force libraries=places
         const scripts = Array.from(document.getElementsByTagName("script"))
         const mapsScript = scripts.find(s => s.src?.includes("maps.googleapis.com/maps/api/js"))
-        
+
         if (mapsScript && !mapsScript.src.includes("libraries=places")) {
           mapsScript.remove()
         } else if (mapsScript && mapsScript.src.includes("libraries=places")) {
-           for (let i = 0; i < 60; i++) {
-              if (window.google?.maps?.places?.Autocomplete) return true
-              if (cancelled) return false
-              await new Promise(r => setTimeout(r, 100))
-           }
+          for (let i = 0; i < 60; i++) {
+            if (window.google?.maps?.places?.Autocomplete) return true
+            if (cancelled) return false
+            await new Promise(r => setTimeout(r, 100))
+          }
         }
 
         // 5. Create and append new script
@@ -783,20 +733,20 @@ export default function AddRestaurant() {
         const formattedAddress = place?.formatted_address || ""
         const comps = Array.isArray(place?.address_components) ? place.address_components : []
         const get = (types) => comps.find((c) => types.some((t) => c.types?.includes(t)))?.long_name || ""
-        
+
         const area = get(["sublocality_level_1", "sublocality", "neighborhood"]) || get(["locality"])
         const city = get(["locality"]) || get(["administrative_area_level_2"])
         const state = get(["administrative_area_level_1"]) || get(["administrative_area_level_2"])
         const pincode = get(["postal_code"])
         const lat = place?.geometry?.location?.lat?.()
         const lng = place?.geometry?.location?.lng?.()
-        
+
         return {
           formattedAddress,
-          area: String(area || "").replace(/[^A-Za-z0-9\s]/g, ""),
-          city: String(city || "").replace(/[^A-Za-z\s]/g, ""),
-          state: String(state || "").replace(/[^A-Za-z\s]/g, ""),
-          pincode: String(pincode || "").replace(/\D/g, "").slice(0, 6),
+          area,
+          city,
+          state,
+          pincode,
           latitude: typeof lat === 'number' ? Number(lat.toFixed(6)) : "",
           longitude: typeof lng === 'number' ? Number(lng.toFixed(6)) : "",
         }
@@ -816,14 +766,14 @@ export default function AddRestaurant() {
             types: ["geocode", "establishment"]
           }
         )
-        
+
         inputElement.setAttribute('data-google-places-initialized', 'true')
         placesAutocompleteRef.current = autocomplete
 
         autocomplete.addListener("place_changed", () => {
           const place = autocomplete.getPlace()
           if (!place?.geometry) return
-          
+
           const parsed = parsePlace(place)
           setStep1((prev) => ({
             ...prev,
@@ -839,11 +789,11 @@ export default function AddRestaurant() {
               longitude: parsed.longitude !== "" ? parsed.longitude : prev.location.longitude,
             },
           }))
-          
+
           setLocationSearchValue(parsed.formattedAddress)
           inputElement.blur()
         })
-        
+
         const pacContainerFix = () => {
           const applyFix = () => {
             const containers = document.querySelectorAll('.pac-container');
@@ -860,7 +810,7 @@ export default function AddRestaurant() {
           setTimeout(applyFix, 100);
           setTimeout(applyFix, 300);
         };
-        
+
         inputElement.addEventListener('focus', pacContainerFix);
         inputElement.addEventListener('input', pacContainerFix);
       } catch (e) {
@@ -868,12 +818,12 @@ export default function AddRestaurant() {
       }
     }
 
-    init().catch(() => {})
+    init().catch(() => { })
 
     return () => {
       cancelled = true
       if (autocomplete) {
-        try { window.google?.maps?.event?.clearInstanceListeners(autocomplete) } catch {}
+        try { window.google?.maps?.event?.clearInstanceListeners(autocomplete) } catch { }
       }
       if (locationSearchInputRef.current) {
         locationSearchInputRef.current.removeAttribute('data-google-places-initialized')
@@ -938,22 +888,20 @@ export default function AddRestaurant() {
               <button
                 type="button"
                 onClick={() => setStep1({ ...step1, pureVegRestaurant: true })}
-                className={`px-3 py-1.5 text-xs rounded-full border ${
-                  step1.pureVegRestaurant === true
+                className={`px-3 py-1.5 text-xs rounded-full border ${step1.pureVegRestaurant === true
                     ? "bg-green-600 text-white border-green-600"
                     : "bg-white text-gray-700 border-gray-200"
-                }`}
+                  }`}
               >
                 Yes, Pure Veg
               </button>
               <button
                 type="button"
                 onClick={() => setStep1({ ...step1, pureVegRestaurant: false })}
-                className={`px-3 py-1.5 text-xs rounded-full border ${
-                  step1.pureVegRestaurant === false
+                className={`px-3 py-1.5 text-xs rounded-full border ${step1.pureVegRestaurant === false
                     ? "bg-gray-900 text-white border-gray-900"
                     : "bg-white text-gray-700 border-gray-200"
-                }`}
+                  }`}
               >
                 No, Mixed Menu
               </button>
@@ -982,7 +930,7 @@ export default function AddRestaurant() {
             <Input
               type="email"
               value={step1.ownerEmail || ""}
-              onChange={(e) => setStep1({ ...step1, ownerEmail: e.target.value.toLowerCase() })}
+              onChange={(e) => setStep1({ ...step1, ownerEmail: e.target.value })}
               className="mt-1 bg-white text-sm text-black placeholder-black"
               placeholder="owner@example.com"
             />
@@ -1039,10 +987,10 @@ export default function AddRestaurant() {
                         ...prev.location,
                         formattedAddress: display,
                         addressLine1: display,
-                        area: (area || prev.location.area).replace(/[^A-Za-z0-9\s]/g, ""),
-                        city: (city || prev.location.city).replace(/[^A-Za-z\s]/g, ""),
-                        state: (state || prev.location.state).replace(/[^A-Za-z\s]/g, ""),
-                        pincode: (pincode || prev.location.pincode).replace(/\D/g, "").slice(0, 6),
+                        area: area || prev.location.area,
+                        city: city || prev.location.city,
+                        state: state || prev.location.state,
+                        pincode: pincode || prev.location.pincode,
                         latitude: lat,
                         longitude: lng,
                       },
@@ -1057,7 +1005,7 @@ export default function AddRestaurant() {
               ))}
             </div>
           )}
-          
+
           <p className="text-[11px] text-gray-500 mt-1">
             Search to auto-fill Area, City, State, Pincode and coordinates.
           </p>
@@ -1099,13 +1047,13 @@ export default function AddRestaurant() {
         <div className="space-y-3">
           <Input
             value={step1.location?.area || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, area: e.target.value.replace(/[^A-Za-z0-9\s]/g, "") } })}
+            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, area: e.target.value } })}
             className="bg-white text-sm"
             placeholder="Area / Sector / Locality*"
           />
           <Input
             value={step1.location?.city || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, city: e.target.value.replace(/[^A-Za-z\s]/g, "") } })}
+            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, city: e.target.value } })}
             className="bg-white text-sm"
             placeholder="City*"
           />
@@ -1123,17 +1071,15 @@ export default function AddRestaurant() {
           />
           <Input
             value={step1.location?.state || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, state: e.target.value.replace(/[^A-Za-z\s]/g, "") } })}
+            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, state: e.target.value } })}
             className="bg-white text-sm"
             placeholder="State (optional)"
           />
           <Input
             value={step1.location?.pincode || ""}
-            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, pincode: e.target.value.replace(/\D/g, "").slice(0, 6) } })}
+            onChange={(e) => setStep1({ ...step1, location: { ...step1.location, pincode: e.target.value } })}
             className="bg-white text-sm"
             placeholder="Pin code (optional)"
-            inputMode="numeric"
-            maxLength={6}
           />
           <Input
             value={step1.location?.landmark || ""}
@@ -1262,11 +1208,19 @@ export default function AddRestaurant() {
                 value={step2.openingTime || ""}
                 onChange={(e) => {
                   const nextOpening = e.target.value
+                  const closingMinutes = timeStringToMinutes(step2.closingTime)
+                  const openingMinutes = timeStringToMinutes(nextOpening)
+                  if (openingMinutes !== null && closingMinutes !== null) {
+                    if (openingMinutes === closingMinutes) {
+                      toast.error("Opening time and closing time cannot be same")
+                      return
+                    }
+                    if (closingMinutes < openingMinutes) {
+                      toast.error("Closing time cannot be less than opening time")
+                      return
+                    }
+                  }
                   setStep2({ ...step2, openingTime: nextOpening })
-                  toast.dismiss("timing-error")
-                }}
-                onBlur={() => {
-                  handleTimingValidation(step2.openingTime, step2.closingTime)
                 }}
                 autoComplete="off"
                 className="bg-white text-sm"
@@ -1279,11 +1233,19 @@ export default function AddRestaurant() {
                 value={step2.closingTime || ""}
                 onChange={(e) => {
                   const nextClosing = e.target.value
+                  const openingMinutes = timeStringToMinutes(step2.openingTime)
+                  const closingMinutes = timeStringToMinutes(nextClosing)
+                  if (openingMinutes !== null && closingMinutes !== null) {
+                    if (openingMinutes === closingMinutes) {
+                      toast.error("Opening time and closing time cannot be same")
+                      return
+                    }
+                    if (closingMinutes < openingMinutes) {
+                      toast.error("Closing time cannot be less than opening time")
+                      return
+                    }
+                  }
                   setStep2({ ...step2, closingTime: nextClosing })
-                  toast.dismiss("timing-error")
-                }}
-                onBlur={() => {
-                  handleTimingValidation(step2.openingTime, step2.closingTime)
                 }}
                 autoComplete="off"
                 className="bg-white text-sm"
@@ -1296,10 +1258,10 @@ export default function AddRestaurant() {
           <Label className="text-xs text-gray-700">Estimated delivery time*</Label>
           <Input
             value={step2.estimatedDeliveryTime || ""}
-            onChange={(e) => setStep2({ ...step2, estimatedDeliveryTime: e.target.value.replace(/\D/g, "") })}
+            onChange={(e) => setStep2({ ...step2, estimatedDeliveryTime: e.target.value })}
             autoComplete="off"
             className="mt-1 bg-white text-sm"
-            placeholder="e.g., 30 (digits only)"
+            placeholder="e.g., 25-30 mins"
           />
         </div>
 

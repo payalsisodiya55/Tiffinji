@@ -2,8 +2,7 @@ import { toast } from "sonner";
 import { userAPI, restaurantAPI, deliveryAPI, adminAPI } from "@food/api";
 import { initializeApp, getApp, getApps } from "firebase/app";
 import fallbackNotificationSound from "@food/assets/audio/alert.mp3";
-
-const pushNotificationSoundPath = "/zomato_sms.mp3";
+import pushNotificationSoundPath from "@food/assets/audio/zomato_sms.mp3";
 
 const DEFAULT_FIREBASE_CONFIG = {
   apiKey: "",
@@ -23,16 +22,13 @@ const MESSAGING_APP_NAME = "web-push-app";
 const recentForegroundNotifications = new Map();
 let pushSoundAudio = null;
 let pushSoundUnlocked = false;
+let gestureAudioPrimed = false;
 let pushSoundContext = null;
 const PUSH_DEBUG_PREFIX = "[push-debug]";
 const notificationDedupWindowMs = 8000;
 
-const pushDebugLog = (prefix, message, data = {}) => {
-  console.log(`${prefix} ${message}`, data);
-};
-const pushDebugWarn = (prefix, message, data = {}) => {
-  console.warn(`${prefix} ${message}`, data);
-};
+const pushDebugLog = (prefix, message, data = {}) => {};
+const pushDebugWarn = (prefix, message, data = {}) => {};
 
 function normalizeModuleFromPath(pathname = window.location.pathname) {
   if (pathname.includes("/restaurant") && !pathname.includes("/restaurants")) return "restaurant";
@@ -43,11 +39,6 @@ function normalizeModuleFromPath(pathname = window.location.pathname) {
 
 function isRecord(value) {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
-}
-
-function shouldSuppressForegroundPush(payload = {}) {
-  const type = String(payload?.data?.type || "").trim().toLowerCase();
-  return type === "restaurant_approved";
 }
 
 function getPushSoundSources(moduleName = normalizeModuleFromPath()) {
@@ -218,6 +209,34 @@ export function isPushSoundEnabled() {
   return localStorage.getItem(pushSoundEnabledStorageKey) === "true";
 }
 
+function isPushSoundActive() {
+  return pushSoundUnlocked || isPushSoundEnabled();
+}
+
+/** Prime Web Audio on a user gesture without playing notification MP3 (iOS-safe). */
+async function primeAudioGesture() {
+  if (gestureAudioPrimed) return true;
+
+  const ctx = getAudioContext();
+  if (!ctx) return false;
+
+  if (ctx.state === "suspended") {
+    await ctx.resume();
+  }
+
+  const now = ctx.currentTime;
+  const oscillator = ctx.createOscillator();
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0, now);
+  oscillator.connect(gain);
+  gain.connect(ctx.destination);
+  oscillator.start(now);
+  oscillator.stop(now + 0.01);
+
+  gestureAudioPrimed = true;
+  return true;
+}
+
 async function triggerWebViewNativeNotification(payload = {}) {
   if (typeof window === "undefined") return false;
 
@@ -260,6 +279,11 @@ async function triggerWebViewNativeNotification(payload = {}) {
 
 async function playPushSound(payload = {}) {
   try {
+    if (!isPushSoundActive()) {
+      pushDebugLog(PUSH_DEBUG_PREFIX, "Push sound skipped — not explicitly enabled");
+      return;
+    }
+
     pushDebugLog(PUSH_DEBUG_PREFIX, "playPushSound called", {
       notificationKey: getNotificationKey(payload),
       pushSoundUnlocked,
@@ -268,7 +292,11 @@ async function playPushSound(payload = {}) {
     });
     const usedNativeBridge = await triggerWebViewNativeNotification(payload);
 
-    if (typeof navigator !== "undefined" && typeof navigator.vibrate === "function") {
+    if (
+      typeof navigator !== "undefined" &&
+      typeof navigator.vibrate === "function" &&
+      isPushSoundActive()
+    ) {
       pushDebugLog(PUSH_DEBUG_PREFIX, "Triggering vibration");
       navigator.vibrate([200, 100, 200, 100, 300]);
     }
@@ -278,7 +306,7 @@ async function playPushSound(payload = {}) {
       return;
     }
 
-    if (!pushSoundUnlocked) {
+    if (!pushSoundUnlocked && !isPushSoundEnabled()) {
       pushDebugWarn(PUSH_DEBUG_PREFIX, "Push sound blocked because sound is not enabled/unlocked");
       return;
     }
@@ -306,33 +334,19 @@ async function playPushSound(payload = {}) {
 }
 
 function setupPushSoundUnlock() {
-  if (typeof window === "undefined" || pushSoundUnlocked) return;
+  if (typeof window === "undefined" || gestureAudioPrimed) return;
 
   const unlock = async () => {
-    let audio = null;
     try {
-      audio = ensurePushSoundAudio();
-      if (!audio) return;
-      pushDebugLog(PUSH_DEBUG_PREFIX, "Attempting passive push sound unlock");
-      audio.muted = true;
-      await audio.play();
-      audio.pause();
-      audio.currentTime = 0;
-      pushSoundUnlocked = true;
-      localStorage.setItem(pushSoundEnabledStorageKey, "true");
-      pushDebugLog(PUSH_DEBUG_PREFIX, "Passive push sound unlock succeeded");
-      window.dispatchEvent(new CustomEvent("push-sound-enabled"));
+      await primeAudioGesture();
+      pushDebugLog(PUSH_DEBUG_PREFIX, "Silent audio gesture primed (no notification MP3)");
     } catch (error) {
-      pushDebugWarn(PUSH_DEBUG_PREFIX, "Passive push sound unlock failed", {
+      pushDebugWarn(PUSH_DEBUG_PREFIX, "Silent audio gesture prime failed", {
         error: error?.message || error,
       });
-    } finally {
-      if (audio) {
-        audio.muted = false;
-      }
     }
 
-    if (pushSoundUnlocked) {
+    if (gestureAudioPrimed) {
       window.removeEventListener("pointerdown", unlock);
       window.removeEventListener("keydown", unlock);
       window.removeEventListener("touchstart", unlock);
@@ -347,15 +361,9 @@ function setupPushSoundUnlock() {
 export async function enablePushNotificationSound() {
   if (typeof window === "undefined") return false;
 
-  let audio = null;
   try {
-    audio = ensurePushSoundAudio();
-    if (!audio) return false;
     pushDebugLog(PUSH_DEBUG_PREFIX, "Manual push sound enable started");
-    audio.muted = true;
-    await audio.play();
-    audio.pause();
-    audio.currentTime = 0;
+    await primeAudioGesture();
     pushSoundUnlocked = true;
     localStorage.setItem(pushSoundEnabledStorageKey, "true");
     window.dispatchEvent(new CustomEvent("push-sound-enabled"));
@@ -372,7 +380,6 @@ export async function enablePushNotificationSound() {
           source: previewAudio.src,
           error: error?.message || error,
         });
-        // Try next preview source.
       }
     }
 
@@ -387,18 +394,13 @@ export async function enablePushNotificationSound() {
       pushSoundUnlocked = true;
       localStorage.setItem(pushSoundEnabledStorageKey, "true");
       window.dispatchEvent(new CustomEvent("push-sound-enabled"));
-      }
-    catch (beepError) {
+    } catch (beepError) {
       pushDebugWarn(PUSH_DEBUG_PREFIX, "Synth beep fallback failed", {
         error: beepError?.message || beepError,
       });
       return false;
     }
     return true;
-  } finally {
-    if (audio) {
-      audio.muted = false;
-    }
   }
 }
 
@@ -478,11 +480,6 @@ async function saveTokenByModule(moduleName, token, platform = "web") {
   }
   if (moduleName === "user") {
     await userAPI.saveFcmToken(token, { platform });
-    return;
-  }
-  if (moduleName === "admin") {
-    await adminAPI.saveFcmToken(token, platform);
-    return;
   }
 }
 
@@ -514,17 +511,17 @@ async function registerNativeWebViewFcmToken(moduleName) {
   }
 }
 
-function showForegroundNotification(payload = {}) {
+// options.fromSwRelay = true means the service worker already showed the system
+// notification; we should only show the in-app toast here to avoid duplicates.
+function showForegroundNotification(payload = {}, options = {}) {
   if (!isRecord(payload)) {
     pushDebugWarn(PUSH_DEBUG_PREFIX, "Ignoring malformed foreground notification payload", { payload });
     return;
   }
-  if (shouldSuppressForegroundPush(payload)) {
-    pushDebugLog(PUSH_DEBUG_PREFIX, "Suppressed foreground push notification", { payload });
-    return;
-  }
+
+  const moduleName = normalizeModuleFromPath();
   const notificationKey = getNotificationKey(payload);
-  pushDebugLog(PUSH_DEBUG_PREFIX, "showForegroundNotification received", { notificationKey, payload });
+  pushDebugLog(PUSH_DEBUG_PREFIX, "showForegroundNotification received", { notificationKey, fromSwRelay: options.fromSwRelay, payload });
   if (wasRecentlyHandled(notificationKey)) {
     return;
   }
@@ -549,16 +546,49 @@ function showForegroundNotification(payload = {}) {
 
   playPushSound(payload);
 
-  // Force system notification even when the tab is in focus
-  if (typeof Notification !== "undefined" && Notification.permission === "granted") {
+  const payloadOrderId =
+    payload?.data?.orderMongoId ||
+    payload?.data?.order_id ||
+    payload?.data?.orderId ||
+    payload?.data?.id ||
+    "";
+  const isDeliveryOrderSignal =
+    moduleName === "delivery" &&
+    Boolean(
+      payloadOrderId ||
+      payload?.data?.type === "new_order" ||
+      title.toLowerCase().includes("order") ||
+      body.toLowerCase().includes("order")
+    );
+
+  if (typeof window !== "undefined" && isDeliveryOrderSignal) {
+    const relayPayload = {
+      orderId: payload?.data?.orderId || payload?.data?.order_id || payloadOrderId || undefined,
+      orderMongoId: payload?.data?.orderMongoId || payloadOrderId || undefined,
+      payload,
+      fromSwRelay: Boolean(options.fromSwRelay),
+    };
+    pushDebugLog(PUSH_DEBUG_PREFIX, "Dispatching delivery FCM alert to in-app flow", relayPayload);
+    window.dispatchEvent(new CustomEvent("delivery-fcm-order-alert", { detail: relayPayload }));
+  }
+
+  // Only show a system notification from the PAGE if this is NOT a SW relay.
+  // When it IS a SW relay the service worker already showed the notification —
+  // creating another one here would produce a duplicate.
+  const isTabVisible = typeof document !== "undefined" && document.visibilityState === "visible";
+
+  // Only show a system notification from the PAGE if:
+  // 1. This is NOT a relay from the service worker (the SW already handles background alerts).
+  // 2. The tab is currently HIDDEN (if visible, the user sees the toast instead).
+  // 3. We are NOT in a mobile WebView (where native notifications are preferred).
+  if (!options.fromSwRelay && !isTabVisible && !isFlutterWebView() && typeof Notification !== "undefined" && Notification.permission === "granted") {
     try {
-      pushDebugLog(PUSH_DEBUG_PREFIX, "Showing browser notification from page", {
+      pushDebugLog(PUSH_DEBUG_PREFIX, "Showing browser notification from page (tab is hidden)", {
         title,
         body,
         image,
         notificationKey,
       });
-      // Use service worker to show native system notification to ensure it bypasses focus checks
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistration().then(registration => {
           if (registration) {
@@ -603,12 +633,44 @@ function showForegroundNotification(payload = {}) {
     }
   }
 
-  // Fallback: Always show in-app toast just in case OS native popups are blocked by Windows DND
+  // Show in-app toast if tab is visible.
   if (typeof document !== "undefined" && document.visibilityState === "visible") {
+    // Cross-tab deduplication using BroadcastChannel and LocalStorage
+    const notificationId = payload?.data?.broadcastId || payload?.data?.orderId || payload?.data?.id || (title + body).replace(/\s+/g, '');
+    const channelName = `notification_dedupe_${notificationId}`;
+    const storageKey = `handled_notify_${notificationId}`;
+
+    if (localStorage.getItem(storageKey)) {
+      return;
+    }
+
+    localStorage.setItem(storageKey, "true");
+    setTimeout(() => localStorage.removeItem(storageKey), 5000);
+
+    const channel = new BroadcastChannel(channelName);
+    channel.postMessage({ type: "HANDLED" });
+    channel.close();
+
+    const isNewOrder = 
+      title.toLowerCase().includes("order") || 
+      body.toLowerCase().includes("order") || 
+      payload?.data?.orderId;
+
     if (body) {
-      toast.success(`${title}: ${body}`);
+      toast(title, {
+        description: body,
+        duration: isNewOrder ? 15000 : 6000,
+        important: isNewOrder,
+        action: payload?.data?.targetUrl ? {
+          label: 'View',
+          onClick: () => window.location.href = payload.data.targetUrl
+        } : undefined
+      });
     } else {
-      toast.success(title);
+      toast(title, {
+        duration: isNewOrder ? 15000 : 6000,
+        important: isNewOrder
+      });
     }
   }
 }
@@ -631,7 +693,8 @@ function attachServiceWorkerMessageListener() {
         return;
       }
       pushDebugLog(PUSH_DEBUG_PREFIX, "Received service worker message in page", { payload: data.payload });
-      scheduleForegroundNotification(data.payload);
+      // fromSwRelay: true — SW already showed the system notification; only show toast.
+      scheduleForegroundNotification(data.payload, { fromSwRelay: true });
     });
   }
 
@@ -660,10 +723,10 @@ function attachServiceWorkerMessageListener() {
   serviceWorkerMessageListenerAttached = true;
 }
 
-function scheduleForegroundNotification(payload) {
+function scheduleForegroundNotification(payload, options = {}) {
   // Keep message handlers fast to avoid Chrome [Violation] warnings.
   // Defer heavier work (toast, audio) to idle time / next tick.
-  const run = () => showForegroundNotification(payload);
+  const run = () => showForegroundNotification(payload, options);
   try {
     if (typeof window !== "undefined" && typeof window.requestIdleCallback === "function") {
       window.requestIdleCallback(run, { timeout: 1000 });
@@ -683,6 +746,10 @@ export function initPushNotificationClient() {
     moduleName,
     soundEnabled: isPushSoundEnabled(),
   });
+
+  if (moduleName === "admin") {
+    return;
+  }
 
   if (isPushSoundEnabled()) {
     pushSoundUnlocked = true;
@@ -713,10 +780,12 @@ async function attachForegroundListener(firebaseAppInstance) {
 
 export async function registerWebPushForCurrentModule(pathname = window.location.pathname) {
   const moduleName = normalizeModuleFromPath(pathname);
-  initPushNotificationClient();
+  if (moduleName === "admin") return;
 
   const accessToken = localStorage.getItem(`${moduleName}_accessToken`);
   if (!accessToken) return;
+
+  initPushNotificationClient();
 
   const supportsBrowserPush = isSupportedBrowser() && isSecureContextForPush();
 
@@ -767,6 +836,13 @@ export async function registerWebPushForCurrentModule(pathname = window.location
         moduleName,
         tokenPreview: `${token.slice(0, 12)}...`,
       });
+
+      const lastSavedToken = getSavedToken(moduleName);
+      if (lastSavedToken === token) {
+        pushDebugLog(PUSH_DEBUG_PREFIX, "FCM token unchanged — skipping backend sync", { moduleName });
+        await attachForegroundListener(app);
+        return;
+      }
 
       // Cache the token in localStorage so it can be retrieved during logout for cleanup.
       setSavedToken(moduleName, token);

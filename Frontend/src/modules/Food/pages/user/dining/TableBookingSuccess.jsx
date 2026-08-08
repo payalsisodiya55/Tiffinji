@@ -6,22 +6,6 @@ import { motion } from "framer-motion"
 import confetti from "canvas-confetti"
 import { useEffect } from "react"
 
-const getRestaurantImage = (restaurant) => {
-    if (!restaurant) return ""
-    if (typeof restaurant.image === 'string' && restaurant.image) return restaurant.image
-    if (restaurant.profileImage) {
-        if (typeof restaurant.profileImage === 'string') return restaurant.profileImage
-        if (restaurant.profileImage.url) return restaurant.profileImage.url
-    }
-    if (Array.isArray(restaurant.coverImages) && restaurant.coverImages.length > 0) {
-        const first = restaurant.coverImages[0]
-        if (typeof first === 'string') return first
-        if (first?.url) return first.url
-    }
-    if (typeof restaurant.logo === 'string' && restaurant.logo) return restaurant.logo
-    return ""
-}
-
 export default function TableBookingSuccess() {
     const location = useLocation()
     const navigate = useNavigate()
@@ -67,7 +51,7 @@ export default function TableBookingSuccess() {
                 {booking.status === 'pending' ? (
                     <Clock className="w-12 h-12 text-amber-500" />
                 ) : (
-                    <CheckCircle2 className="w-12 h-12 text-[#7e3866]" />
+                    <CheckCircle2 className="w-12 h-12 text-primary" />
                 )}
             </motion.div>
 
@@ -84,7 +68,7 @@ export default function TableBookingSuccess() {
                     {booking.status === 'pending' ? 'Waiting for restaurant approval' : 'Your table is ready for you'}
                 </p>
                 <div className="pt-2">
-                    <span className="bg-[#F9F9FB] dark:bg-slate-900 text-[#7e3866] dark:text-purple-400 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-widest border border-[#7e3866]/20 dark:border-purple-400/20">
+                    <span className="bg-[#F9F9FB] dark:bg-slate-900 text-primary dark:text-purple-400 px-4 py-1 rounded-full text-xs font-bold uppercase tracking-widest border border-primary/20 dark:border-purple-400/20">
                         BOOKING ID: {booking.bookingId}
                     </span>
                 </div>
@@ -119,7 +103,7 @@ export default function TableBookingSuccess() {
                     <div className="flex items-center gap-4 text-left">
                         <div className="w-16 h-16 rounded-2xl bg-white dark:bg-slate-800 border border-slate-100 dark:border-slate-700 flex-shrink-0 p-1">
                             <img
-                                src={getRestaurantImage(booking.restaurant)}
+                                src={booking.restaurant?.image || booking.restaurant?.profileImage?.url || ""}
                                 className="w-full h-full object-cover rounded-xl"
                                 alt="restaurant"
                                 onError={(e) => {
@@ -128,7 +112,7 @@ export default function TableBookingSuccess() {
                             />
                         </div>
                         <div className="min-w-0">
-                            <h2 className="font-black text-lg text-gray-900 dark:text-slate-100 truncate">{booking.restaurant?.name || "The Great Indian Restaurant"}</h2>
+                            <h2 className="font-black text-lg text-gray-900 dark:text-slate-100 truncate">{booking.restaurant?.name || "The Great tiffinji Restaurant"}</h2>
                             <p className="text-xs text-gray-400 dark:text-slate-500 flex items-center gap-1 mt-0.5">
                                 <MapPin className="w-3 h-3" />
                                 <span className="truncate">
@@ -140,7 +124,7 @@ export default function TableBookingSuccess() {
                         </div>
                     </div>
 
-                     <div className="grid grid-cols-2 gap-4 py-6 border-y border-dashed border-slate-200 dark:border-slate-800 text-left">
+                    <div className="grid grid-cols-2 gap-4 py-6 border-y border-dashed border-slate-200 dark:border-slate-800 text-left">
                         <div className="space-y-1">
                             <p className="text-[10px] uppercase font-bold text-slate-400 dark:text-slate-500 tracking-wider">Date</p>
                             <div className="flex items-center gap-2 font-bold text-gray-800 dark:text-slate-200">
@@ -196,7 +180,7 @@ export default function TableBookingSuccess() {
                 </Button>
             </motion.div>
 
-            <p className="mt-8 text-[10px] font-bold text-slate-300 uppercase tracking-widest px-10 text-center">
+            <p className="fixed bottom-10 text-[10px] font-bold text-slate-300 uppercase tracking-widest px-10 text-center">
                 Show this ticket at the restaurant for a smooth entry
             </p>
         </AnimatedPage>

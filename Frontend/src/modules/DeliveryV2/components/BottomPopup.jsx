@@ -321,15 +321,11 @@ export default function BottomPopup({
                   e.stopPropagation()
                 }}
                 onTouchEnd={(e) => {
-                  // Handle touch end — respect closeOnHandleClick prop (same as onClick)
+                  // Handle touch end for mobile collapse toggle
                   debugLog('?? Handle touched, current collapsed:', isCollapsed)
                   e.stopPropagation()
                   e.preventDefault()
-                  if (closeOnHandleClick) {
-                    handleClose()
-                  } else {
-                    handleCollapseToggle(e)
-                  }
+                  handleCollapseToggle(e)
                 }}
                 onMouseDown={(e) => {
                   // Prevent drag when clicking handle
@@ -343,6 +339,9 @@ export default function BottomPopup({
                   background: 'transparent'
                 }}
               >
+                <ChevronDown
+                  className="w-6 h-6 text-gray-400 mb-1 pointer-events-none"
+                />
                 <div
                   className="w-12 h-1.5 bg-gray-300 rounded-full pointer-events-none"
                 />

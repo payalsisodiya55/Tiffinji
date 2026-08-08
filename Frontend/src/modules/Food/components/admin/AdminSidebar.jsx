@@ -51,10 +51,21 @@ import { cn } from "@food/utils/utils"
 import { Input } from "@food/components/ui/input"
 import { adminSidebarMenu } from "@food/utils/adminSidebarMenu"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
-import quickSpicyLogo from "@food/assets/quicky-spicy-logo.png"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+
+import { adminAPI } from "@food/api"
+import { API_BASE_URL } from "@food/api/config"
+import { normalizeImageUrl } from "@food/utils/common"
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
+
+const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api(?:\/v\d+)?\/?$/, "")
+const resolveAdminLogo = (media) => {
+  if (!media) return null
+  if (typeof media === "string") return normalizeImageUrl(media, BACKEND_ORIGIN) || null
+  const raw = media?.url || media?.secure_url || media?.imageUrl || media?.image || media?.src || ""
+  return normalizeImageUrl(raw, BACKEND_ORIGIN) || null
+}
 
 
 // Icon mapping
@@ -106,6 +117,19 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   const location = useLocation()
   const [searchQuery, setSearchQuery] = useState("")
   const [badges, setBadges] = useState({})
+  const [adminUser, setAdminUser] = useState(null)
+
+  useEffect(() => {
+    const loadAdminUser = () => {
+      try {
+        const userStr = localStorage.getItem('admin_user');
+        if (userStr) setAdminUser(JSON.parse(userStr));
+      } catch (e) { }
+    }
+    loadAdminUser()
+    window.addEventListener('adminAuthChanged', loadAdminUser)
+    return () => window.removeEventListener('adminAuthChanged', loadAdminUser)
+  }, [])
 
   useEffect(() => {
     const fetchBadges = async () => {
@@ -127,49 +151,71 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     const l = label.toLowerCase()
     const p = path?.toLowerCase() || ""
 
-    if (l.includes("food approval")) return badges.foodApprovals
-    if (l === "foods") return badges.foods
-    if (l === "restaurants" || l.includes("new joining request")) return badges.restaurants
-    if (l.includes("restaurant complaints")) return badges.restaurantComplaints
-    if (p.includes("orders/pending")) return badges.orders
-    if (p.includes("offline-payments")) return badges.offlinePayments
-    if (l.includes("support tickets")) return l.includes("delivery") ? badges.deliverySupportTickets : badges.userSupportTickets
-    if (l.includes("withdrawal")) return l.includes("delivery") ? badges.deliveryWithdrawals : badges.restaurantWithdrawals
-    if (l.includes("emergency help")) return badges.emergencyHelp
-    if (l.includes("earning addon history")) return badges.earningAddons
-    if (l.includes("safety emergency reports")) return badges.safetyReports
-    if (l === "deliveryman" && !p.includes("join-request")) return badges.deliveryPartners // expandable parent
-    if (l.includes("join-request")) return badges.deliveryPartners
-    if (l === "user feedback" || p.includes("contact-messages")) return badges.contactMessages
-    if (l.includes("support tickets")) return badges.supportTickets || (l.includes("delivery") ? badges.deliverySupportTickets : badges.userSupportTickets)
+    // FOOD MANAGEMENT
+    if (p.includes("food-approval")) return badges.foodApprovals || 0
+    if (l === "foods") return badges.foods || 0
+
+    // RESTAURANT MANAGEMENT
+    if (l === "restaurants") return (badges.restaurants || 0) + (badges.restaurantComplaints || 0)
+    if (p.includes("restaurants/joining-request")) return badges.restaurants || 0
+    if (p.includes("restaurants/complaints")) return badges.restaurantComplaints || 0
+
+    // ORDER MANAGEMENT
+    if (l === "orders") return (badges.orders || 0) + (badges.offlinePayments || 0)
+    if (p.includes("orders/pending")) return badges.orders || 0
+    if (p.includes("orders/offline-payments")) return badges.offlinePayments || 0
+
+    // CUSTOMER MANAGEMENT
+    if (p.includes("contact-messages")) return badges.contactMessages || 0
+    if (p === "/admin/food/support-tickets") return badges.userSupportTickets || 0
+
+    // DELIVERYMAN MANAGEMENT
+    if (l === "deliveryman") return (badges.deliveryPartners || 0) + (badges.earningAddons || 0)
+    if (p.includes("delivery-partners/join-request")) return badges.deliveryPartners || 0
+    if (p.includes("delivery-withdrawal")) return badges.deliveryWithdrawals || 0
+    if (p.includes("delivery-emergency-help")) return badges.emergencyHelp || 0
+    if (p.includes("delivery-support-tickets")) return badges.deliverySupportTickets || 0
+    if (p.includes("earning-addon-history")) return badges.earningAddons || 0
+
+    // HELP & SUPPORT
+    if (p.includes("safety-emergency-reports")) return badges.safetyReports || 0
+
+    // TRANSACTION MANAGEMENT
+    if (p.includes("restaurant-withdraws")) return badges.restaurantWithdrawals || 0
+
     return 0
   }
-  const [logoUrl, setLogoUrl] = useState(() => getCachedSettings()?.logo?.url || null)
+  const [logoUrl, setLogoUrl] = useState(() => resolveAdminLogo(localStorage.getItem('admin_app_logo')) || resolveAdminLogo(getCachedSettings()?.logo) || null)
   const [companyName, setCompanyName] = useState(() => getCachedSettings()?.companyName || null)
 
   // Load business settings logo
   useEffect(() => {
     const loadLogo = async () => {
       try {
-        // First check cache
-        let cached = getCachedSettings()
-        if (cached) {
-          if (cached.logo?.url) {
-            setLogoUrl(cached.logo.url)
+        const adminLogo = localStorage.getItem('admin_app_logo');
+        if (adminLogo) {
+          setLogoUrl(resolveAdminLogo(adminLogo));
+        } else {
+          // First check cache
+          let cached = getCachedSettings()
+          if (cached) {
+            if (cached.logo?.url) {
+              setLogoUrl(resolveAdminLogo(cached.logo))
+            }
+            if (cached.companyName) {
+              setCompanyName(cached.companyName)
+            }
           }
-          if (cached.companyName) {
-            setCompanyName(cached.companyName)
-          }
-        }
 
-        // Always try to load fresh data to ensure we have the latest
-        const settings = await loadBusinessSettings()
-        if (settings) {
-          if (settings.logo?.url) {
-            setLogoUrl(settings.logo.url)
-          }
-          if (settings.companyName) {
-            setCompanyName(settings.companyName)
+          // Always try to load fresh data to ensure we have the latest
+          const settings = await loadBusinessSettings()
+          if (settings) {
+            if (settings.logo?.url) {
+              setLogoUrl(resolveAdminLogo(settings.logo))
+            }
+            if (settings.companyName) {
+              setCompanyName(settings.companyName)
+            }
           }
         }
       } catch (error) {
@@ -180,28 +226,36 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     // Load immediately
     loadLogo()
 
-    // Also try after a small delay to ensure DOM is ready
-    const timeoutId = setTimeout(() => {
-      loadLogo()
-    }, 100)
-
     // Listen for business settings updates
     const handleSettingsUpdate = () => {
-      const cached = getCachedSettings()
-      if (cached) {
-        if (cached.logo?.url) {
-          setLogoUrl(cached.logo.url)
-        }
-        if (cached.companyName) {
-          setCompanyName(cached.companyName)
+      const adminLogo = localStorage.getItem('admin_app_logo');
+      if (adminLogo) {
+        setLogoUrl(resolveAdminLogo(adminLogo));
+      } else {
+        const cached = getCachedSettings()
+        if (cached) {
+          if (cached.logo?.url) {
+            setLogoUrl(resolveAdminLogo(cached.logo))
+          }
+          if (cached.companyName) {
+            setCompanyName(cached.companyName)
+          }
         }
       }
     }
+
+    // Listen for themeLoaded
+    const handleThemeLoaded = () => {
+      const adminLogo = localStorage.getItem('admin_app_logo');
+      if (adminLogo) setLogoUrl(resolveAdminLogo(adminLogo));
+    };
+
     window.addEventListener('businessSettingsUpdated', handleSettingsUpdate)
+    window.addEventListener('themeLoaded', handleThemeLoaded)
 
     return () => {
-      clearTimeout(timeoutId)
       window.removeEventListener('businessSettingsUpdated', handleSettingsUpdate)
+      window.removeEventListener('themeLoaded', handleThemeLoaded)
     }
   }, [])
 
@@ -267,16 +321,51 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
   // expandedSections state is initialized above in getInitialStates consolidation
 
 
-  // Filter menu items based on search query
+  // Filter menu items based on search query and sub-admin permissions
   const filteredMenuData = useMemo(() => {
+    let sourceMenu = adminSidebarMenu
+
+    if (adminUser?.role === 'SUB_ADMIN') {
+      const allowed = adminUser.accessibleModules || []
+      sourceMenu = []
+      adminSidebarMenu.forEach((item) => {
+        if (item.type === "section") {
+          const filteredItems = item.items.reduce((acc, subItem) => {
+            if (subItem.type === "expandable") {
+              // Check if they have the main parent permission OR any specific sub-permission
+              const allowedSubItems = (subItem.subItems || []).filter(si =>
+                allowed.includes(subItem.label) || allowed.includes(si.label)
+              )
+              if (allowedSubItems.length > 0) {
+                acc.push({ ...subItem, subItems: allowedSubItems })
+              } else if (allowed.includes(subItem.label)) {
+                // If no specific sub-items allowed but parent is allowed, show all (backwards compatibility)
+                acc.push(subItem)
+              }
+            } else if (allowed.includes(subItem.label)) {
+              acc.push(subItem)
+            }
+            return acc
+          }, [])
+          if (filteredItems.length > 0) {
+            sourceMenu.push({ ...item, items: filteredItems })
+          }
+        } else if (item.type === "link" || item.type === "expandable") {
+          if (allowed.includes(item.label)) {
+            sourceMenu.push(item)
+          }
+        }
+      })
+    }
+
     if (!searchQuery.trim()) {
-      return adminSidebarMenu
+      return sourceMenu
     }
 
     const query = searchQuery.toLowerCase().trim()
     const filtered = []
 
-    adminSidebarMenu.forEach((item) => {
+    sourceMenu.forEach((item) => {
       if (item.type === "link") {
         if (item.label.toLowerCase().includes(query)) {
           filtered.push(item)
@@ -314,7 +403,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
     })
 
     return filtered
-  }, [searchQuery])
+  }, [searchQuery, adminUser])
 
   // Auto-expand sections with matches when searching
   useEffect(() => {
@@ -355,10 +444,6 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
 
     if (targetPath === "/admin" || targetPath === "/admin/food") {
       return currentPath === targetPath
-    }
-
-    if (targetPath === "/admin/food/franchise") {
-      return currentPath === "/admin/food/franchise" || (currentPath.startsWith("/admin/food/franchise/") && !currentPath.startsWith("/admin/food/franchise/settings"))
     }
 
     // For subItems, check if this is the most specific match
@@ -413,7 +498,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
       const Icon = iconMap[item.icon] || Utensils
       return (
         <Link
-          key={index}
+          key={item.path || item.label || index}
           to={item.path}
           onClick={() => {
             if (window.innerWidth < 1024 && onClose) {
@@ -422,10 +507,11 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
           }}
           className={cn(
             "flex items-center gap-2.5 px-3 py-2 rounded-lg transition-all duration-300 ease-out menu-item-animate text-left",
-            isInSection ? "text-sm font-semibold" : "text-sm",
-            isActive(item.path)
-              ? "bg-white/10 text-white border border-white/15 font-semibold"
-              : "text-neutral-300 hover:bg-white/5 hover:text-white",
+            isInSection ? "text-base font-bold" : "text-base font-bold",
+            item.label === "Log out" ? "text-red-500 hover:bg-red-500/10 hover:text-red-400" :
+              isActive(item.path)
+                ? "bg-white/10 text-white border border-white/15"
+                : "text-neutral-100 hover:bg-white/5 hover:text-white",
             isCollapsed && "justify-center px-2"
           )}
           style={{ animationDelay: `${index * 0.05}s` }}
@@ -438,18 +524,18 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
           )} />
           {!isCollapsed && (
             <div className="flex-1 flex items-center justify-between overflow-hidden">
-              <span className={cn("text-left truncate", isInSection ? "font-semibold" : "font-medium")}>
+              <span className="text-left font-bold">
                 {item.label}
               </span>
               {getBadgeCount(item.label, item.path) > 0 && (
-                <span className="shrink-0 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1 min-w-[18px] text-center">
+                <span className="shrink-0 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1 min-w-[18px] text-center">
                   {getBadgeCount(item.label, item.path) > 99 ? "99+" : getBadgeCount(item.label, item.path)}
                 </span>
               )}
             </div>
           )}
           {isCollapsed && getBadgeCount(item.label, item.path) > 0 && (
-            <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-neutral-950 animate-pulse" />
+            <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-neutral-950 animate-pulse" />
           )}
         </Link>
       )
@@ -462,11 +548,11 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
 
       if (isCollapsed) {
         return (
-          <div key={index} className="menu-item-animate" style={{ animationDelay: `${index * 0.05}s` }}>
+          <div key={item.path || item.label || index} className="menu-item-animate" style={{ animationDelay: `${index * 0.05}s` }}>
             <button
               onClick={() => toggleSection(sectionKey)}
               className={cn(
-                "w-full flex items-center justify-center px-2 py-2 rounded-lg transition-all duration-300 ease-out text-sm font-medium",
+                "w-full flex items-center justify-center px-2 py-2 rounded-lg transition-all duration-300 ease-out text-base font-bold",
                 "text-white hover:bg-white/5"
               )}
               title={item.label}
@@ -474,7 +560,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
               <div className="relative">
                 <Icon className="w-4 h-4 shrink-0 text-neutral-300 transition-transform duration-300" />
                 {getBadgeCount(item.label, item.path) > 0 && (
-                  <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-red-600 rounded-full border-2 border-neutral-950 animate-pulse" />
+                  <span className="absolute top-0 right-0 w-2.5 h-2.5 bg-orange-500 rounded-full border-2 border-neutral-950 animate-pulse" />
                 )}
               </div>
             </button>
@@ -483,19 +569,19 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
       }
 
       return (
-        <div key={index} className="menu-item-animate" style={{ animationDelay: `${index * 0.05}s` }}>
+        <div key={item.path || item.label || index} className="menu-item-animate" style={{ animationDelay: `${index * 0.05}s` }}>
           <button
             onClick={() => toggleSection(sectionKey)}
             className={cn(
-              "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition-all duration-300 ease-out text-sm font-medium text-left",
+              "w-full flex items-center justify-between gap-2 px-3 py-2 rounded-lg transition-all duration-300 ease-out text-base font-bold text-left",
               "text-white hover:bg-white/5"
             )}
           >
             <div className="flex items-center gap-2.5 text-left flex-1 min-w-0">
-              <Icon className="w-4 h-4 shrink-0 text-neutral-300 transition-transform duration-300" />
-              <span className="font-medium text-left truncate">{item.label}</span>
+              <Icon className="w-4 h-4 shrink-0 text-neutral-100 transition-transform duration-300" />
+              <span className="font-bold text-left">{item.label}</span>
               {getBadgeCount(item.label, item.path) > 0 && (
-                <span className="shrink-0 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1 min-w-[18px] text-center">
+                <span className="shrink-0 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1 min-w-[18px] text-center">
                   {getBadgeCount(item.label, item.path) > 99 ? "99+" : getBadgeCount(item.label, item.path)}
                 </span>
               )}
@@ -510,7 +596,7 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                 const allSubPaths = item.subItems.map(si => si.path)
                 return (
                   <Link
-                    key={subIndex}
+                    key={subItem.path || subItem.label}
                     to={subItem.path}
                     onClick={() => {
                       if (window.innerWidth < 1024 && onClose) {
@@ -518,10 +604,10 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                       }
                     }}
                     className={cn(
-                      "flex items-center gap-2 px-3 py-1.5 rounded-md transition-all duration-300 ease-out text-sm font-normal text-left",
+                      "flex items-center gap-2 px-3 py-1.5 rounded-md transition-all duration-300 ease-out text-base font-bold text-left",
                       isActive(subItem.path, allSubPaths)
-                        ? "bg-white/10 text-white font-semibold"
-                        : "text-neutral-300 hover:bg-white/5 hover:text-white"
+                        ? "bg-white/10 text-white"
+                        : "text-neutral-100 hover:bg-white/5 hover:text-white"
                     )}
                     style={{ animationDelay: `${subIndex * 0.03}s` }}
                   >
@@ -529,9 +615,9 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                       "w-1.5 h-1.5 rounded-full shrink-0 transition-all duration-300",
                       isActive(subItem.path, allSubPaths) ? "bg-white scale-125" : "bg-neutral-400"
                     )}></span>
-                    <span className="text-left flex-1 truncate">{subItem.label}</span>
+                    <span className="text-left flex-1">{subItem.label}</span>
                     {getBadgeCount(subItem.label, subItem.path) > 0 && (
-                      <span className="shrink-0 bg-red-600 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1 min-w-[18px] text-center">
+                      <span className="shrink-0 bg-orange-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full ml-1 min-w-[18px] text-center">
                         {getBadgeCount(subItem.label, subItem.path) > 99 ? "99+" : getBadgeCount(subItem.label, subItem.path)}
                       </span>
                     )}
@@ -619,38 +705,37 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
       `}</style>
       <div
         className={cn(
-          "bg-neutral-950 border-r border-neutral-800/60 h-screen fixed left-0 top-0 z-50 flex flex-col overflow-hidden",
+          "border-r border-neutral-700/30 h-screen fixed left-0 top-0 z-50 flex flex-col overflow-hidden",
           "transform transition-all duration-300 ease-in-out",
           "lg:translate-x-0",
           isOpen ? "translate-x-0" : "-translate-x-full",
-          isCollapsed ? "w-20" : "w-80"
+          isCollapsed ? "w-20" : "w-80",
+          "bg-black"
         )}
+        style={{ backgroundColor: '#000000' }}
       >
         {/* Header with Logo and Brand */}
-        <div className="shrink-0 px-3 py-3 border-b border-neutral-800/60 bg-neutral-900 animate-[fadeIn_0.4s_ease-out]">
+        <div
+          className="shrink-0 px-3 py-3 border-b border-neutral-700/30 animate-[fadeIn_0.4s_ease-out] bg-black"
+          style={{ backgroundColor: '#000000' }}
+        >
           <div className="flex items-center justify-between mb-3">
             {!isCollapsed && (
               <div className="flex items-center gap-2 animate-[slideIn_0.3s_ease-out]">
                 <div className="w-24 h-12 rounded-lg flex items-center justify-center shadow-black/20">
                   {logoUrl ? (
                     <img
-                      src={logoUrl || quickSpicyLogo}
+                      src={logoUrl}
                       alt={companyName || "Company"}
                       className="w-24 h-10 object-contain"
                       loading="lazy"
-                      onError={(e) => {
-                        if (e.target.src !== quickSpicyLogo) {
-                          e.target.src = quickSpicyLogo
-                        }
-                      }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
                     />
                   ) : companyName ? (
                     <span className="text-xs font-semibold text-white px-2 truncate">
                       {companyName}
                     </span>
-                  ) : (
-                    <img src={quickSpicyLogo} alt="Company" className="w-24 h-10 object-contain" loading="lazy" />
-                  )}
+                  ) : null}
                 </div>
               </div>
             )}
@@ -659,19 +744,13 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                 <div className="w-10 h-10 rounded-lg bg-white/5 flex items-center justify-center shadow-lg shadow-black/20 ring-1 ring-white/10">
                   {logoUrl || companyName ? (
                     <img
-                      src={logoUrl || quickSpicyLogo}
+                      src={logoUrl}
                       alt={companyName || "Company"}
                       className="w-10 h-10 object-contain"
                       loading="lazy"
-                      onError={(e) => {
-                        if (e.target.src !== quickSpicyLogo) {
-                          e.target.src = quickSpicyLogo
-                        }
-                      }}
+                      onError={(e) => { e.target.style.display = 'none'; }}
                     />
-                  ) : (
-                    <img src={quickSpicyLogo} alt="Company" className="w-10 h-10 object-contain" loading="lazy" />
-                  )}
+                  ) : null}
                 </div>
               </div>
             )}
@@ -714,8 +793,12 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
                 placeholder="Search Menu..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
+                autoComplete="off"
+                spellCheck="false"
+                autoCorrect="off"
+                autoCapitalize="off"
                 className={cn(
-                  "w-full pl-9 py-2 bg-neutral-900 border border-neutral-800 rounded-lg text-sm text-white placeholder:text-neutral-500 focus:outline-none focus:ring-2 focus:ring-white/40 focus:border-white/40 transition-all duration-200 text-left",
+                  "w-full pl-9 py-2.5 bg-neutral-900 border border-neutral-800 rounded-lg text-base font-bold text-white placeholder:text-neutral-400 focus:outline-none focus:ring-2 focus:ring-white/40 focus:border-white/40 transition-all duration-200 text-left",
                   searchQuery ? "pr-9" : "pr-3"
                 )}
               />
@@ -748,28 +831,28 @@ export default function AdminSidebar({ isOpen = false, onClose, onCollapseChange
               if (item.type === "section") {
                 return (
                   <div
-                    key={index}
+                    key={item.label || index}
                     className={cn(
                       index > 0 ? "mt-4 pt-4 border-t border-neutral-800/60" : "",
                       "animate-[fadeIn_0.4s_ease-out]"
                     )}
                     style={{ animationDelay: `${index * 0.1}s` }}
                   >
-                      <div className="px-3 py-2 mb-2 flex items-center justify-between">
-                        <span className="text-neutral-400 font-bold text-sm uppercase tracking-wider text-left">
-                          {item.label}
-                        </span>
-                        {item.items.some(subItem => {
-                          const count = getBadgeCount(subItem.label, subItem.path);
-                          if (count > 0) return true;
-                          if (subItem.type === "expandable" && subItem.subItems) {
-                            return subItem.subItems.some(si => getBadgeCount(si.label, si.path) > 0);
-                          }
-                          return false;
-                        }) && (
-                          <span className="w-2 h-2 bg-red-600 rounded-full animate-pulse shadow-[0_0_8px_rgba(220,38,38,0.5)]" />
+                    <div className="px-3 py-2 mb-2 flex items-center justify-between">
+                      <span className="text-neutral-300 font-semibold text-base text-left">
+                        {item.label}
+                      </span>
+                      {item.items.some(subItem => {
+                        const count = getBadgeCount(subItem.label, subItem.path);
+                        if (count > 0) return true;
+                        if (subItem.type === "expandable" && subItem.subItems) {
+                          return subItem.subItems.some(si => getBadgeCount(si.label, si.path) > 0);
+                        }
+                        return false;
+                      }) && (
+                          <span className="w-2 h-2 bg-orange-500 rounded-full animate-pulse shadow-[0_0_8px_rgba(249,115,22,0.5)]" />
                         )}
-                      </div>
+                    </div>
                     <div className="space-y-1">
                       {item.items.map((subItem, subIndex) => renderMenuItem(subItem, `${index}-${subIndex}`, true))}
                     </div>

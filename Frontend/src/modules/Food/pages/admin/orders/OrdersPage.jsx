@@ -11,12 +11,13 @@ import FilterPanel from "@food/components/admin/orders/FilterPanel"
 import ViewOrderDialog from "@food/components/admin/orders/ViewOrderDialog"
 import SettingsDialog from "@food/components/admin/orders/SettingsDialog"
 import RefundModal from "@food/components/admin/orders/RefundModal"
+import AssignDeliveryModal from "@food/components/admin/AssignDeliveryModal"
 import { useOrdersManagement } from "@food/components/admin/orders/useOrdersManagement"
 import { Loader2 } from "lucide-react"
 import { OrdersDashboardSkeleton } from "@food/components/ui/loading-skeletons"
 import { useDelayedLoading } from "@food/hooks/useDelayedLoading"
-const alertSound = "/alert.mp3"
-const originalSound = "/original.mp3"
+import alertSound from "@food/assets/audio/zomato_sms.mp3"
+import originalSound from "@food/assets/audio/zomato_sms.mp3"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -44,9 +45,13 @@ export default function OrdersPage({ statusKey = "all" }) {
   const [isLoading, setIsLoading] = useState(true)
   const [processingRefund, setProcessingRefund] = useState(null)
   const [processingActionOrderId, setProcessingActionOrderId] = useState(null)
+  const [resendLoadingOrderId, setResendLoadingOrderId] = useState(null)
+  const [markDeliveredLoadingOrderId, setMarkDeliveredLoadingOrderId] = useState(null)
   const [deletingOrderId, setDeletingOrderId] = useState(null)
   const [refundModalOpen, setRefundModalOpen] = useState(false)
   const [selectedOrderForRefund, setSelectedOrderForRefund] = useState(null)
+  const [assignDeliveryModalOpen, setAssignDeliveryModalOpen] = useState(false)
+  const [selectedOrderForAssign, setSelectedOrderForAssign] = useState(null)
   const showLoadingSkeleton = useDelayedLoading(isLoading, { delay: 120, minDuration: 360 })
   const seenOrderIdsRef = useRef(new Set())
   const isFirstLoadRef = useRef(true)
@@ -70,10 +75,7 @@ export default function OrdersPage({ statusKey = "all" }) {
   }, [])
 
   const playDeliveryStyleBuzz = useCallback(async () => {
-    const selectedSound = localStorage.getItem("delivery_alert_sound") || "zomato_tone"
-    const soundFile = selectedSound === "original"
-      ? resolveAudioSource(originalSound, "admin-original")
-      : resolveAudioSource(alertSound, "admin-alert")
+    const soundFile = resolveAudioSource(alertSound, "admin-alert")
 
     try {
       if (!notificationAudioRef.current) {
@@ -244,10 +246,7 @@ export default function OrdersPage({ statusKey = "all" }) {
         fallbackAudioRef.current.muted = false
 
         if (!notificationAudioRef.current) {
-          const selectedSound = localStorage.getItem("delivery_alert_sound") || "zomato_tone"
-          const soundFile = selectedSound === "original"
-            ? resolveAudioSource(originalSound, "admin-original")
-            : resolveAudioSource(alertSound, "admin-alert")
+          const soundFile = resolveAudioSource(alertSound, "admin-alert")
           notificationAudioRef.current = new Audio(soundFile)
           notificationAudioRef.current.preload = "auto"
           notificationAudioRef.current.volume = 1
@@ -319,7 +318,7 @@ export default function OrdersPage({ statusKey = "all" }) {
       if (!silent) setIsLoading(true)
       const params = {
         page: 1,
-        limit: 1000,
+        limit: 5000,
         status:
           statusKey === "all"
             ? undefined
@@ -456,8 +455,10 @@ export default function OrdersPage({ statusKey = "all" }) {
 
 
       let displayStatus = order.orderStatus
-      if (!backendStatus || backendStatus === "created" || backendStatus === "confirmed") {
+      if (!backendStatus || backendStatus === "created") {
         displayStatus = "Pending"
+      } else if (backendStatus === "confirmed") {
+        displayStatus = "Accepted"
       } else if (backendStatus === "preparing" || backendStatus === "ready_for_pickup") {
         displayStatus = "Processing"
       } else if (backendStatus === "picked_up") {
@@ -502,6 +503,8 @@ export default function OrdersPage({ statusKey = "all" }) {
         ...order,
         id: order._id || order.id,
         orderId: order.orderId || order.id,
+        rawOrderStatus: backendStatus || order.orderStatus || "",
+        dispatchStatus: order.dispatch?.status || "",
         date,
         time,
         customerName,
@@ -736,6 +739,106 @@ export default function OrdersPage({ statusKey = "all" }) {
     }
   }
 
+  const handleCancelOrder = async (order) => {
+    const orderIdToUse = order.id || order._id || order.orderId
+    if (!orderIdToUse) {
+      toast.error("Order ID not found")
+      return
+    }
+
+    const reason = prompt(
+      `Enter cancellation reason for order ${order.orderId}:`,
+      "Order cancelled by admin",
+    )
+    if (reason === null) return
+
+    try {
+      setProcessingActionOrderId(order.id || order.orderId)
+      const response = await adminAPI.cancelOrder(orderIdToUse, reason)
+      if (response.data?.success) {
+        toast.success(response.data?.message || `Order ${order.orderId} cancelled`)
+        await fetchOrders({ silent: true, withRingCheck: false })
+      } else {
+        toast.error(response.data?.message || "Failed to cancel order")
+      }
+    } catch (error) {
+      debugError("Error cancelling order:", error)
+      toast.error(error.response?.data?.message || "Failed to cancel order")
+    } finally {
+      setProcessingActionOrderId(null)
+    }
+  }
+
+  const handleResendNotification = async (order) => {
+    const orderIdToUse = order.id || order._id || order.orderId
+    if (!orderIdToUse) {
+      toast.error("Order ID not found")
+      return
+    }
+
+    try {
+      setResendLoadingOrderId(order.id || order.orderId)
+      const response = await adminAPI.resendDeliveryNotification(orderIdToUse)
+      if (response.data?.success) {
+        const notifiedCount = Number(response.data.data?.notifiedCount || 0)
+        const shortlistedCount = Number(response.data.data?.shortlistedCount || 0)
+        const connectedSocketCount = response.data.data?.connectedSocketCount
+        const searchRadiusKm = response.data.data?.searchRadiusKm
+        const stats = response.data.data?.resendSearchStats
+        const radiusLabel = searchRadiusKm ? ` within ${searchRadiusKm} km` : ""
+        const busyLabel = stats?.busy ? ` (${stats.busy} busy skipped)` : ""
+        if (notifiedCount > 0) {
+          toast.success(
+            `Notification sent to ${notifiedCount} delivery partner${notifiedCount === 1 ? "" : "s"}${radiusLabel}${busyLabel}${connectedSocketCount != null ? ` (live sockets: ${connectedSocketCount})` : ""}`,
+          )
+        } else {
+          toast.warning(
+            shortlistedCount > 0
+              ? `No delivery partners received the alert${radiusLabel}. Shortlisted: ${shortlistedCount}${busyLabel}${connectedSocketCount != null ? `, live sockets: ${connectedSocketCount}` : ""}.`
+              : `No free online delivery partners found in this zone${radiusLabel}${stats?.online ? ` (${stats.online} online, ${stats.busy || 0} busy)` : ""}.`,
+          )
+        }
+        await fetchOrders({ silent: true, withRingCheck: false })
+      } else {
+        toast.error(response.data?.message || "Failed to resend notification")
+      }
+    } catch (error) {
+      debugError("Error resending notification:", error)
+      toast.error(error.response?.data?.message || "Failed to resend notification")
+    } finally {
+      setResendLoadingOrderId(null)
+    }
+  }
+
+  const handleMarkDelivered = async (order) => {
+    const orderIdToUse = order.id || order._id || order.orderId
+    if (!orderIdToUse) {
+      toast.error("Order ID not found")
+      return
+    }
+
+    const shouldMark = confirm(
+      `Mark order ${order.orderId} as delivered?\n\nThis will close the order without running the rider completion flow.`,
+    )
+    if (!shouldMark) return
+
+    try {
+      setMarkDeliveredLoadingOrderId(order.id || order.orderId)
+      const response = await adminAPI.markOrderDelivered(orderIdToUse)
+      if (response.data?.success) {
+        toast.success(response.data?.message || `Order ${order.orderId} marked as delivered`)
+        await fetchOrders({ silent: true, withRingCheck: false })
+      } else {
+        toast.error(response.data?.message || "Failed to mark order as delivered")
+      }
+    } catch (error) {
+      debugError("Error marking order delivered:", error)
+      toast.error(error.response?.data?.message || "Failed to mark order as delivered")
+    } finally {
+      setMarkDeliveredLoadingOrderId(null)
+    }
+  }
+
   const handleDeleteOrder = async (order) => {
     const orderIdToUse = order.id || order._id || order.orderId
     if (!orderIdToUse) {
@@ -905,6 +1008,11 @@ export default function OrdersPage({ statusKey = "all" }) {
     }
   }
 
+  const handleAssignDelivery = (order) => {
+    setSelectedOrderForAssign(order)
+    setAssignDeliveryModalOpen(true)
+  }
+
   if (showLoadingSkeleton) {
     return (
       <div className="min-h-screen w-full max-w-full overflow-x-hidden bg-slate-50 p-4 lg:p-6">
@@ -945,6 +1053,7 @@ export default function OrdersPage({ statusKey = "all" }) {
         isOpen={isViewOrderOpen}
         onOpenChange={setIsViewOrderOpen}
         order={selectedOrder}
+        onAssignDelivery={handleAssignDelivery}
       />
       <RefundModal
         isOpen={refundModalOpen}
@@ -952,6 +1061,18 @@ export default function OrdersPage({ statusKey = "all" }) {
         order={selectedOrderForRefund}
         onConfirm={handleRefundConfirm}
         isProcessing={processingRefund !== null}
+      />
+      <AssignDeliveryModal
+        isOpen={assignDeliveryModalOpen}
+        onClose={() => {
+          setAssignDeliveryModalOpen(false)
+          setSelectedOrderForAssign(null)
+        }}
+        orderId={selectedOrderForAssign?.id || selectedOrderForAssign?.orderId}
+        onAssigned={() => {
+          fetchOrders({ silent: true, withRingCheck: false })
+          setIsViewOrderOpen(false)
+        }}
       />
       <OrdersTable 
         orders={filteredOrders} 
@@ -962,7 +1083,13 @@ export default function OrdersPage({ statusKey = "all" }) {
         onDeleteOrder={statusKey === "all" ? handleDeleteOrder : undefined}
         onAcceptOrder={statusKey === "all" ? handleAcceptOrder : undefined}
         onRejectOrder={statusKey === "all" ? handleRejectOrder : undefined}
+        onCancelOrder={handleCancelOrder}
+        onResendNotification={handleResendNotification}
+        onMarkDelivered={handleMarkDelivered}
+        onAssignDelivery={handleAssignDelivery}
         actionLoadingOrderId={processingActionOrderId}
+        resendLoadingOrderId={resendLoadingOrderId}
+        markDeliveredLoadingOrderId={markDeliveredLoadingOrderId}
         deletingOrderId={deletingOrderId}
       />
     </div>

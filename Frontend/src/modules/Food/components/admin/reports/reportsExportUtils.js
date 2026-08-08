@@ -3,7 +3,10 @@ import { downloadFile } from "@/shared/utils/downloadUtils"
 export const exportReportsToCSV = (data, headers, filename = "report") => {
   const rows = data.map((item, index) => {
     return headers.map(header => {
-      const value = item[header.key] || item[header] || ""
+      let value = item[header.key] || item[header] || ""
+      if (typeof value === 'string') {
+        value = value.replace(/[₹\u20B9]/g, '').trim()
+      }
       return typeof value === 'object' ? JSON.stringify(value) : value
     })
   })
@@ -14,7 +17,7 @@ export const exportReportsToCSV = (data, headers, filename = "report") => {
     ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
   ].join("\n")
   
-  const blob = new Blob(["\uFEFF", csvContent], { type: "text/csv;charset=utf-8;" })
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -26,41 +29,34 @@ export const exportReportsToCSV = (data, headers, filename = "report") => {
 }
 
 export const exportReportsToExcel = (data, headers, filename = "report") => {
-  const rows = data.map((item) => {
-    return headers.map(header => {
-      const value = item[header.key] || item[header] || ""
-      return typeof value === 'object' ? JSON.stringify(value) : value
-    })
-  })
-  
   const headerLabels = headers.map(h => typeof h === 'string' ? h : h.label)
   
-  const htmlContent = `
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          table { border-collapse: collapse; width: 100%; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          th { background-color: #f2f2f2; font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <table>
-          <thead>
-            <tr>
-              ${headerLabels.map(h => `<th>${h}</th>`).join("")}
-            </tr>
-          </thead>
-          <tbody>
-            ${rows.map(row => `<tr>${row.map(cell => `<td>${String(cell).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`).join("")}</tr>`).join("")}
-          </tbody>
-        </table>
-      </body>
+  let htmlContent = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="utf-8">
+    </head>
+    <body>
+      <table>
+        <thead>
+          <tr>
+            ${headerLabels.map(h => `<th>${h}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${data.map(item => {
+            return `<tr>` + headers.map(header => {
+              let value = item[header.key] || item[header] || ""
+              return `<td>${String(value)}</td>`
+            }).join("") + `</tr>`
+          }).join("")}
+        </tbody>
+      </table>
+    </body>
     </html>
   `
   
-  const blob = new Blob(["\uFEFF", htmlContent], { type: "application/vnd.ms-excel;charset=utf-8;" })
+  const blob = new Blob([htmlContent], { type: "application/vnd.ms-excel" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -152,10 +148,10 @@ export const exportTransactionReportToCSV = (transactions, filename = "transacti
   
   const csvContent = [
     headers.join(","),
-    ...rows.map(row => row.map(cell => `"${cell}"`).join(","))
+    ...rows.map(row => row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(","))
   ].join("\n")
   
-  const blob = new Blob(["\uFEFF", csvContent], { type: "text/csv;charset=utf-8;" })
+  const blob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)
@@ -168,45 +164,41 @@ export const exportTransactionReportToCSV = (transactions, filename = "transacti
 
 export const exportTransactionReportToExcel = (transactions, filename = "transaction_report") => {
   const headers = ["SI", "Order ID", "Restaurant", "Customer Name", "Total Item Amount", "Coupon Discount", "VAT/Tax", "Delivery Charge", "Platform Fee", "Order Amount"]
-  const rows = transactions.map((transaction, index) => [
-    index + 1,
-    transaction.orderId,
-    transaction.restaurant,
-    transaction.customerName,
-    transaction.totalItemAmount.toFixed(2),
-    transaction.couponDiscount.toFixed(2),
-    transaction.vatTax.toFixed(2),
-    transaction.deliveryCharge.toFixed(2),
-    Number(transaction.platformFee || 0).toFixed(2),
-    transaction.orderAmount.toFixed(2)
-  ])
   
-  const htmlContent = `
-    <html>
-      <head>
-        <meta charset="utf-8">
-        <style>
-          table { border-collapse: collapse; width: 100%; }
-          th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-          th { background-color: #f2f2f2; font-weight: bold; }
-        </style>
-      </head>
-      <body>
-        <table>
-          <thead>
+  let htmlContent = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta charset="utf-8">
+    </head>
+    <body>
+      <table>
+        <thead>
+          <tr>
+            ${headers.map(h => `<th>${h}</th>`).join("")}
+          </tr>
+        </thead>
+        <tbody>
+          ${transactions.map((transaction, index) => `
             <tr>
-              ${headers.map(h => `<th>${h}</th>`).join("")}
+              <td>${index + 1}</td>
+              <td>${transaction.orderId}</td>
+              <td>${transaction.restaurant}</td>
+              <td>${transaction.customerName}</td>
+              <td>₹${transaction.totalItemAmount.toFixed(2)}</td>
+              <td>₹${transaction.couponDiscount.toFixed(2)}</td>
+              <td>₹${transaction.vatTax.toFixed(2)}</td>
+              <td>₹${transaction.deliveryCharge.toFixed(2)}</td>
+              <td>₹${Number(transaction.platformFee || 0).toFixed(2)}</td>
+              <td>₹${transaction.orderAmount.toFixed(2)}</td>
             </tr>
-          </thead>
-          <tbody>
-            ${rows.map(row => `<tr>${row.map(cell => `<td>${String(cell).replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>`).join("")}</tr>`).join("")}
-          </tbody>
-        </table>
-      </body>
+          `).join("")}
+        </tbody>
+      </table>
+    </body>
     </html>
   `
   
-  const blob = new Blob(["\uFEFF", htmlContent], { type: "application/vnd.ms-excel;charset=utf-8;" })
+  const blob = new Blob([htmlContent], { type: "application/vnd.ms-excel" })
   const link = document.createElement("a")
   const url = URL.createObjectURL(blob)
   link.setAttribute("href", url)

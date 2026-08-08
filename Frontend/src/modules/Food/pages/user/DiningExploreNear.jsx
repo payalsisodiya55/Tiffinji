@@ -76,7 +76,7 @@ const popularRestaurants = [
     rating: 4.6,
     location: "Scheme 54, Indore",
     distance: "4.5 km",
-    cuisine: "North Indian",
+    cuisine: "North tiffinji",
     price: "₹1200 for two",
     image: "https://images.unsplash.com/photo-1579584425555-c3ce17fd4351?w=800&h=600&fit=crop",
     offer: "Flat 30% OFF + 3 more",
@@ -254,7 +254,7 @@ export default function DiningExploreNear() {
                   }
                 }}
                 placeholder="Search for restaurants, cuisines, dishes..."
-                className="w-full h-12 sm:h-14 md:h-16 pl-12 sm:pl-14 pr-12 sm:pr-14 rounded-xl border-2 border-gray-200 focus:border-[#7e3866] bg-white shadow-sm text-base sm:text-lg md:text-xl"
+                className="w-full h-12 sm:h-14 md:h-16 pl-12 sm:pl-14 pr-12 sm:pr-14 rounded-xl border-2 border-gray-200 focus:border-primary bg-white shadow-sm text-base sm:text-lg md:text-xl"
               />
               <Search className="absolute left-4 sm:left-5 md:left-6 top-1/2 -translate-y-1/2 h-5 w-5 sm:h-6 sm:w-6 md:h-7 md:w-7 text-gray-400" />
               <Button
@@ -317,7 +317,7 @@ export default function DiningExploreNear() {
                       variant="outline"
                       onClick={() => toggleFilter(filter.id)}
                       className={`h-7 sm:h-8 px-2 sm:px-3 rounded-full flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 transition-all font-medium ${isActive
-                        ? 'bg-[#7e3866] text-white border-[#7e3866] hover:bg-[#55254b]'
+                        ? 'bg-primary text-white border-primary hover:bg-secondary'
                         : 'bg-white border border-gray-200 hover:bg-gray-50 text-gray-600'
                         }`}
                     >
@@ -386,7 +386,7 @@ export default function DiningExploreNear() {
                         </Button>
 
                         {/* Blue Section - Bottom 40% */}
-                        <div className="absolute bottom-0 left-0 right-0 z-10" style={{ height: '40%', backgroundImage: 'linear-gradient(to right, rgba(213, 31, 16, 0.95) 0%, rgba(213, 31, 16, 0.75) 55%, rgba(213, 31, 16, 0) 100%)' }}>
+                        <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-primary to-transparent" style={{ height: '40%' }}>
                           <div className="h-full flex flex-col justify-end">
                             <div className="pl-4 sm:pl-5 pb-4 sm:pb-5">
                               <p className="text-white text-xs sm:text-sm font-medium uppercase tracking-wide mb-1">
@@ -427,7 +427,7 @@ export default function DiningExploreNear() {
                         {/* Offer Badge */}
                         {restaurant.offer && (
                           <div className="flex items-center gap-2 text-sm">
-                            <BadgePercent className="h-4 w-4 text-[#7e3866]" strokeWidth={2} />
+                            <BadgePercent className="h-4 w-4 text-primary" strokeWidth={2} />
                             <span className="text-gray-700 font-medium">{restaurant.offer}</span>
                           </div>
                         )}
@@ -461,7 +461,7 @@ export default function DiningExploreNear() {
                   setSortBy(null)
                   setSelectedCuisine(null)
                 }}
-                className="text-[#7e3866] font-medium text-sm"
+                className="text-primary font-medium text-sm"
               >
                 Clear all
               </button>
@@ -485,11 +485,11 @@ export default function DiningExploreNear() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveFilterTab(tab.id)}
-                      className={`flex flex-col items-center gap-1 py-4 px-2 text-center relative transition-colors ${isActive ? 'bg-white text-[#7e3866]' : 'text-gray-500 hover:bg-gray-100'
+                      className={`flex flex-col items-center gap-1 py-4 px-2 text-center relative transition-colors ${isActive ? 'bg-white text-primary' : 'text-gray-500 hover:bg-gray-100'
                         }`}
                     >
                       {isActive && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#7e3866] rounded-r" />
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r" />
                       )}
                       <Icon className="h-5 w-5" strokeWidth={1.5} />
                       <span className="text-xs font-medium leading-tight">{tab.label}</span>
@@ -514,8 +514,8 @@ export default function DiningExploreNear() {
                           key={option.id || 'relevance'}
                           onClick={() => setSortBy(option.id)}
                           className={`px-4 py-3 rounded-xl border text-left transition-colors ${sortBy === option.id
-                              ? 'border-green-500 bg-green-50'
-                              : 'border-gray-200 hover:border-green-500'
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-gray-200 hover:border-green-500'
                             }`}
                         >
                           <span className={`text-sm font-medium ${sortBy === option.id ? 'text-green-600' : 'text-gray-700'}`}>
@@ -535,8 +535,8 @@ export default function DiningExploreNear() {
                       <button
                         onClick={() => toggleFilter('delivery-under-30')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('delivery-under-30')
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-200 hover:border-green-500'
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-green-500'
                           }`}
                       >
                         <Timer className={`h-6 w-6 ${activeFilters.has('delivery-under-30') ? 'text-green-600' : 'text-gray-600'}`} strokeWidth={1.5} />
@@ -545,8 +545,8 @@ export default function DiningExploreNear() {
                       <button
                         onClick={() => toggleFilter('delivery-under-45')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('delivery-under-45')
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-200 hover:border-green-500'
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-green-500'
                           }`}
                       >
                         <Timer className={`h-6 w-6 ${activeFilters.has('delivery-under-45') ? 'text-green-600' : 'text-gray-600'}`} strokeWidth={1.5} />
@@ -564,8 +564,8 @@ export default function DiningExploreNear() {
                       <button
                         onClick={() => toggleFilter('rating-35-plus')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('rating-35-plus')
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-200 hover:border-green-500'
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-green-500'
                           }`}
                       >
                         <Star className={`h-6 w-6 ${activeFilters.has('rating-35-plus') ? 'text-green-600 fill-green-600' : 'text-gray-400'}`} />
@@ -574,8 +574,8 @@ export default function DiningExploreNear() {
                       <button
                         onClick={() => toggleFilter('rating-4-plus')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('rating-4-plus')
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-200 hover:border-green-500'
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-green-500'
                           }`}
                       >
                         <Star className={`h-6 w-6 ${activeFilters.has('rating-4-plus') ? 'text-green-600 fill-green-600' : 'text-gray-400'}`} />
@@ -584,8 +584,8 @@ export default function DiningExploreNear() {
                       <button
                         onClick={() => toggleFilter('rating-45-plus')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('rating-45-plus')
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-200 hover:border-green-500'
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-green-500'
                           }`}
                       >
                         <Star className={`h-6 w-6 ${activeFilters.has('rating-45-plus') ? 'text-green-600 fill-green-600' : 'text-gray-400'}`} />
@@ -603,8 +603,8 @@ export default function DiningExploreNear() {
                       <button
                         onClick={() => toggleFilter('distance-under-1km')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('distance-under-1km')
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-200 hover:border-green-500'
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-green-500'
                           }`}
                       >
                         <MapPin className={`h-6 w-6 ${activeFilters.has('distance-under-1km') ? 'text-green-600' : 'text-gray-600'}`} strokeWidth={1.5} />
@@ -613,8 +613,8 @@ export default function DiningExploreNear() {
                       <button
                         onClick={() => toggleFilter('distance-under-2km')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('distance-under-2km')
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-200 hover:border-green-500'
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-green-500'
                           }`}
                       >
                         <MapPin className={`h-6 w-6 ${activeFilters.has('distance-under-2km') ? 'text-green-600' : 'text-gray-600'}`} strokeWidth={1.5} />
@@ -632,8 +632,8 @@ export default function DiningExploreNear() {
                       <button
                         onClick={() => toggleFilter('price-under-200')}
                         className={`px-4 py-3 rounded-xl border text-left transition-colors ${activeFilters.has('price-under-200')
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-200 hover:border-green-500'
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-green-500'
                           }`}
                       >
                         <span className={`text-sm font-medium ${activeFilters.has('price-under-200') ? 'text-green-600' : 'text-gray-700'}`}>Under ₹200</span>
@@ -641,8 +641,8 @@ export default function DiningExploreNear() {
                       <button
                         onClick={() => toggleFilter('price-under-500')}
                         className={`px-4 py-3 rounded-xl border text-left transition-colors ${activeFilters.has('price-under-500')
-                            ? 'border-green-500 bg-green-50'
-                            : 'border-gray-200 hover:border-green-500'
+                          ? 'border-green-500 bg-green-50'
+                          : 'border-gray-200 hover:border-green-500'
                           }`}
                       >
                         <span className={`text-sm font-medium ${activeFilters.has('price-under-500') ? 'text-green-600' : 'text-gray-700'}`}>Under ₹500</span>
@@ -656,13 +656,13 @@ export default function DiningExploreNear() {
                   <div className="space-y-4 mb-8">
                     <h3 className="text-lg font-semibold text-gray-900 mb-4">Cuisine</h3>
                     <div className="grid grid-cols-2 gap-3">
-                      {['Continental', 'Italian', 'Asian', 'Indian', 'Chinese', 'American', 'Seafood', 'Cafe'].map((cuisine) => (
+                      {['Continental', 'Italian', 'Asian', 'tiffinji', 'Chinese', 'American', 'Seafood', 'Cafe'].map((cuisine) => (
                         <button
                           key={cuisine}
                           onClick={() => setSelectedCuisine(selectedCuisine === cuisine ? null : cuisine)}
                           className={`px-4 py-3 rounded-xl border text-center transition-colors ${selectedCuisine === cuisine
-                              ? 'border-green-500 bg-green-50'
-                              : 'border-gray-200 hover:border-green-500'
+                            ? 'border-green-500 bg-green-50'
+                            : 'border-gray-200 hover:border-green-500'
                             }`}
                         >
                           <span className={`text-sm font-medium ${selectedCuisine === cuisine ? 'text-green-600' : 'text-gray-700'}`}>
@@ -687,8 +687,8 @@ export default function DiningExploreNear() {
               <button
                 onClick={() => setIsFilterOpen(false)}
                 className={`flex-1 py-3 font-semibold rounded-xl transition-colors ${activeFilters.size > 0 || sortBy || selectedCuisine
-                    ? 'bg-green-600 text-white hover:bg-green-700'
-                    : 'bg-gray-200 text-gray-500'
+                  ? 'bg-green-600 text-white hover:bg-green-700'
+                  : 'bg-gray-200 text-gray-500'
                   }`}
               >
                 {activeFilters.size > 0 || sortBy || selectedCuisine

@@ -9,7 +9,7 @@ import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
 import { useLocation as useLocationHook } from "@food/hooks/useLocation"
 import { useProfile } from "@food/context/ProfileContext"
 import { FaLocationDot } from "react-icons/fa6"
-import { diningAPI, restaurantAPI } from "@food/api"
+import { diningAPI } from "@food/api"
 import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 
 const slugifyRestaurant = (value) =>
@@ -71,23 +71,7 @@ export default function DiningCategory() {
         )
 
         if (response?.data?.success) {
-          const rawData = Array.isArray(response.data.data) ? response.data.data : []
-          const enrichedData = await Promise.all(
-            rawData.map(async (rest) => {
-              const restId = rest._id || rest.id
-              if (!restId) return rest
-              try {
-                const outletResponse = await restaurantAPI.getOutletTimingsByRestaurantId(restId, { noCache: true })
-                const outletTimings = outletResponse?.data?.data?.outletTimings || outletResponse?.data?.outletTimings || null
-                if (outletTimings) {
-                  return { ...rest, outletTimings }
-                }
-              } catch (_) {}
-              return rest
-            })
-          )
-
-          const mapped = enrichedData.map((restaurant) => {
+          const mapped = (Array.isArray(response.data.data) ? response.data.data : []).map((restaurant) => {
             const availability = getRestaurantAvailabilityStatus(restaurant)
             return {
               id: restaurant._id || restaurant.id,
@@ -110,7 +94,6 @@ export default function DiningCategory() {
               featuredDish: restaurant.featuredDish || "Chef's special",
               featuredPrice: restaurant.featuredPrice || null,
               availability,
-              isEnabled: restaurant.diningSettings?.isEnabled === true,
             }
           })
           setRestaurants(mapped)
@@ -155,7 +138,7 @@ export default function DiningCategory() {
             className="h-auto rounded-full border border-[#e7d8c5] bg-white px-4 py-2 text-left hover:bg-[#fff3e6] dark:border-gray-700 dark:bg-[#1a1a1a] dark:hover:bg-gray-800"
           >
             <div className="flex items-center gap-2">
-              <FaLocationDot className="h-4 w-4 text-[#7e3866]" />
+              <FaLocationDot className="h-4 w-4 text-primary" />
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#aa8b68] dark:text-gray-400">Dining In</p>
                 <p className="text-sm font-bold text-[#2f2215] dark:text-white">{cityName}</p>
@@ -176,7 +159,7 @@ export default function DiningCategory() {
               </p>
             </div>
             <div className="inline-flex items-center gap-2 self-start rounded-full bg-white px-4 py-2 text-sm font-semibold text-[#6b5641] shadow-sm dark:border dark:border-gray-700 dark:bg-[#1a1a1a] dark:text-gray-300">
-              <MapPin className="h-4 w-4 text-[#7e3866]" />
+              <MapPin className="h-4 w-4 text-primary" />
               <span>{restaurants.length} places found</span>
             </div>
           </div>
@@ -219,10 +202,7 @@ export default function DiningCategory() {
                   to={`/food/user/dining/${category}/${restaurant.slug}`}
                   state={{ restaurant }}
                 >
-                  <Card 
-                    className={`group overflow-hidden rounded-[30px] border border-[#f0dfca] bg-white py-0 shadow-[0_18px_60px_rgba(17,24,39,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_80px_rgba(17,24,39,0.14)] dark:border-gray-800 dark:bg-[#141414] dark:shadow-[0_18px_60px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_24px_80px_rgba(0,0,0,0.45)] ${!restaurant.isEnabled || !restaurant.availability?.isOpen ? "grayscale opacity-75" : ""}`}
-                    style={{ filter: (!restaurant.isEnabled || !restaurant.availability?.isOpen) ? 'grayscale(100%)' : 'none', opacity: (!restaurant.isEnabled || !restaurant.availability?.isOpen) ? 0.75 : 1 }}
-                  >
+                  <Card className="group overflow-hidden rounded-[30px] border border-[#f0dfca] bg-white py-0 shadow-[0_18px_60px_rgba(17,24,39,0.08)] transition-all duration-300 hover:-translate-y-1 hover:shadow-[0_24px_80px_rgba(17,24,39,0.14)] dark:border-gray-800 dark:bg-[#141414] dark:shadow-[0_18px_60px_rgba(0,0,0,0.35)] dark:hover:shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
                     <div className="relative h-64 overflow-hidden">
                       <img
                         src={restaurant.image}
@@ -268,7 +248,7 @@ export default function DiningCategory() {
                       </div>
 
                       <div className="flex items-center gap-2 text-sm text-[#5f4c39] dark:text-gray-300">
-                        <UtensilsCrossed className="h-4 w-4 text-[#7e3866]" />
+                        <UtensilsCrossed className="h-4 w-4 text-primary" />
                         <span className="line-clamp-1">{restaurant.cuisine}</span>
                       </div>
 
@@ -284,7 +264,7 @@ export default function DiningCategory() {
 
                       <div className="flex items-center justify-between border-t border-dashed border-[#ead7c0] pt-4 dark:border-gray-700">
                         <div className="text-sm font-semibold text-[#4c3b2c] dark:text-gray-200">{restaurant.price}</div>
-                        <div className="inline-flex items-center gap-2 text-sm font-bold text-[#7e3866]">
+                        <div className="inline-flex items-center gap-2 text-sm font-bold text-primary">
                           <BadgePercent className="h-4 w-4" />
                           <span>Menu & booking</span>
                         </div>

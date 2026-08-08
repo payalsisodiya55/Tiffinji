@@ -18,6 +18,12 @@ export default function FeeSettings() {
     platformFee: "",
     packagingFee: "",
     gstRate: "",
+    gstOnDeliveryFee: "",
+    gstOnPlatformFee: "",
+    gstOnPackagingFee: "",
+    deliveryBonusAmount: "",
+    dispatchRadiusExpansionEnabled: true,
+    dispatchRadiusTiers: "2, 4, 6, 8, 15",
   })
   const [loadingFeeSettings, setLoadingFeeSettings] = useState(false)
   const [savingFeeSettings, setSavingFeeSettings] = useState(false)
@@ -38,6 +44,12 @@ export default function FeeSettings() {
           platformFee: response.data.data.feeSettings.platformFee ?? "",
           packagingFee: response.data.data.feeSettings.packagingFee ?? "",
           gstRate: response.data.data.feeSettings.gstRate ?? "",
+          gstOnDeliveryFee: response.data.data.feeSettings.gstOnDeliveryFee ?? "",
+          gstOnPlatformFee: response.data.data.feeSettings.gstOnPlatformFee ?? "",
+          gstOnPackagingFee: response.data.data.feeSettings.gstOnPackagingFee ?? "",
+          deliveryBonusAmount: response.data.data.feeSettings.deliveryBonusAmount ?? "",
+          dispatchRadiusExpansionEnabled: response.data.data.feeSettings.dispatchRadiusExpansionEnabled !== false,
+          dispatchRadiusTiers: response.data.data.feeSettings.dispatchRadiusTiers?.join(", ") ?? "2, 4, 6, 8, 15",
         })
       } else if (response.data.success && response.data.data.feeSettings === null) {
         // Not configured yet - keep empty fields (no defaults).
@@ -49,6 +61,12 @@ export default function FeeSettings() {
           platformFee: "",
           packagingFee: "",
           gstRate: "",
+          gstOnDeliveryFee: "",
+          gstOnPlatformFee: "",
+          gstOnPackagingFee: "",
+          deliveryBonusAmount: "",
+          dispatchRadiusExpansionEnabled: true,
+          dispatchRadiusTiers: "2, 4, 6, 8, 15",
         })
       }
     } catch (error) {
@@ -76,6 +94,12 @@ export default function FeeSettings() {
         platformFee: feeSettings.platformFee === "" ? undefined : Number(feeSettings.platformFee),
         packagingFee: feeSettings.packagingFee === "" ? undefined : Number(feeSettings.packagingFee),
         gstRate: feeSettings.gstRate === "" ? undefined : Number(feeSettings.gstRate),
+        gstOnDeliveryFee: feeSettings.gstOnDeliveryFee === "" ? undefined : Number(feeSettings.gstOnDeliveryFee),
+        gstOnPlatformFee: feeSettings.gstOnPlatformFee === "" ? undefined : Number(feeSettings.gstOnPlatformFee),
+        gstOnPackagingFee: feeSettings.gstOnPackagingFee === "" ? undefined : Number(feeSettings.gstOnPackagingFee),
+        deliveryBonusAmount: feeSettings.deliveryBonusAmount === "" ? undefined : Number(feeSettings.deliveryBonusAmount),
+        dispatchRadiusExpansionEnabled: Boolean(feeSettings.dispatchRadiusExpansionEnabled),
+        dispatchRadiusTiers: feeSettings.dispatchRadiusTiers ? feeSettings.dispatchRadiusTiers.split(',').map(s => Number(s.trim())).filter(n => !isNaN(n)) : undefined,
         isActive: true,
       })
 
@@ -92,6 +116,12 @@ export default function FeeSettings() {
             platformFee: saved.platformFee ?? "",
             packagingFee: saved.packagingFee ?? "",
             gstRate: saved.gstRate ?? "",
+            gstOnDeliveryFee: saved.gstOnDeliveryFee ?? "",
+            gstOnPlatformFee: saved.gstOnPlatformFee ?? "",
+            gstOnPackagingFee: saved.gstOnPackagingFee ?? "",
+            deliveryBonusAmount: saved.deliveryBonusAmount ?? "",
+            dispatchRadiusExpansionEnabled: saved.dispatchRadiusExpansionEnabled !== false,
+            dispatchRadiusTiers: saved.dispatchRadiusTiers?.join(", ") ?? "2, 4, 6, 8, 15",
           })
         }
       } else {
@@ -499,10 +529,10 @@ export default function FeeSettings() {
                   </p>
                 </div>
 
-                {/* GST Rate */}
+                {/* GST Rate (Item) */}
                 <div className="space-y-2">
                   <label className="block text-sm font-semibold text-slate-700">
-                    GST Rate (%)
+                    GST on Item (%)
                   </label>
                   <input
                     type="number"
@@ -518,6 +548,131 @@ export default function FeeSettings() {
                     GST percentage applied on order subtotal
                   </p>
                 </div>
+
+                {/* GST on Delivery Fee */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    GST on Delivery Fee (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={feeSettings.gstOnDeliveryFee}
+                    onChange={(e) => setFeeSettings({ ...feeSettings, gstOnDeliveryFee: e.target.value })}
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+                    placeholder="18"
+                  />
+                  <p className="text-xs text-slate-500">
+                    GST percentage applied on delivery fee
+                  </p>
+                </div>
+
+                {/* GST on Platform Fee */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    GST on Platform Fee (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={feeSettings.gstOnPlatformFee}
+                    onChange={(e) => setFeeSettings({ ...feeSettings, gstOnPlatformFee: e.target.value })}
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+                    placeholder="18"
+                  />
+                  <p className="text-xs text-slate-500">
+                    GST percentage applied on platform fee
+                  </p>
+                </div>
+
+                {/* GST on Packaging Fee */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    GST on Packaging Fee (%)
+                  </label>
+                  <input
+                    type="number"
+                    value={feeSettings.gstOnPackagingFee}
+                    onChange={(e) => setFeeSettings({ ...feeSettings, gstOnPackagingFee: e.target.value })}
+                    min="0"
+                    max="100"
+                    step="0.1"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+                    placeholder="18"
+                  />
+                  <p className="text-xs text-slate-500">
+                    GST percentage applied on packaging fee
+                  </p>
+                </div>
+
+                {/* Delivery Bonus Amount */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Delivery Bonus Amount (₹)
+                  </label>
+                  <input
+                    type="number"
+                    value={feeSettings.deliveryBonusAmount}
+                    onChange={(e) => setFeeSettings({ ...feeSettings, deliveryBonusAmount: e.target.value })}
+                    min="0"
+                    step="1"
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+                    placeholder="20"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Fixed bonus added to rider earnings per order
+                  </p>
+                </div>
+
+                <div className="space-y-2 md:col-span-2">
+                  <div className="flex items-center justify-between gap-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">
+                    <div>
+                      <label className="block text-sm font-semibold text-slate-700">
+                        Dispatch Radius Expansion
+                      </label>
+                      <p className="text-xs text-slate-500 mt-1">
+                        When enabled, rider alerts expand by attempt using the configured tiers. When disabled, alerts go to all riders within the final radius immediately.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setFeeSettings({
+                        ...feeSettings,
+                        dispatchRadiusExpansionEnabled: !feeSettings.dispatchRadiusExpansionEnabled,
+                      })}
+                      className={`relative inline-flex h-7 w-14 items-center rounded-full transition-colors ${
+                        feeSettings.dispatchRadiusExpansionEnabled ? "bg-green-600" : "bg-slate-300"
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-5 w-5 transform rounded-full bg-white transition-transform ${
+                          feeSettings.dispatchRadiusExpansionEnabled ? "translate-x-8" : "translate-x-1"
+                        }`}
+                      />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Dispatch Radius Tiers */}
+                <div className="space-y-2">
+                  <label className="block text-sm font-semibold text-slate-700">
+                    Dispatch Radius Steps (km)
+                  </label>
+                  <input
+                    type="text"
+                    value={feeSettings.dispatchRadiusTiers}
+                    onChange={(e) => setFeeSettings({ ...feeSettings, dispatchRadiusTiers: e.target.value })}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none transition-all"
+                    placeholder="2, 4, 6, 8, 15"
+                  />
+                  <p className="text-xs text-slate-500">
+                    Comma-separated list of radius steps used when expansion is enabled
+                  </p>
+                </div>
               </div>
           </>
           )}
@@ -526,3 +681,4 @@ export default function FeeSettings() {
     </div>
   )
 }
+

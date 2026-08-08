@@ -3,14 +3,23 @@ import { useNavigate } from "react-router-dom"
 import { Search, Menu, ChevronRight, MapPin, X, Bell, HelpCircle } from "lucide-react"
 import { restaurantAPI } from "@food/api"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
+import { API_BASE_URL } from "@food/api/config"
+import { normalizeImageUrl } from "@food/utils/common"
 import useNotificationInbox from "@food/hooks/useNotificationInbox"
 import { useRestaurantNotifications } from "@food/hooks/useRestaurantNotifications"
 import { Utensils } from "lucide-react"
-import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
+
+const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api(?:\/v\d+)?\/?$/, "")
+const resolveRestaurantLogo = (media) => {
+  if (!media) return null
+  if (typeof media === "string") return normalizeImageUrl(media, BACKEND_ORIGIN) || null
+  const raw = media?.url || media?.secure_url || media?.imageUrl || media?.image || media?.src || ""
+  return normalizeImageUrl(raw, BACKEND_ORIGIN) || null
+}
 
 const extractRestaurantPayload = (response) =>
   response?.data?.data?.restaurant ||
@@ -27,6 +36,7 @@ export default function RestaurantNavbar({
   showSearch = true,
   showOfflineOnlineTag = true,
   showNotifications = true,
+  onMobileMenuOpen,
 }) {
   const navigate = useNavigate()
   const [isSearchActive, setIsSearchActive] = useState(false)
@@ -34,7 +44,6 @@ export default function RestaurantNavbar({
   const [status, setStatus] = useState("Offline")
   const [restaurantData, setRestaurantData] = useState(null)
   const [loading, setLoading] = useState(true)
-  const [outletTimings, setOutletTimings] = useState(null)
   const [companyName, setCompanyName] = useState("")
   const [logoUrl, setLogoUrl] = useState(null)
   const searchTimeoutRef = useRef(null)
@@ -106,12 +115,12 @@ export default function RestaurantNavbar({
       const cached = getCachedSettings()
       if (cached) {
         if (cached.companyName) setCompanyName(cached.companyName)
-        if (cached.logo?.url) setLogoUrl(cached.logo.url)
+        if (cached.logo) setLogoUrl(resolveRestaurantLogo(cached.logo))
       } else {
         const settings = await loadBusinessSettings()
         if (settings) {
           if (settings.companyName) setCompanyName(settings.companyName)
-          if (settings.logo?.url) setLogoUrl(settings.logo.url)
+          if (settings.logo) setLogoUrl(resolveRestaurantLogo(settings.logo))
         }
       }
     }
@@ -121,7 +130,7 @@ export default function RestaurantNavbar({
       const cached = getCachedSettings()
       if (cached) {
         if (cached.companyName) setCompanyName(cached.companyName)
-        if (cached.logo?.url) setLogoUrl(cached.logo.url)
+        if (cached.logo) setLogoUrl(resolveRestaurantLogo(cached.logo))
       }
     }
     window.addEventListener('businessSettingsUpdated', handleSettingsUpdate)
@@ -294,56 +303,19 @@ export default function RestaurantNavbar({
     }
   }, [restaurantData, propLocation])
 
-  // Load outlet timings on mount and listen for changes
-  useEffect(() => {
-    const loadOutletTimings = () => {
-      restaurantAPI
-        .getOutletTimings()
-        .then((res) => {
-          const data = res?.data?.data?.outletTimings || res?.data?.outletTimings
-          if (data) setOutletTimings(data)
-        })
-        .catch((error) => {
-          if (error.code !== 'ERR_NETWORK' && error.code !== 'ECONNABORTED' && !error.message?.includes('timeout')) {
-            debugError("Error loading outlet timings in navbar:", error)
-          }
-        })
-    }
-
-    loadOutletTimings()
-
-    window.addEventListener("outletTimingsUpdated", loadOutletTimings)
-    return () => {
-      window.removeEventListener("outletTimingsUpdated", loadOutletTimings)
-    }
-  }, [])
-
   // Load status from localStorage on mount and listen for changes
   useEffect(() => {
     const updateStatus = () => {
       try {
-        let isOnline = false
         const savedStatus = localStorage.getItem('restaurant_online_status')
         if (savedStatus !== null) {
-          isOnline = JSON.parse(savedStatus)
+          const isOnline = JSON.parse(savedStatus)
+          setStatus(isOnline ? "Online" : "Offline")
         } else {
           // If not stored yet, fallback to backend value (when available).
-          isOnline = Boolean(restaurantData?.isAcceptingOrders)
+          const isOnline = Boolean(restaurantData?.isAcceptingOrders)
+          setStatus(isOnline ? "Online" : "Offline")
         }
-
-        if (isOnline && outletTimings) {
-          const restaurantWithTimings = {
-            ...restaurantData,
-            isAcceptingOrders: true,
-            outletTimings
-          }
-          const availability = getRestaurantAvailabilityStatus(restaurantWithTimings, new Date())
-          if (!availability.isOpen) {
-            isOnline = false
-          }
-        }
-
-        setStatus(isOnline ? "Online" : "Offline")
       } catch (error) {
         debugError("Error loading restaurant status:", error)
         const isOnline = Boolean(restaurantData?.isAcceptingOrders)
@@ -355,23 +327,19 @@ export default function RestaurantNavbar({
     updateStatus()
 
     // Listen for status changes from RestaurantStatus page
-    const handleStatusChange = (event) => {
-      updateStatus()
-    }
-
-    const interval = setInterval(updateStatus, 30000)
+  const handleStatusChange = (event) => {
+      const isOnline = event.detail?.isOnline || false
+      setStatus(isOnline ? "Online" : "Offline")
+  }
 
     window.addEventListener('restaurantStatusChanged', handleStatusChange)
     
     return () => {
-      clearInterval(interval)
       window.removeEventListener('restaurantStatusChanged', handleStatusChange)
     }
-  }, [restaurantData, outletTimings])
+  }, [restaurantData])
 
-  const handleStatusClick = () => {
-    navigate("/food/restaurant/status")
-  }
+
 
   const handleSearchClick = () => {
     setIsSearchActive(true)
@@ -395,18 +363,18 @@ export default function RestaurantNavbar({
   }
 
   return (
-    <div className="w-full bg-white border-b border-gray-200 px-4 py-3 flex items-center justify-between relative">
+    <div className="w-full bg-gradient-to-r from-[#B80B3D] to-[#66001D] rounded-b-[24px] shadow-lg px-3 pt-4 pb-4 sm:px-4 sm:pt-5 sm:pb-5 flex items-center justify-between gap-2 relative">
       {/* Search Overlay */}
       {isSearchActive && (
-        <div className="absolute inset-0 bg-white z-50 flex items-center px-2.5 sm:px-4 gap-1.5 sm:gap-3">
+        <div className="absolute inset-0 bg-white z-50 flex items-center px-4 gap-3">
           <div className="flex-1 relative flex items-center">
-            <Search className="absolute left-1.5 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-0 w-5 h-5 text-gray-400" />
             <input
               type="text"
               value={searchValue}
               onChange={handleSearchChange}
               placeholder="Search by order ID or dish name"
-              className="w-full pl-8 pr-2 py-2 text-[13px] sm:text-[15px] text-gray-900 placeholder-gray-500 font-medium focus:outline-none focus-none"
+              className="w-full pl-8 pr-4 py-2 text-gray-900 placeholder-gray-500 font-medium focus:outline-none"
               autoFocus
             />
           </div>
@@ -421,22 +389,42 @@ export default function RestaurantNavbar({
       )}
 
       {/* Left Side - Restaurant Info */}
-      <div className="flex-1 min-w-0 pr-4 flex items-center gap-3">
-        {logoUrl && (
-          <img src={logoUrl} alt="Logo" className="h-10 w-10 object-contain rounded-lg shrink-0" />
+      <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-3 pr-1 sm:pr-4">
+        {onMobileMenuOpen && (
+          <button
+            type="button"
+            onClick={onMobileMenuOpen}
+            className="shrink-0 rounded-xl bg-white/15 p-2 text-white hover:bg-white/25 lg:hidden"
+            aria-label="Open menu"
+          >
+            <Menu className="h-5 w-5" />
+          </button>
         )}
-        <div className="min-w-0">
+        {logoUrl && (
+          <img
+            src={logoUrl}
+            alt="Logo"
+            className="h-9 w-9 shrink-0 rounded-lg object-contain sm:h-10 sm:w-10"
+          />
+        )}
+        <div className="min-w-0 flex-1">
           {/* Restaurant Name */}
-          <div className="flex items-baseline gap-1.5 min-w-0">
-            <h1 className="text-[15px] font-bold text-gray-900 truncate">
+          <div className="flex items-baseline min-w-0">
+            <h1 className="text-[15px] sm:text-[17px] font-black text-white truncate leading-tight">
               {loading ? "Loading..." : (restaurantName || "Restaurant")}
             </h1>
           </div>
-          {!loading && location && location.trim() !== "" && (
-            <div className="flex items-center gap-1 mt-0.5 opacity-80">
-              <MapPin className="w-2.5 h-2.5 text-gray-500 shrink-0" />
-              <p className="text-[10px] text-gray-500 truncate font-medium" title={location}>
-                {location}
+          
+          {/* Location & Company */}
+          {!loading && (
+            <div className="flex items-center gap-1 mt-0.5 opacity-90 min-w-0">
+              {location && location.trim() !== "" && (
+                <MapPin className="w-3 h-3 text-white/80 shrink-0" />
+              )}
+              <p className="text-[11px] text-white/80 truncate font-medium">
+                {location && location.trim() !== "" ? location : ""}
+                {location && location.trim() !== "" && companyName ? " • " : ""}
+                {companyName ? <span className="uppercase tracking-wider font-bold">{companyName}</span> : ""}
               </p>
             </div>
           )}
@@ -444,39 +432,33 @@ export default function RestaurantNavbar({
       </div>
 
       {/* Right Side - Interactive Elements */}
-      <div className="flex items-center shrink-0">
+      <div className="flex shrink-0 items-center">
         {/* Offline/Online Status Tag */}
         {showOfflineOnlineTag && (
-          <button
-            onClick={handleStatusClick}
-            className={`flex items-center gap-1.5 px-2 py-1 border rounded-full hover:opacity-80 transition-all shrink-0 ${
+          <div
+            className={`flex items-center gap-1 px-2 py-1 sm:gap-1.5 sm:px-3 sm:py-1.5 rounded-full shadow-sm ${
               status === "Online" 
-                ? "bg-green-50 border-green-300" 
-                : "bg-gray-100 border-gray-300"
+                ? "bg-white/20 border border-white/20" 
+                : "bg-white/10 border border-white/10"
             }`}
           >
-            <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-              status === "Online" ? "bg-green-500" : "bg-gray-500"
+            <span className={`w-2 h-2 rounded-full shrink-0 ${
+              status === "Online" ? "bg-[#00e676]" : "bg-gray-400"
             }`}></span>
-            <span className={`text-sm font-medium ${
-              status === "Online" ? "text-green-700" : "text-gray-700"
-            }`}>
+            <span className="text-[11px] sm:text-sm font-bold text-white tracking-wide">
               {status}
             </span>
-            <ChevronRight className={`w-4 h-4 ${
-              status === "Online" ? "text-green-700" : "text-gray-700"
-            }`} />
-          </button>
+          </div>
         )}
 
         {/* Search Icon */}
         {showSearch && (
           <button
             onClick={handleSearchClick}
-            className="p-2 ml-1 hover:bg-gray-100 rounded-full transition-colors shrink-0"
+            className="p-2 ml-1 hover:bg-white/10 rounded-full transition-colors"
             aria-label="Search"
           >
-            <Search className="w-5 h-5 text-gray-700" />
+            <Search className="w-5 h-5 text-white" />
           </button>
         )}
 
@@ -484,42 +466,24 @@ export default function RestaurantNavbar({
         {showNotifications && (
             <button
               onClick={handleNotificationsClick}
-              className="relative p-2 ml-1 hover:bg-gray-100 rounded-full transition-colors shrink-0"
+              className="relative p-2 ml-1 hover:bg-white/10 rounded-full transition-colors"
               aria-label="Notifications"
             >
-              <Bell className="w-5 h-5 text-gray-700" />
+              <Bell className="w-5 h-5 text-white" />
               {unreadCount > 0 && (
                 <span className="absolute top-2 right-2 w-2.5 h-2.5 rounded-full bg-red-500 border border-white animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.4)]" />
               )}
             </button>
           )}
-
-        {/* Support/Help Icon */}
-        <button
-          onClick={() => navigate("/food/restaurant/help-centre/support")}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors shrink-0"
-          aria-label="Support"
-        >
-          <HelpCircle className="w-5 h-5 text-gray-700" />
-        </button>
-
-        {/* Hamburger Menu Icon */}
-        <button
-          onClick={handleMenuClick}
-          className="p-2 hover:bg-gray-100 rounded-full transition-colors"
-          aria-label="Menu"
-        >
-          <Menu className="w-5 h-5 text-gray-700" />
-        </button>
       </div>
       
       {/* Real-time Dining Booking Popup */}
       {newReservation && (
         <div className="fixed top-20 left-4 right-4 z-[100] animate-in slide-in-from-top duration-300">
-          <div className="bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-[#7e3866]/10 overflow-hidden">
+          <div className="bg-white rounded-3xl shadow-[0_20px_50px_rgba(0,0,0,0.15)] border border-primary/10 overflow-hidden">
             <div className="p-4 flex items-center gap-4">
               <div className="w-12 h-12 rounded-2xl bg-purple-50 flex items-center justify-center shrink-0">
-                <Utensils className="w-6 h-6 text-[#7e3866]" />
+                <Utensils className="w-6 h-6 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
                 <h4 className="font-black text-slate-900 text-sm">New Table Request!</h4>
@@ -538,9 +502,9 @@ export default function RestaurantNavbar({
               <button 
                 onClick={() => {
                   clearNewReservation();
-                  navigate("/food/restaurant/dining-reservations");
+                  navigate("/food/restaurant/explore");
                 }}
-                className="flex-1 h-10 bg-[#7e3866] text-white text-xs font-bold rounded-xl uppercase tracking-widest shadow-lg shadow-purple-200"
+                className="flex-1 h-10 bg-primary text-white text-xs font-bold rounded-xl uppercase tracking-widest shadow-lg shadow-purple-200"
               >
                 View Request
               </button>

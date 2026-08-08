@@ -91,15 +91,7 @@ export default function SelectAddress() {
 
   const onChangeForm = (e) => {
     const { name, value } = e.target
-    let cleaned = value
-    if (name === "street" || name === "additionalDetails") {
-      cleaned = value.replace(/[^a-zA-Z0-9\s]/g, "")
-    } else if (name === "city" || name === "state") {
-      cleaned = value.replace(/[^a-zA-Z\s]/g, "")
-    } else if (name === "zipCode") {
-      cleaned = value.replace(/[^0-9]/g, "").slice(0, 6)
-    }
-    setForm((prev) => ({ ...prev, [name]: cleaned }))
+    setForm((prev) => ({ ...prev, [name]: value }))
   }
 
   const onSave = async (e) => {
@@ -115,11 +107,6 @@ export default function SelectAddress() {
 
     if (!street || !city || !state) {
       toast.error("Please fill Street, City and State")
-      return
-    }
-
-    if (form.zipCode && form.zipCode.length !== 6) {
-      toast.error("Pincode must be exactly 6 digits")
       return
     }
 
@@ -252,7 +239,7 @@ export default function SelectAddress() {
                                         {String(addr?.label || "Saved").toLowerCase() === "office" ? "Work" : (addr?.label || "Saved")}
                                       </p>
                                       {addr?.isDefault && (
-                                        <Badge className="bg-orange-100 text-orange-800 dark:bg-[#7e3866]/15 dark:text-orange-200">
+                                        <Badge className="bg-orange-100 text-orange-800 dark:bg-primary/15 dark:text-orange-200">
                                           Default
                                         </Badge>
                                       )}
@@ -345,10 +332,6 @@ export default function SelectAddress() {
                       placeholder="Pincode"
                       value={form.zipCode}
                       onChange={onChangeForm}
-                      maxLength={6}
-                      type="text"
-                      pattern="[0-9]*"
-                      inputMode="numeric"
                     />
                   </div>
                   <div>

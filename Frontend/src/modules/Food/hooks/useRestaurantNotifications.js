@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState, useCallback, useContext } from 'react';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '@food/api/config';
+import { isValidSocketOrigin, resolveSocketOrigin } from '@food/utils/socketOrigin';
 import { restaurantAPI } from '@food/api';
-const alertSound = '/zomato_sms.mp3';
+import alertSound from '@food/assets/audio/alert.mp3';
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
 import { RestaurantNotificationContext } from '../context/RestaurantNotificationContext';
 import { isModuleAuthenticated } from '@food/utils/auth';
@@ -16,6 +17,23 @@ const resolveAudioSource = (source) => {
 
 const supportsBrowserNotifications = () =>
   typeof window !== 'undefined' && typeof Notification !== 'undefined';
+
+const isRestaurantOrderSoundAllowed = () => {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return false;
+
+  const userAgent = navigator.userAgent || '';
+  const isWebView =
+    Boolean(window.ReactNativeWebView) ||
+    Boolean(window.flutter_inappwebview) ||
+    /\bwv\b|WebView/i.test(userAgent);
+
+  if (isWebView) return true;
+
+  const isMobileUserAgent = /Android|iPhone|iPad|iPod|Mobile|IEMobile|Opera Mini|Windows Phone/i.test(userAgent);
+  const isSmallViewport = window.matchMedia?.('(max-width: 768px)')?.matches;
+
+  return !(isMobileUserAgent || isSmallViewport);
+};
 
 const buildRestaurantOrderNotification = (orderData = {}) => {
   const orderId = orderData.orderId || orderData.orderMongoId || 'New';
@@ -83,8 +101,30 @@ export const useRestaurantNotifications = () => {
   if (context) return context;
   
   const socketRef = useRef(null);
-  const [newOrder, setNewOrder] = useState(null);
+  const [orderQueue, setOrderQueue] = useState([]); // Queue of pending orders
   const [newReservation, setNewReservation] = useState(null);
+  const [pickupOtpReveal, setPickupOtpRevealState] = useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('restaurant_pickupOtpReveal');
+        return saved ? JSON.parse(saved) : null;
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  }); // { orderId, otp, message }
+
+  const setPickupOtpReveal = (data) => {
+    setPickupOtpRevealState(data);
+    if (typeof window !== 'undefined') {
+      if (data) {
+        localStorage.setItem('restaurant_pickupOtpReveal', JSON.stringify(data));
+      } else {
+        localStorage.removeItem('restaurant_pickupOtpReveal');
+      }
+    }
+  };
   const [isConnected, setIsConnected] = useState(false);
   const audioRef = useRef(null);
   const activeOrderRef = useRef(null);
@@ -96,6 +136,8 @@ export const useRestaurantNotifications = () => {
   const lastConnectErrorLogRef = useRef(0);
   const lastAlertAtByOrderRef = useRef(new Map());
   const lastBrowserNotificationAtByOrderRef = useRef(new Map());
+  // Track order IDs that have been cancelled so REST polling doesn't resurrect them
+  const cancelledOrderIdsRef = useRef(new Set());
   const CONNECT_ERROR_LOG_THROTTLE_MS = 10000;
   const ALERT_LOOP_INTERVAL_MS = 4500;
   const ALERT_LOOP_MAX_MS = 120000;
@@ -114,6 +156,20 @@ export const useRestaurantNotifications = () => {
       ''
     ).trim()
   );
+
+  // Enqueue a new order into the queue (deduplicates by ID)
+  const enqueueOrder = (orderData) => {
+    setOrderQueue(prev => {
+      const key = getOrderAlertKey(orderData);
+      if (key && prev.some(o => getOrderAlertKey(o) === key)) return prev;
+      return [...prev, orderData];
+    });
+  };
+
+  // Remove the first order from the queue
+  const dequeueOrder = () => {
+    setOrderQueue(prev => prev.slice(1));
+  };
 
   const shouldProcessOrderAlert = (orderData = {}) => {
     const key = getOrderAlertKey(orderData);
@@ -185,6 +241,20 @@ export const useRestaurantNotifications = () => {
     alertLoopStartedAtRef.current = 0;
   };
 
+  const removeOrderFromQueue = useCallback((orderIdToRemove) => {
+    const keyToRemove = String(orderIdToRemove).trim();
+    if (!keyToRemove) return;
+    
+    setOrderQueue(prev => {
+      const filtered = prev.filter(o => getOrderAlertKey(o) !== keyToRemove);
+      if (activeOrderRef.current && getOrderAlertKey(activeOrderRef.current) === keyToRemove) {
+         stopAlertLoop();
+         activeOrderRef.current = null;
+      }
+      return filtered;
+    });
+  }, []);
+
   const startAlertLoop = () => {
     stopAlertLoop();
     alertLoopStartedAtRef.current = Date.now();
@@ -196,9 +266,7 @@ export const useRestaurantNotifications = () => {
         return;
       }
 
-      // Only re-alert if the tab is hidden. 
-      // If the user has the tab open, they are seeing the orders.
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      if (typeof document !== 'undefined') {
         playNotificationSound(activeOrderRef.current);
       }
     }, ALERT_LOOP_INTERVAL_MS);
@@ -229,13 +297,10 @@ export const useRestaurantNotifications = () => {
 
     activeOrderRef.current = orderData || { id: Date.now() };
 
-    // Play sound immediately if:
-    // 1. It's a real-time socket event (we want to know even if on the page)
-    // 2. OR the tab is hidden (so the poll successfully alerts the user)
     const isTabHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
-    if (isSocket || isTabHidden) {
-      playNotificationSound(orderData);
-    }
+    
+    // Always play sound immediately
+    playNotificationSound(orderData);
 
     startAlertLoop();
 
@@ -252,11 +317,10 @@ export const useRestaurantNotifications = () => {
     }
   };
 
-  // Get restaurant ID from API
+  // Get restaurant ID from API (restaurant session only)
   useEffect(() => {
-    if (!isModuleAuthenticated('restaurant')) {
-      return;
-    }
+    if (!isModuleAuthenticated('restaurant')) return;
+
     const fetchRestaurantId = async () => {
       try {
         const response = await restaurantAPI.getCurrentRestaurant();
@@ -277,7 +341,7 @@ export const useRestaurantNotifications = () => {
   // we still fetch restaurant orders from REST periodically and trigger the same
   // alert flow. This prevents "restaurant didn't receive the order" cases.
   useEffect(() => {
-    if (!isModuleAuthenticated('restaurant') || !restaurantId) return;
+    if (!restaurantId) return;
 
     const ALERT_POLL_MS = 8000;
     let isCancelled = false;
@@ -300,6 +364,10 @@ export const useRestaurantNotifications = () => {
             const status = String(o?.status || "").toLowerCase();
             if (status !== "confirmed") return false;
 
+            // Skip orders that have been locally marked as cancelled
+            const oId = String(o?._id || o?.orderMongoId || o?.orderId || '').trim();
+            if (oId && cancelledOrderIdsRef.current.has(oId)) return false;
+
             // If it's a scheduled order, only alert if it's due soon (within 30 mins)
             if (o.scheduledAt) {
               const scheduledTime = new Date(o.scheduledAt).getTime();
@@ -318,8 +386,68 @@ export const useRestaurantNotifications = () => {
 
         if (confirmed.length > 0) {
           // Trigger alerts for newest confirmed orders (dedupe prevents spam).
-          confirmed.slice(0, 5).forEach((o) => handleIncomingOrderAlert(o, 'poll'));
+          confirmed.slice(0, 5).forEach((o) => {
+            handleIncomingOrderAlert(o, 'poll');
+            enqueueOrder(o); // add each confirmed order to the queue
+          });
         }
+
+        // --- NEW: Fallback for Cancellations if Socket failed ---
+        if (activeOrderRef.current) {
+          const activeId = activeOrderRef.current._id || activeOrderRef.current.orderMongoId || activeOrderRef.current.orderId;
+          const matchingOrderInPoll = rows.find(o => o._id === activeId || o.orderId === activeId);
+          if (matchingOrderInPoll) {
+            const statusRaw = String(matchingOrderInPoll.status || matchingOrderInPoll.orderStatus || '').toLowerCase().trim().replace(/\s+/g, '_');
+            if (statusRaw === 'cancelled_by_user' || statusRaw === 'cancelled_by_restaurant' || statusRaw === 'cancelled_by_admin' || statusRaw === 'cancelled') {
+              debugLog('?? Fallback: Active order cancelled detected via REST poll:', matchingOrderInPoll);
+              removeOrderFromQueue(activeId);
+              if (typeof window !== 'undefined') {
+                window.dispatchEvent(
+                  new CustomEvent('restaurantOrderStatusUpdate', {
+                    detail: matchingOrderInPoll,
+                  }),
+                );
+              }
+            }
+          }
+        }
+
+        // --- NEW: Fallback for Pickup OTP Request if Socket failed ---
+        const currentOtpRevealStr = typeof window !== 'undefined' ? localStorage.getItem('restaurant_pickupOtpReveal') : null;
+        let currentOtpRevealObj = null;
+        if (currentOtpRevealStr) {
+           try { currentOtpRevealObj = JSON.parse(currentOtpRevealStr); } catch(e) {}
+        }
+
+        const otpRequests = rows.filter(o => {
+          const reqAt = o?.deliveryVerification?.pickupOtp?.requestedAt;
+          const isVerified = o?.deliveryVerification?.pickupOtp?.verified;
+          const pickupOtp = o?.pickupOtp;
+          
+          if (!reqAt || isVerified || !pickupOtp) return false;
+          
+          // Only show if requested within last 15 minutes
+          const requestedTime = new Date(reqAt).getTime();
+          const now = Date.now();
+          if (now - requestedTime > 15 * 60000) return false;
+          
+          // Don't show if we are already showing it
+          if (currentOtpRevealObj && currentOtpRevealObj.orderMongoId === o._id) return false;
+          
+          return true;
+        }).sort((a, b) => new Date(b.deliveryVerification.pickupOtp.requestedAt).getTime() - new Date(a.deliveryVerification.pickupOtp.requestedAt).getTime());
+
+        if (otpRequests.length > 0) {
+           const latestReq = otpRequests[0];
+           const payload = {
+              orderMongoId: latestReq._id.toString(),
+              orderId: latestReq.orderId || latestReq.order_id || latestReq._id.toString(),
+              otp: latestReq.pickupOtp,
+              message: 'Delivery partner is requesting the Pickup OTP. Please share this code with them.'
+           };
+           setPickupOtpReveal(payload);
+        }
+        // -------------------------------------------------------------
       } catch (error) {
         // Non-blocking: keep polling.
       }
@@ -370,8 +498,44 @@ export const useRestaurantNotifications = () => {
       if (typeof document === 'undefined') return;
       
       if (document.visibilityState === 'visible') {
-        // Stop any repeating alert loops once the user "sees" the page
-        stopAlertLoop();
+        // Force a REST fetch on foreground to catch any orders missed while in background
+        if (restaurantId) {
+          restaurantAPI.getOrders({ page: 1, limit: 10 }).then(response => {
+             const rows = response?.data?.data?.orders || response?.data?.data?.data?.orders || [];
+             const confirmed = (rows || []).filter(o => {
+                const status = String(o?.status || "").toLowerCase();
+                if (status !== "confirmed") return false;
+                // Skip orders that have been locally marked as cancelled
+                const oId = String(o?._id || o?.orderMongoId || o?.orderId || '').trim();
+                if (oId && cancelledOrderIdsRef.current.has(oId)) return false;
+                return !o.scheduledAt || new Date(o.scheduledAt).getTime() <= Date.now() + 30 * 60000;
+             }).sort((a, b) => new Date(b?.createdAt || 0).getTime() - new Date(a?.createdAt || 0).getTime());
+             
+             if (confirmed.length > 0) {
+                confirmed.slice(0, 5).forEach(o => enqueueOrder(o));
+             }
+
+             // --- NEW: Fallback for Cancellations if Socket failed ---
+             if (activeOrderRef.current) {
+                const activeId = activeOrderRef.current._id || activeOrderRef.current.orderMongoId || activeOrderRef.current.orderId;
+                const matchingOrderInPoll = rows.find(o => o._id === activeId || o.orderId === activeId);
+                if (matchingOrderInPoll) {
+                  const statusRaw = String(matchingOrderInPoll.status || matchingOrderInPoll.orderStatus || '').toLowerCase().trim().replace(/\s+/g, '_');
+                  if (statusRaw === 'cancelled_by_user' || statusRaw === 'cancelled_by_restaurant' || statusRaw === 'cancelled_by_admin' || statusRaw === 'cancelled') {
+                    debugLog('?? Fallback: Active order cancelled detected via REST poll on visibility change:', matchingOrderInPoll);
+                    removeOrderFromQueue(activeId);
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(
+                        new CustomEvent('restaurantOrderStatusUpdate', {
+                          detail: matchingOrderInPoll,
+                        }),
+                      );
+                    }
+                  }
+                }
+             }
+          }).catch(() => {});
+        }
       } else if (document.visibilityState === 'hidden' && activeOrderRef.current) {
         // Trigger one-shot alert when tab is hidden to ensure user didn't miss it
         playNotificationSound(activeOrderRef.current);
@@ -383,15 +547,12 @@ export const useRestaurantNotifications = () => {
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, []);
+  }, [restaurantId]);
 
   useEffect(() => {
-    if (!isModuleAuthenticated('restaurant')) {
-      setIsConnected(false);
-      return;
-    }
     if (!API_BASE_URL || !String(API_BASE_URL).trim()) {
       setIsConnected(false);
+      if (typeof window !== 'undefined') window.restaurantSocketConnected = false;
       return;
     }
     if (!restaurantId) {
@@ -436,66 +597,7 @@ export const useRestaurantNotifications = () => {
     backendUrl = backendUrl.replace(/^(https?):\/+/gi, '$1://');
     backendUrl = backendUrl.replace(/\/+$/, ''); // Remove trailing slashes
     
-    // CRITICAL: Check for localhost in production BEFORE creating socket
-    // Detect production environment more reliably
-    const frontendHostname = window.location.hostname;
-    const isLocalhost = frontendHostname === 'localhost' || 
-                        frontendHostname === '127.0.0.1' ||
-                        frontendHostname === '';
-    const isProductionBuild = import.meta.env.MODE === 'production' || import.meta.env.PROD;
-    // Production deployment: not localhost AND (HTTPS OR has domain name with dots)
-    const isProductionDeployment = !isLocalhost && (
-      window.location.protocol === 'https:' || 
-      (frontendHostname.includes('.') && !frontendHostname.startsWith('192.168.') && !frontendHostname.startsWith('10.'))
-    );
-    
-    // If backend URL is localhost but we're not running locally, BLOCK connection
-    const backendIsLocalhost = backendUrl.includes('localhost') || backendUrl.includes('127.0.0.1');
-    // Block if: backend is localhost AND (production build OR production deployment)
-    // Allow if: frontend is also localhost (development scenario)
-    const shouldBlockConnection = backendIsLocalhost && (isProductionBuild || isProductionDeployment) && !isLocalhost;
-    
-    if (shouldBlockConnection) {
-      // Try to infer backend URL from frontend URL (common pattern: api.domain.com or domain.com/api)
-      const frontendHost = window.location.hostname;
-      const frontendProtocol = window.location.protocol;
-      let suggestedBackendUrl = null;
-      
-      // Common patterns:
-      // - If frontend is on foods.appzeto.com, backend might be api.foods.appzeto.com or foods.appzeto.com
-      if (frontendHost.includes('foods.appzeto.com')) {
-        suggestedBackendUrl = `${frontendProtocol}//api.foods.appzeto.com/api`;
-      } else if (frontendHost.includes('appzeto.com')) {
-        suggestedBackendUrl = `${frontendProtocol}//api.${frontendHost}/api`;
-      }
-      
-      debugError('? CRITICAL: BLOCKING Socket.IO connection to localhost!');
-      debugError('Backend connectivity disabled (UI-only mode).');
-      debugError('?? Current backendUrl:', backendUrl);
-      debugError('?? Current API_BASE_URL:', API_BASE_URL);
-      debugError('?? Frontend hostname:', frontendHost);
-      debugError('?? Frontend protocol:', frontendProtocol);
-      debugError('?? Is production build:', isProductionBuild);
-      debugError('?? Is production deployment:', isProductionDeployment);
-      debugError('?? Backend is localhost:', backendIsLocalhost);
-      if (suggestedBackendUrl) {
-        debugError('?? Suggested backend URL:', suggestedBackendUrl);
-      } else {
-        debugError('?? Backend URL config is disabled in this build.');
-      }
-      debugError('?? Backend URL config is disabled in this build.');
-      
-      // Clean up any existing socket connection
-      if (socketRef.current) {
-        debugLog('?? Cleaning up existing socket connection...');
-        socketRef.current.disconnect();
-        socketRef.current = null;
-      }
-      
-      // Don't try to connect to localhost in production - it will fail
-      setIsConnected(false);
-      return; // CRITICAL: Exit early to prevent socket creation
-    }
+
     
     // Validate backend URL format
     if (!backendUrl || !backendUrl.startsWith('http')) {
@@ -503,25 +605,20 @@ export const useRestaurantNotifications = () => {
       debugError('?? API_BASE_URL:', API_BASE_URL);
       debugError('?? Expected format: https://your-domain.com or ');
       setIsConnected(false);
+      if (typeof window !== 'undefined') window.restaurantSocketConnected = false;
       return; // Don't try to connect with invalid URL
     }
     
-    // Construct Socket.IO URL
-    // IMPORTANT: Socket.IO server is on the origin (not /api/v1).
-    // Our API baseURL is typically like: http://localhost:5000/api/v1
-    // So for sockets we always connect to: http://localhost:5000
-    let socketOrigin = backendUrl;
-    try {
-      socketOrigin = new URL(backendUrl).origin;
-    } catch {
-      socketOrigin = String(backendUrl || "")
-        .replace(/\/api\/v\d+\/?$/i, "")
-        .replace(/\/api\/?$/i, "")
-        .replace(/\/+$/, "");
-    }
+    // Backend uses a dedicated Socket.IO server; resolve shared socket origin.
+    const socketUrl = resolveSocketOrigin();
 
-    // Backend uses default namespace; rooms handle role separation.
-    const socketUrl = `${socketOrigin}`;
+    if (!isValidSocketOrigin(socketUrl)) {
+      debugError('? CRITICAL: Invalid Socket.IO origin resolved for restaurant:', socketUrl);
+      debugError('?? API_BASE_URL:', API_BASE_URL);
+      setIsConnected(false);
+      if (typeof window !== 'undefined') window.restaurantSocketConnected = false;
+      return;
+    }
     
     // Validate socket URL format
     try {
@@ -532,6 +629,7 @@ export const useRestaurantNotifications = () => {
         debugError('?? Socket URL:', socketUrl);
         debugError('?? This should have been caught earlier, but blocking anyway');
         setIsConnected(false);
+      if (typeof window !== 'undefined') window.restaurantSocketConnected = false;
         return;
       }
     } catch (urlError) {
@@ -540,6 +638,7 @@ export const useRestaurantNotifications = () => {
       debugError('?? Backend URL:', backendUrl);
       debugError('?? API_BASE_URL:', API_BASE_URL);
       setIsConnected(false);
+      if (typeof window !== 'undefined') window.restaurantSocketConnected = false;
       return; // Don't try to connect with invalid URL
     }
     
@@ -551,11 +650,21 @@ export const useRestaurantNotifications = () => {
     debugLog('?? Is Production Build:', isProductionBuild);
     debugLog('?? Is Production Deployment:', isProductionDeployment);
 
+    const restaurantToken =
+      localStorage.getItem('restaurant_accessToken') || localStorage.getItem('accessToken');
+
+    if (!restaurantToken) {
+      setIsConnected(false);
+      if (typeof window !== 'undefined') window.restaurantSocketConnected = false;
+      return;
+    }
+
     // Initialize socket connection (default namespace)
-    // Use polling only to avoid repeated "WebSocket connection failed" when backend is down
+    // WebSocket-first for instant delivery; polling is the automatic fallback.
     socketRef.current = io(socketUrl, {
       path: '/socket.io/',
-      transports: ['polling'],
+      transports: ['websocket', 'polling'],
+      upgrade: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -564,8 +673,9 @@ export const useRestaurantNotifications = () => {
       forceNew: false,
       autoConnect: true,
       auth: {
-        token: localStorage.getItem('restaurant_accessToken') || localStorage.getItem('accessToken')
-      }
+        token: restaurantToken,
+      },
+      query: { token: restaurantToken },
     });
 
     socketRef.current.on('connect', () => {
@@ -573,6 +683,7 @@ export const useRestaurantNotifications = () => {
       debugLog('? Socket ID:', socketRef.current.id);
       debugLog('? Socket URL:', socketUrl);
       setIsConnected(true);
+      if (typeof window !== 'undefined') window.restaurantSocketConnected = true;
       
       // Join restaurant room immediately after connection with retry
       if (restaurantId) {
@@ -623,12 +734,14 @@ export const useRestaurantNotifications = () => {
         debugWarn('?? Add frontend URL to CORS_ORIGIN in backend .env');
       }
       setIsConnected(false);
+      if (typeof window !== 'undefined') window.restaurantSocketConnected = false;
     });
 
     // Listen for disconnection
     socketRef.current.on('disconnect', (reason) => {
       debugLog('? Restaurant Socket disconnected:', reason);
       setIsConnected(false);
+      if (typeof window !== 'undefined') window.restaurantSocketConnected = false;
       
       if (reason === 'io server disconnect') {
         // Server disconnected the socket, reconnect manually
@@ -645,6 +758,7 @@ export const useRestaurantNotifications = () => {
     socketRef.current.on('reconnect', (attemptNumber) => {
       debugLog(`? Reconnected after ${attemptNumber} attempts`);
       setIsConnected(true);
+      if (typeof window !== 'undefined') window.restaurantSocketConnected = true;
       
       // Rejoin restaurant room after reconnection
       if (restaurantId) {
@@ -671,7 +785,7 @@ export const useRestaurantNotifications = () => {
       }
 
       debugLog('?? New order received:', normalizedOrder);
-      setNewOrder(normalizedOrder);
+      enqueueOrder(normalizedOrder); // add to queue
 
       handleIncomingOrderAlert(normalizedOrder, 'socket');
     });
@@ -698,6 +812,19 @@ export const useRestaurantNotifications = () => {
     // Listen for order status updates
     socketRef.current.on('order_status_update', (data) => {
       debugLog('?? Order status update:', data);
+
+      // Track cancelled order IDs so REST polling never resurrects them
+      const statusRaw = String(data?.orderStatus || data?.status || '').toLowerCase().trim().replace(/\s+/g, '_');
+      if (statusRaw === 'cancelled_by_user' || statusRaw === 'cancelled_by_restaurant' || statusRaw === 'cancelled_by_admin' || statusRaw === 'cancelled') {
+        const ids = [data?.orderMongoId, data?.orderId, data?._id, data?.id]
+          .map(v => v == null ? '' : String(v).trim())
+          .filter(Boolean);
+        for (const id of ids) {
+          cancelledOrderIdsRef.current.add(id);
+          removeOrderFromQueue(id);
+        }
+      }
+
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('restaurantOrderStatusUpdate', {
@@ -707,40 +834,19 @@ export const useRestaurantNotifications = () => {
       }
     });
 
+    // Listen for pickup OTP reveal (rider pressed "Request OTP" button)
+    socketRef.current.on('pickup_otp_reveal', (data) => {
+      debugLog('?? Pickup OTP reveal received:', data);
+      setPickupOtpReveal(data);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('restaurantPickupOtpReveal', { detail: data || {} })
+        );
+      }
+    });
+
     socketRef.current.on('admin_notification', (payload) => {
       debugLog('?? Admin broadcast received:', payload);
-      
-      const title = payload?.title || 'Notification';
-      const body = payload?.message || 'New broadcast notification received.';
-
-      // Show native browser notification popup
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        try {
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistration().then(registration => {
-              if (registration) {
-                registration.showNotification(title, {
-                  body,
-                  icon: '/logo.png',
-                  tag: `admin-broadcast-${Date.now()}`,
-                  requireInteraction: true,
-                  vibrate: [200, 100, 200, 100, 300],
-                  data: { targetUrl: payload?.link || '/' }
-                });
-              } else {
-                new Notification(title, { body, icon: '/logo.png' });
-              }
-            }).catch(() => {
-              new Notification(title, { body, icon: '/logo.png' });
-            });
-          } else {
-            new Notification(title, { body, icon: '/logo.png' });
-          }
-        } catch (e) {
-          // Fallback silently
-        }
-      }
-
       dispatchNotificationInboxRefresh();
     });
 
@@ -762,45 +868,33 @@ export const useRestaurantNotifications = () => {
     };
   }, [restaurantId]);
 
-  // Track user interaction for autoplay policy
+  // Prime audio gesture silently on first interaction (no alert.mp3 on iOS unlock)
   useEffect(() => {
     const handleUserInteraction = async () => {
       userInteractedRef.current = true;
+      audioUnlockAttemptedRef.current = true;
 
-      if (!audioRef.current) {
-        audioRef.current = new Audio(resolveAudioSource(alertSound));
-        audioRef.current.preload = 'auto';
-        audioRef.current.volume = 1;
-      }
-
-      if (!audioUnlockAttemptedRef.current && audioRef.current) {
-        audioUnlockAttemptedRef.current = true;
-        try {
+      try {
+        if (audioRef.current) {
           audioRef.current.muted = true;
+          audioRef.current.volume = 0;
+          audioRef.current.currentTime = 0;
           await audioRef.current.play();
           audioRef.current.pause();
           audioRef.current.currentTime = 0;
-        } catch (error) {
-          audioUnlockAttemptedRef.current = false;
-          if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
-            debugWarn('Error unlocking notification sound:', error);
-          }
-        } finally {
-          // Ensure audio never remains muted after unlock attempts.
-          if (audioRef.current) {
-            audioRef.current.muted = false;
-          }
+          audioRef.current.muted = false;
+          audioRef.current.volume = 1;
         }
+      } catch (error) {
+        debugWarn('Restaurant audio unlock failed:', error);
       }
 
-      // Remove listeners after first interaction
       document.removeEventListener('click', handleUserInteraction);
       document.removeEventListener('touchstart', handleUserInteraction);
       document.removeEventListener('keydown', handleUserInteraction);
       window.removeEventListener('pointerdown', handleUserInteraction);
     };
     
-    // Listen for user interaction
     document.addEventListener('click', handleUserInteraction, { once: true });
     document.addEventListener('touchstart', handleUserInteraction, { once: true });
     document.addEventListener('keydown', handleUserInteraction, { once: true });
@@ -815,10 +909,22 @@ export const useRestaurantNotifications = () => {
   }, []);
 
   const playNotificationSound = async (orderData = {}) => {
+    if (!isRestaurantOrderSoundAllowed()) {
+      return;
+    }
+
     try {
       const usedNativeBridge = await triggerWebViewNativeNotification(orderData);
       if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-        navigator.vibrate([200, 100, 200, 100, 300]);
+        try {
+          if (navigator.userActivation && !navigator.userActivation.hasBeenActive) {
+            // Skip vibration to avoid Chrome intervention warning if user hasn't interacted
+          } else {
+            navigator.vibrate([200, 100, 200, 100, 300]);
+          }
+        } catch (e) {
+          // Ignore vibration errors
+        }
       }
       if (usedNativeBridge) {
         return;
@@ -854,12 +960,18 @@ export const useRestaurantNotifications = () => {
   const clearNewOrder = () => {
     stopAlertLoop();
     activeOrderRef.current = null;
-    setNewOrder(null);
+    dequeueOrder(); // pop front of queue; next order becomes head
   };
+
+  // Expose the head of queue as `newOrder` for backward compatibility
+  const newOrder = orderQueue[0] || null;
 
   return {
     newOrder,
+    orderQueue,
     newReservation,
+    pickupOtpReveal,
+    clearPickupOtpReveal: () => setPickupOtpReveal(null),
     clearNewOrder,
     clearNewReservation: () => {
       setNewReservation(null);

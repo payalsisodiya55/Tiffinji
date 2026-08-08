@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 
 /**
@@ -33,46 +33,46 @@ export function useLocationSimple() {
       // Backend response structure: { success: true, data: { results: [...] } }
       const backendData = apiResponse?.data?.data || {}
       const results = backendData.results || []
-      
+
       if (results.length === 0) {
         return ""
       }
 
       const result = results[0]
-      
+
       // Method 1: Extract from address_components object
       if (result.address_components) {
         const components = result.address_components
-        
+
         // Check if it's an array (Google Maps style)
         if (Array.isArray(components)) {
           // Find sublocality or neighborhood
           const sublocality = components.find(comp => {
             const types = comp.types || []
-            return types.includes('sublocality') || 
-                   types.includes('sublocality_level_1') ||
-                   types.includes('neighborhood')
+            return types.includes('sublocality') ||
+              types.includes('sublocality_level_1') ||
+              types.includes('neighborhood')
           })
-          
+
           if (sublocality?.long_name) {
             return sublocality.long_name.trim()
           }
-        } 
+        }
         // Object format: { city, state, country, area }
         else if (components.area) {
           const area = components.area.trim()
           // Validate: Don't use state or city as area
-          if (area && 
-              area.toLowerCase() !== (components.state || "").toLowerCase() &&
-              area.toLowerCase() !== (components.city || "").toLowerCase() &&
-              !area.toLowerCase().includes("district")) {
+          if (area &&
+            area.toLowerCase() !== (components.state || "").toLowerCase() &&
+            area.toLowerCase() !== (components.city || "").toLowerCase() &&
+            !area.toLowerCase().includes("district")) {
             return area
           }
         }
       }
 
       // Method 2: Extract from formatted_address (Zomato-style parsing)
-      // Indian address format: "Area, City, State" (e.g., "New Palasia, Indore, Madhya Pradesh")
+      // tiffinji address format: "Area, City, State" (e.g., "New Palasia, Indore, Madhya Pradesh")
       if (result.formatted_address) {
         const addressParts = result.formatted_address
           .split(',')
@@ -86,23 +86,23 @@ export function useLocationSimple() {
           const state = addressParts[2]
 
           // Validate first part is not city or state
-          if (firstPart && 
-              firstPart.length > 2 && 
-              firstPart.length < 50 &&
-              firstPart.toLowerCase() !== city.toLowerCase() &&
-              firstPart.toLowerCase() !== state.toLowerCase() &&
-              !firstPart.match(/^\d+/) && // Not a number
-              !firstPart.toLowerCase().includes("district")) {
+          if (firstPart &&
+            firstPart.length > 2 &&
+            firstPart.length < 50 &&
+            firstPart.toLowerCase() !== city.toLowerCase() &&
+            firstPart.toLowerCase() !== state.toLowerCase() &&
+            !firstPart.match(/^\d+/) && // Not a number
+            !firstPart.toLowerCase().includes("district")) {
             return firstPart
           }
         }
       }
 
       // Method 3: Try direct fields from result
-      const directArea = result.area || 
-                        result.sublocality || 
-                        result.neighborhood ||
-                        result.sublocality_level_1
+      const directArea = result.area ||
+        result.sublocality ||
+        result.neighborhood ||
+        result.sublocality_level_1
 
       if (directArea && directArea.trim()) {
         return directArea.trim()
@@ -142,16 +142,37 @@ export function useLocationSimple() {
       const addressComponents = result.address_components || {}
 
       // Extract area (subLocality/neighborhood) - THIS IS THE KEY REQUIREMENT
-      const area = extractAreaFromResponse(response)
+      let area = extractAreaFromResponse(response)
 
       // Extract other location details
-      const city = Array.isArray(addressComponents) 
-        ? addressComponents.find(c => c.types?.includes('locality'))?.long_name 
+      let city = Array.isArray(addressComponents)
+        ? addressComponents.find(c => c.types?.includes('locality'))?.long_name
         : addressComponents.city || ""
-      
-      const state = Array.isArray(addressComponents)
+
+      let state = Array.isArray(addressComponents)
         ? addressComponents.find(c => c.types?.includes('administrative_area_level_1'))?.long_name
         : addressComponents.state || ""
+
+      let formattedAddress = result.formatted_address || ""
+
+      const locationSource = backendData?.location?.source
+      if (locationSource === 'coords_only' || (!area && !city)) {
+        debugLog("?? Backend reverse geocode returned coords_only or no details, trying Nominatim fallback...")
+        try {
+          const nominatimUrl = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&addressdetails=1`
+          const nomRes = await fetch(nominatimUrl, { headers: { Accept: "application/json" } })
+          const nomJson = await nomRes.json()
+          if (nomJson && nomJson.display_name) {
+            formattedAddress = nomJson.display_name
+            const a = nomJson.address || {}
+            city = a.city || a.town || a.village || ""
+            state = a.state || ""
+            area = a.suburb || a.neighbourhood || ""
+          }
+        } catch (e) {
+          debugError("Nominatim fallback failed:", e)
+        }
+      }
 
       return {
         latitude,
@@ -159,7 +180,7 @@ export function useLocationSimple() {
         area: area || "", // Primary: Area/subLocality name
         city: city || "",
         state: state || "",
-        formattedAddress: result.formatted_address || "",
+        formattedAddress: formattedAddress || "",
       }
     } catch (err) {
       debugError("Reverse geocoding error:", err)
@@ -187,23 +208,30 @@ export function useLocationSimple() {
       }
 
       navigator.geolocation.getCurrentPosition(
-        (position) => {
+        async (position) => {
           const { latitude, longitude } = position.coords
-          const locationData = {
-            latitude,
-            longitude,
-            area: "",
-            city: "",
-            state: "",
-            formattedAddress: "",
+          try {
+            const locationData = await reverseGeocode(latitude, longitude)
+            localStorage.setItem("userLocation", JSON.stringify(locationData))
+            resolve(locationData)
+          } catch (e) {
+            debugError("Reverse geocoding failed during getCurrentLocation:", e)
+            const locationData = {
+              latitude,
+              longitude,
+              area: "",
+              city: "",
+              state: "",
+              formattedAddress: "",
+            }
+            localStorage.setItem("userLocation", JSON.stringify(locationData))
+            resolve(locationData)
           }
-          localStorage.setItem("userLocation", JSON.stringify(locationData))
-          resolve(locationData)
         },
         (err) => {
           // Handle geolocation errors
           let errorMessage = "Unable to retrieve your location"
-          
+
           switch (err.code) {
             case err.PERMISSION_DENIED:
               errorMessage = "Location permission denied. Please enable location access in your browser settings."
@@ -218,7 +246,7 @@ export function useLocationSimple() {
               errorMessage = "An unknown error occurred while retrieving location."
               break
           }
-          
+
           reject(new Error(errorMessage))
         },
         options
@@ -236,17 +264,17 @@ export function useLocationSimple() {
 
     try {
       const locationData = await getCurrentLocation(true) // Force fresh location
-      
+
       setLocation(locationData)
       setPermissionGranted(true)
       setError(null)
-      
+
       return locationData
     } catch (err) {
       const errorMessage = err.message || "Failed to get location"
       setError(errorMessage)
       setPermissionGranted(false)
-      
+
       // Try to load cached location as fallback
       const cached = localStorage.getItem("userLocation")
       if (cached) {
@@ -257,7 +285,7 @@ export function useLocationSimple() {
           debugError("Failed to parse cached location:", parseErr)
         }
       }
-      
+
       throw err
     } finally {
       setLoading(false)

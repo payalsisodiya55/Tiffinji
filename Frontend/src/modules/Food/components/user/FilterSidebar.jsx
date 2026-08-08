@@ -2,10 +2,10 @@ import React from 'react';
 import { motion, AnimatePresence } from "framer-motion";
 import { X, SlidersHorizontal, ArrowDownUp, IndianRupee, UtensilsCrossed, Check } from "lucide-react";
 
-const FilterSidebar = ({ 
-  isOpen, 
-  onClose, 
-  activeTab, 
+const FilterSidebar = ({
+  isOpen,
+  onClose,
+  activeTab,
   setActiveTab,
   sortBy,
   setSortBy,
@@ -42,10 +42,10 @@ const FilterSidebar = ({
           >
             <div className="p-4 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
               <h2 className="text-lg font-bold flex items-center gap-2">
-                <SlidersHorizontal className="w-5 h-5 text-[#7e3866]" />
+                <SlidersHorizontal className="w-5 h-5 text-primary" />
                 Filters
               </h2>
-              <button 
+              <button
                 onClick={onClose}
                 className="p-2 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors"
               >
@@ -60,11 +60,10 @@ const FilterSidebar = ({
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full p-4 flex flex-col items-center gap-1 transition-all duration-200 ${
-                      activeTab === tab.id 
-                        ? 'bg-white dark:bg-[#1a1a1a] text-[#7e3866] border-r-2 border-[#7e3866]' 
+                    className={`w-full p-4 flex flex-col items-center gap-1 transition-all duration-200 ${activeTab === tab.id
+                        ? 'bg-white dark:bg-[#1a1a1a] text-primary border-r-2 border-primary'
                         : 'text-gray-500 hover:text-gray-700'
-                    }`}
+                      }`}
                   >
                     <tab.icon className="w-5 h-5" />
                     <span className="text-[10px] font-bold uppercase tracking-wider">{tab.label}</span>
@@ -93,9 +92,8 @@ const FilterSidebar = ({
                             checked={sortBy === opt.id}
                             onChange={() => setSortBy(opt.id)}
                           />
-                          <div className={`w-5 h-5 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${
-                            sortBy === opt.id ? 'border-[#7e3866] bg-[#7e3866]' : 'border-gray-300 dark:border-gray-700'
-                          }`}>
+                          <div className={`w-5 h-5 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${sortBy === opt.id ? 'border-primary bg-primary' : 'border-gray-300 dark:border-gray-700'
+                            }`}>
                             {sortBy === opt.id && <Check className="w-3 h-3 text-white" />}
                           </div>
                         </div>
@@ -108,10 +106,10 @@ const FilterSidebar = ({
                 {activeTab === 'cuisine' && (
                   <div className="space-y-2">
                     <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-4">Cuisines</h3>
-                    {['North Indian', 'Chinese', 'South Indian', 'Italian', 'Mexican', 'Continental'].map((c) => (
+                    {['North tiffinji', 'Chinese', 'South tiffinji', 'Italian', 'Mexican', 'Continental'].map((c) => (
                       <label key={c} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 cursor-pointer">
                         <span className="text-sm font-medium">{c}</span>
-                        <Checkbox 
+                        <Checkbox
                           checked={selectedCuisine === c}
                           onCheckedChange={() => setSelectedCuisine(c === selectedCuisine ? null : c)}
                         />
@@ -123,15 +121,15 @@ const FilterSidebar = ({
             </div>
 
             <div className="p-4 border-t border-gray-100 dark:border-gray-800 flex gap-3 bg-white dark:bg-[#111111]">
-              <button 
+              <button
                 onClick={onReset}
                 className="flex-1 py-3 text-sm font-bold text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-xl transition-all"
               >
                 Clear All
               </button>
-              <button 
+              <button
                 onClick={onApply}
-                className="flex-[2] py-3 bg-[#7e3866] text-white text-sm font-bold rounded-xl shadow-lg shadow-[#7e3866]/20 hover:bg-#55254b transition-all active:scale-95"
+                className="flex-[2] py-3 bg-primary text-white text-sm font-bold rounded-xl shadow-lg shadow-primary/20 hover:bg-#55254b transition-all active:scale-95"
               >
                 Apply Filters
               </button>

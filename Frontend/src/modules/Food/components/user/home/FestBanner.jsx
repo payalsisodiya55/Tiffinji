@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowRightCircle, Leaf, Flame, Sparkles } from 'lucide-react';
-import quickSpicyLogo from "@food/assets/quicky-spicy-logo.png";
+
 
 // Images for different modes - Extended pool for rotation
-const images = {
+const defaultImages = {
   nonVeg: [
     "https://images.unsplash.com/photo-1565299585323-38d6b0865b47?w=500&h=500&fit=crop", // Taco
     "https://images.unsplash.com/photo-1544025162-d76694265947?w=500&h=500&fit=crop", // Platter
@@ -21,18 +21,28 @@ const images = {
   ]
 };
 
-export default function FestBanner({ isVegMode, videoUrl = "", hideFoodImages = false }) {
+export default function FestBanner({ isVegMode, images = [], hideFoodImages = false }) {
   const [imgIndex, setImgIndex] = useState(0);
-  const currentPool = isVegMode ? images.veg : images.nonVeg;
-  const hasVideo = typeof videoUrl === "string" && videoUrl.trim().length > 0;
-  
-  // Dynamic rotation
+  const [bgIndex, setBgIndex] = useState(0);
+  const currentPool = isVegMode ? defaultImages.veg : defaultImages.nonVeg;
+  const hasBgImages = Array.isArray(images) && images.length > 0;
+
+  // Dynamic rotation for foreground images
   useEffect(() => {
     const timer = setInterval(() => {
       setImgIndex(prev => (prev + 1) % currentPool.length);
     }, 4000);
     return () => clearInterval(timer);
   }, [currentPool.length]);
+
+  // Dynamic rotation for background slider
+  useEffect(() => {
+    if (!hasBgImages || images.length <= 1) return;
+    const timer = setInterval(() => {
+      setBgIndex(prev => (prev + 1) % images.length);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [hasBgImages, images.length]);
 
   // Reset index when mode changes
   useEffect(() => {
@@ -47,21 +57,41 @@ export default function FestBanner({ isVegMode, videoUrl = "", hideFoodImages = 
   ];
 
   return (
-      <motion.div 
+    <motion.div
       initial={false}
-      className={`relative px-4 pt-2 pb-4 overflow-hidden min-h-[140px] sm:min-h-[180px] transition-all duration-700 ${hasVideo ? 'bg-transparent' : 'bg-transparent'} rounded-b-[2rem]`}
+      id="fest-banner-root"
+      className={`relative px-4 pt-8 pb-6 overflow-hidden transition-all duration-700 bg-transparent rounded-b-[2rem] ${hideFoodImages ? "" : "min-h-[140px] sm:min-h-[180px]"}`}
     >
-      {hasVideo && (
-        <div className="absolute inset-0 z-0">
-          <video
-            src={videoUrl}
-            className="w-full h-full object-cover"
-            autoPlay
-            muted
-            loop
-            playsInline
-          />
-          <div className="absolute inset-0 bg-black/35" />
+      {hasBgImages && (
+        <div className="absolute inset-0 z-0 bg-slate-900">
+          <AnimatePresence mode="popLayout">
+            {images[bgIndex] && (images[bgIndex].endsWith('.mp4') || images[bgIndex].includes('/video/')) ? (
+              <motion.video
+                key={`bg-vid-${bgIndex}`}
+                src={images[bgIndex]}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1.2, ease: "easeInOut" }}
+                className="absolute inset-0 w-full h-full object-contain"
+                muted
+                autoPlay
+                loop
+                playsInline
+              />
+            ) : (
+              <motion.img
+                key={`bg-img-${bgIndex}`}
+                src={images[bgIndex]}
+                initial={{ opacity: 0, scale: 1.05 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0 }}
+                transition={{ duration: 1.2, ease: "easeInOut" }}
+                className="absolute inset-0 w-full h-full object-cover"
+              />
+            )}
+          </AnimatePresence>
+          <div className="absolute inset-0 bg-black/35 z-10" />
         </div>
       )}
 
@@ -74,7 +104,7 @@ export default function FestBanner({ isVegMode, videoUrl = "", hideFoodImages = 
           className="flex items-center gap-2 bg-white/10 backdrop-blur-md px-3 py-1 rounded-full border border-white/10 shadow-sm font-bold"
         >
           <Sparkles className="h-2.5 w-2.5 text-[#fff200] animate-pulse" />
-          <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Foodelo Missions</span>
+          <span className="text-[9px] font-black text-white uppercase tracking-[0.2em]">Tiffinji Missions</span>
           <Sparkles className="h-2.5 w-2.5 text-[#fff200] animate-pulse" />
         </motion.div>
 
@@ -84,15 +114,15 @@ export default function FestBanner({ isVegMode, videoUrl = "", hideFoodImages = 
           animate={{ scale: 1, opacity: 1 }}
           transition={{ type: "spring", damping: 10, stiffness: 100 }}
         >
-          <h2 
+          <h2
             className="text-2xl sm:text-3xl font-black text-[#fff200] italic tracking-tighter drop-shadow-md uppercase leading-none"
             style={{ WebkitTextStroke: '0.5px rgba(255,255,255,0.3)' }}
           >
             {isVegMode ? 'VEGGIE DELIGHT' : 'FEAST BONANZA'}
           </h2>
         </motion.div>
-        
-        <motion.div 
+
+        <motion.div
           animate={{ scale: [1, 1.05, 1] }}
           transition={{ duration: 2, repeat: Infinity }}
           className="flex items-center gap-2 px-4 py-1.5 bg-black/40 backdrop-blur-lg rounded-full border border-white/20 shadow-xl group cursor-pointer active:scale-95 transition-all text-white"
@@ -104,26 +134,24 @@ export default function FestBanner({ isVegMode, videoUrl = "", hideFoodImages = 
           <ArrowRightCircle className="h-5 w-5 text-[#fff200] shadow-sm" />
         </motion.div>
 
-        {hideFoodImages ? (
-          <div className="h-28 sm:h-36" />
-        ) : (
+        {hideFoodImages ? null : (
           <div className="flex items-end justify-center gap-5 sm:gap-8 pt-10 relative w-full mb-2">
             <div className={`absolute bottom-4 left-1/2 -translate-x-1/2 w-56 h-12 blur-[45px] rounded-full transition-colors duration-700 ${isVegMode ? 'bg-emerald-500/40' : 'bg-yellow-400/40'}`} />
-            
+
             <AnimatePresence mode="popLayout" initial={false}>
-              <motion.div 
+              <motion.div
                 key={`img-left-${isVegMode}-${imgIndex}`}
                 className="w-16 h-16 sm:w-20 sm:h-20 z-10"
                 initial={{ x: -100, opacity: 0, rotate: -45, scale: 0.5 }}
-                animate={{ 
-                  x: 0, 
-                  opacity: 1, 
+                animate={{
+                  x: 0,
+                  opacity: 1,
                   rotate: -15,
                   scale: 1,
                   y: [0, -12, 0]
                 }}
                 exit={{ x: -100, opacity: 0, rotate: -45, scale: 0.5 }}
-                transition={{ 
+                transition={{
                   y: { duration: 3.5, repeat: Infinity, ease: "easeInOut" },
                   default: { duration: 0.8, type: "spring", damping: 15 }
                 }}
@@ -131,18 +159,18 @@ export default function FestBanner({ isVegMode, videoUrl = "", hideFoodImages = 
                 <img src={displayImages[0]} alt="food" className="w-full h-full object-cover rounded-2xl border-[3px] border-white shadow-2xl rotate-12" />
               </motion.div>
 
-              <motion.div 
+              <motion.div
                 key={`img-center-${isVegMode}-${imgIndex}`}
                 className="w-24 h-24 sm:w-32 sm:h-32 z-30 -mb-2"
                 initial={{ y: 100, opacity: 0, scale: 0.5 }}
-                animate={{ 
-                  y: 0, 
+                animate={{
+                  y: 0,
                   opacity: 1,
                   scale: 1,
                   rotate: [0, 5, -5, 0]
                 }}
                 exit={{ y: 50, opacity: 0, scale: 0.5 }}
-                transition={{ 
+                transition={{
                   rotate: { duration: 6, repeat: Infinity, ease: "easeInOut" },
                   default: { duration: 0.8, type: "spring", damping: 12, stiffness: 100 }
                 }}
@@ -153,19 +181,19 @@ export default function FestBanner({ isVegMode, videoUrl = "", hideFoodImages = 
                 </div>
               </motion.div>
 
-              <motion.div 
+              <motion.div
                 key={`img-right-${isVegMode}-${imgIndex}`}
                 className="w-16 h-16 sm:w-20 sm:h-20 z-10"
                 initial={{ x: 100, opacity: 0, rotate: 45, scale: 0.5 }}
-                animate={{ 
-                  x: 0, 
-                  opacity: 1, 
+                animate={{
+                  x: 0,
+                  opacity: 1,
                   rotate: 15,
                   scale: 1,
                   y: [0, -12, 0]
                 }}
                 exit={{ x: 100, opacity: 0, rotate: 45, scale: 0.5 }}
-                transition={{ 
+                transition={{
                   y: { duration: 4, repeat: Infinity, ease: "easeInOut", delay: 0.4 },
                   default: { duration: 0.8, type: "spring", damping: 15 }
                 }}

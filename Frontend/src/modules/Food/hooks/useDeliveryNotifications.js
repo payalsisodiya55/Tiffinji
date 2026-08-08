@@ -2,12 +2,19 @@ import { useEffect, useRef, useState, useCallback, useContext } from 'react';
 import io from 'socket.io-client';
 import { API_BASE_URL } from '@food/api/config';
 import { deliveryAPI } from '@food/api';
-const alertSound = '/alert.mp3';
-const originalSound = '/original.mp3';
+import { toast } from 'sonner';
+import alertSound from '@food/assets/audio/alert.mp3';
+
 import { dispatchNotificationInboxRefresh } from '@food/hooks/useNotificationInbox';
-import { addDeliveryNotification } from '@food/utils/deliveryNotifications';
+import {
+  getOrderAlertKey,
+  getOrderMongoId,
+  getOrderAcceptId,
+  normalizeIncomingOrder,
+} from '@food/utils/orderDispatchId';
+import { isValidSocketOrigin, resolveSocketOrigin } from '@food/utils/socketOrigin';
 import { DeliveryNotificationContext } from '../context/DeliveryNotificationContext';
-import { isModuleAuthenticated } from '@food/utils/auth';
+import { subscribeDeliveryPartnerOffers } from '@food/realtimeTracking';
 
 const shouldLogDeliverySocket = () => {
   if (typeof window === 'undefined') return import.meta.env.DEV;
@@ -38,7 +45,6 @@ const debugError = (...args) => {
 
 if (typeof window !== 'undefined') {
   debugLog('alertSound URL:', alertSound);
-  debugLog('originalSound URL:', originalSound);
 }
 
 const resolveAudioSource = (source) => {
@@ -55,6 +61,17 @@ const safeReadJson = (key) => {
   } catch {
     return null;
   }
+};
+
+const isRiderOnline = () => {
+  try {
+    const raw = localStorage.getItem('delivery-v2-online-pref');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      return !!parsed?.state?.isOnline;
+    }
+  } catch (e) {}
+  return false;
 };
 
 const decodeJwtPayload = (token) => {
@@ -74,12 +91,16 @@ const decodeJwtPayload = (token) => {
   }
 };
 
+const getDeliveryAuthToken = () =>
+  localStorage.getItem('delivery_accessToken') || null;
+
+const hasDeliverySession = () => Boolean(getDeliveryAuthToken());
+
 const resolveDeliveryPartnerIdFromClient = () => {
+  if (!hasDeliverySession()) return null;
+
   try {
-    const storedUser =
-      safeReadJson('delivery_user') ||
-      safeReadJson('deliveryUser') ||
-      safeReadJson('user');
+    const storedUser = safeReadJson('delivery_user') || safeReadJson('deliveryUser');
 
     const nestedCandidate =
       storedUser?.id ||
@@ -94,10 +115,7 @@ const resolveDeliveryPartnerIdFromClient = () => {
 
     if (nestedCandidate) return String(nestedCandidate);
 
-    const token =
-      localStorage.getItem('delivery_accessToken') ||
-      localStorage.getItem('accessToken');
-    const payload = decodeJwtPayload(token);
+    const payload = decodeJwtPayload(getDeliveryAuthToken());
     const tokenCandidate =
       payload?.userId ||
       payload?.id ||
@@ -187,6 +205,9 @@ export const useDeliveryNotifications = () => {
   const userInteractedRef = useRef(false);
   const lastAlertAtByOrderRef = useRef(new Map());
   const lastBrowserNotificationAtByOrderRef = useRef(new Map());
+  const lastFirebaseOfferAtByOrderRef = useRef(new Map());
+  const prevFirebaseOfferKeysRef = useRef(new Set());
+  const firebaseDeliveryOffersHealthyRef = useRef(true);
   
   // Step 2: All state hooks (unconditional)
   const [newOrder, setNewOrder] = useState(null);
@@ -194,9 +215,12 @@ export const useDeliveryNotifications = () => {
   const [orderStatusUpdate, setOrderStatusUpdate] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
   const [deliveryPartnerId, setDeliveryPartnerId] = useState(null);
+  const [autoKilledOrder, setAutoKilledOrder] = useState(null);
   const [claimedOrderId, setClaimedOrderId] = useState(null); // set when another partner claims an order
   const [adminNotification, setAdminNotification] = useState(null);
+  const [deliverySessionToken, setDeliverySessionToken] = useState(() => getDeliveryAuthToken());
   const joinedDeliveryRoomRef = useRef(null);
+  const joinedTrackingOrdersRef = useRef(new Set());
   const ALERT_LOOP_INTERVAL_MS = 4500;
   const ALERT_LOOP_MAX_MS = 120000;
   const ALERT_DEDUPE_MS = 15000;
@@ -204,18 +228,6 @@ export const useDeliveryNotifications = () => {
   const NOTIFICATION_PERMISSION_ASKED_KEY = 'delivery_notification_permission_asked';
 
   // Step 3: All callbacks before effects (unconditional)
-  const getOrderAlertKey = (orderData = {}) => (
-    String(
-      orderData?.orderMongoId ||
-      orderData?.order_mongo_id ||
-      orderData?.orderId ||
-      orderData?.order_id ||
-      orderData?._id ||
-      orderData?.id ||
-      ''
-    ).trim()
-  );
-
   const shouldProcessOrderAlert = (orderData = {}) => {
     const key = getOrderAlertKey(orderData);
     if (!key) return true;
@@ -242,6 +254,10 @@ export const useDeliveryNotifications = () => {
       alertLoopTimerRef.current = null;
     }
     alertLoopStartedAtRef.current = 0;
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
   }, []);
 
   const startAlertLoop = useCallback((playSoundFn) => {
@@ -255,7 +271,7 @@ export const useDeliveryNotifications = () => {
         return;
       }
 
-      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      if (typeof document !== 'undefined') {
         playSoundFn(activeOrderRef.current);
       }
     }, ALERT_LOOP_INTERVAL_MS);
@@ -263,7 +279,9 @@ export const useDeliveryNotifications = () => {
   
   const playNotificationSound = useCallback(async (orderData = {}) => {
     try {
-      const usedNativeBridge = await triggerWebViewNativeNotification(orderData);
+      // Temporarily disabled native bridge sound trigger
+      // const usedNativeBridge = await triggerWebViewNativeNotification(orderData);
+      const usedNativeBridge = false;
 
       if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
         navigator.vibrate([200, 100, 200, 100, 300]);
@@ -273,46 +291,24 @@ export const useDeliveryNotifications = () => {
         return;
       }
 
-      // Get current selected sound preference from localStorage
-      const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
-      const soundFile = selectedSound === 'original'
-        ? resolveAudioSource(originalSound, 'delivery-original')
-        : resolveAudioSource(alertSound, 'delivery-alert');
-      
-      // Update audio source if preference changed or initialize if not exists
-      if (audioRef.current) {
-        const currentSrc = audioRef.current.src;
-        const newSrc = soundFile;
-        // Check if source needs to be updated
-        if (!currentSrc.includes(newSrc.split('/').pop())) {
-          audioRef.current.pause();
-          audioRef.current.src = newSrc;
-          audioRef.current.load();
-          debugLog('?? Audio source updated to:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
-        }
-      } else {
-        // Initialize audio if not exists
-        audioRef.current = new Audio();
-        audioRef.current.src = soundFile;
+      // Lazily create audio if it doesn't exist yet
+      if (!audioRef.current) {
+        const soundFile = resolveAudioSource(alertSound);
+        audioRef.current = new Audio(soundFile);
         audioRef.current.preload = 'auto';
         audioRef.current.volume = 0.9;
-        audioRef.current.load();
-        debugLog('?? Audio initialized with:', selectedSound === 'original' ? 'Original' : 'Zomato Tone', 'Source:', soundFile);
       }
-      
-      if (audioRef.current) {
-        audioRef.current.muted = false;
-        audioRef.current.volume = 0.9;
-        audioRef.current.currentTime = 0;
-        audioRef.current.play().catch(error => {
-          // On strict autoplay environments, we still keep vibration/native bridge path active.
-          if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
-            debugWarn('Error playing notification sound:', error);
-          }
-        });
-      }
+
+      // audioRef.current.muted = false;
+      // audioRef.current.volume = 0.9;
+      // audioRef.current.currentTime = 0;
+      // audioRef.current.play().catch(error => {
+      //   // On strict autoplay environments, vibration/native bridge path stays active.
+      //   if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
+      //     debugWarn('Error playing notification sound:', error);
+      //   }
+      // });
     } catch (error) {
-      // Don't log autoplay policy errors
       if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
         debugWarn('Error playing sound:', error);
       }
@@ -375,6 +371,18 @@ export const useDeliveryNotifications = () => {
     }
   }, [playNotificationSound, showBackgroundOrderNotification, startAlertLoop]);
 
+  const shouldUseSocketOrderFallback = useCallback((orderData = {}) => {
+    const channel = String(orderData?.channel || '').toLowerCase();
+    const shouldUse = channel === 'socket_fallback' || !firebaseDeliveryOffersHealthyRef.current;
+    debugLog('Socket fallback health check', {
+      shouldUse,
+      channel,
+      firebaseHealthy: firebaseDeliveryOffersHealthyRef.current,
+      orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
+    });
+    return shouldUse;
+  }, []);
+
   const recoverDeliveryState = useCallback(async () => {
     if (!deliveryPartnerId) return;
 
@@ -418,14 +426,15 @@ export const useDeliveryNotifications = () => {
         const dispatchStatus = order?.dispatch?.status;
         return (
           ['unassigned', 'assigned'].includes(dispatchStatus) &&
-          ['preparing', 'ready_for_pickup'].includes(order?.orderStatus)
+          ['confirmed', 'preparing', 'ready_for_pickup'].includes(order?.orderStatus)
         );
       });
 
       if (recoverableOrder && !activeOrderRef.current) {
-        debugLog('Recovered available delivery order after reconnect/focus:', recoverableOrder);
-        setNewOrder(recoverableOrder);
-        handleIncomingOrderAlert(recoverableOrder);
+        const normalized = normalizeIncomingOrder(recoverableOrder);
+        debugLog('Recovered available delivery order after reconnect/focus:', normalized);
+        setNewOrder(normalized);
+        handleIncomingOrderAlert(normalized);
       }
     } catch (error) {
       debugWarn('Delivery recovery sync failed:', error?.message || error);
@@ -481,9 +490,7 @@ export const useDeliveryNotifications = () => {
           isConnected,
           socketId: socketRef.current?.id || null,
           socketConnected: Boolean(socketRef.current?.connected),
-          socketAuthTokenPresent: Boolean(
-            localStorage.getItem('delivery_accessToken') || localStorage.getItem('accessToken')
-          ),
+          socketAuthTokenPresent: Boolean(getDeliveryAuthToken()),
         };
       },
     };
@@ -529,7 +536,10 @@ export const useDeliveryNotifications = () => {
   useEffect(() => {
     const onVisibilityChange = () => {
       if (typeof document === 'undefined') return;
-      if (document.visibilityState !== 'hidden') return;
+      if (document.visibilityState !== 'hidden') {
+        void recoverDeliveryState();
+        return;
+      }
       if (!activeOrderRef.current) return;
 
       playNotificationSound(activeOrderRef.current);
@@ -540,62 +550,49 @@ export const useDeliveryNotifications = () => {
     return () => {
       document.removeEventListener('visibilitychange', onVisibilityChange);
     };
-  }, [playNotificationSound, showBackgroundOrderNotification]);
+  }, [playNotificationSound, showBackgroundOrderNotification, recoverDeliveryState]);
 
-  // Track user interaction for autoplay policy
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+
+    const onDeliveryFcmAlert = (event) => {
+      const detail = event?.detail || {};
+      debugLog('Received delivery FCM alert bridge', detail);
+      if (!isRiderOnline()) {
+        debugLog('Ignored delivery FCM alert bridge because rider is offline');
+        return;
+      }
+
+      const hintedOrder = normalizeIncomingOrder({
+        orderId: detail?.orderId || detail?.orderMongoId,
+        orderMongoId: detail?.orderMongoId || detail?.orderId,
+      });
+
+      if (hintedOrder && (hintedOrder.orderId || hintedOrder.orderMongoId)) {
+        setNewOrder(hintedOrder);
+      }
+
+      void recoverDeliveryState();
+    };
+
+    window.addEventListener('delivery-fcm-order-alert', onDeliveryFcmAlert);
+    return () => {
+      window.removeEventListener('delivery-fcm-order-alert', onDeliveryFcmAlert);
+    };
+  }, [recoverDeliveryState]);
+
+  // Track user interaction — mark gesture only; never play alert.mp3 during unlock (iOS leak)
   useEffect(() => {
     const handleUserInteraction = async () => {
       userInteractedRef.current = true;
+      audioUnlockAttemptedRef.current = true;
 
-      const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
-      const soundFile = selectedSound === 'original'
-        ? resolveAudioSource(originalSound, 'delivery-original')
-        : resolveAudioSource(alertSound, 'delivery-alert');
-
-      if (!audioRef.current) {
-        audioRef.current = new Audio(soundFile);
-        audioRef.current.preload = 'auto';
-        audioRef.current.volume = 0.7;
-      }
-
-      if (!audioUnlockAttemptedRef.current && audioRef.current) {
-        audioUnlockAttemptedRef.current = true;
-        try {
-          audioRef.current.muted = true;
-          // Ensure src is set even if it was just initialized
-          if (!audioRef.current.src || audioRef.current.src === window.location.href) {
-             const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
-             const soundFile = selectedSound === 'original'
-                ? resolveAudioSource(originalSound)
-                : resolveAudioSource(alertSound);
-             audioRef.current.src = soundFile;
-          }
-          audioRef.current.load();
-          await audioRef.current.play();
-          audioRef.current.pause();
-          audioRef.current.currentTime = 0;
-          debugLog('?? Audio unlocked successfully');
-        } catch (error) {
-          audioUnlockAttemptedRef.current = false;
-          if (!error.message?.includes('user didn\'t interact') && !error.name?.includes('NotAllowedError')) {
-            debugWarn('Error unlocking notification audio:', error, 'Audio src:', audioRef.current?.src);
-          }
-        } finally {
-          // Ensure audio never remains muted after unlock attempts.
-          if (audioRef.current) {
-            audioRef.current.muted = false;
-          }
-        }
-      }
-
-      // Remove listeners after first interaction
       document.removeEventListener('click', handleUserInteraction);
       document.removeEventListener('touchstart', handleUserInteraction);
       document.removeEventListener('keydown', handleUserInteraction);
       window.removeEventListener('pointerdown', handleUserInteraction);
     };
     
-    // Listen for user interaction
     document.addEventListener('click', handleUserInteraction, { once: true });
     document.addEventListener('touchstart', handleUserInteraction, { once: true });
     document.addEventListener('keydown', handleUserInteraction, { once: true });
@@ -609,114 +606,131 @@ export const useDeliveryNotifications = () => {
     };
   }, []);
   
-  // Initialize audio on mount - use selected preference from localStorage
+  // Initialize audio on mount (delivery session only — provider mounts in delivery module)
   useEffect(() => {
-    // Get selected alert sound preference from localStorage
-    const selectedSound = localStorage.getItem('delivery_alert_sound') || 'zomato_tone';
-    const soundFile = selectedSound === 'original'
-      ? resolveAudioSource(originalSound, 'delivery-original')
-      : resolveAudioSource(alertSound, 'delivery-alert');
-    
+    if (!deliverySessionToken) return;
+
+    const soundFile = resolveAudioSource(alertSound);
     if (!audioRef.current) {
       audioRef.current = new Audio(soundFile);
       audioRef.current.preload = 'auto';
-      audioRef.current.volume = 0.7;
-      debugLog('?? Audio initialized with:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
-    } else {
-      // Update audio source if preference changed
-      const currentSrc = audioRef.current.src;
-      const newSrc = soundFile;
-      if (!currentSrc.includes(newSrc.split('/').pop())) {
-        audioRef.current.pause();
-        audioRef.current.src = newSrc;
-        audioRef.current.load();
-        debugLog('?? Audio updated to:', selectedSound === 'original' ? 'Original' : 'Zomato Tone');
-      }
+      audioRef.current.volume = 0.9;
+      debugLog('?? Audio initialized on mount with Alert Sound');
     }
-    
     return () => {
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
       }
     };
-  }, []); // Note: This runs once on mount. To update dynamically, we'd need to listen to storage events
+  }, [deliverySessionToken]);
 
-  // Fetch delivery partner ID
+  // Fetch delivery partner ID (only when logged in as delivery partner)
   useEffect(() => {
-    if (!isModuleAuthenticated('delivery')) {
-      return;
+    if (!deliverySessionToken) {
+      setDeliveryPartnerId(null);
+      return undefined;
     }
 
     const fallbackId = resolveDeliveryPartnerIdFromClient();
     if (fallbackId) {
       setDeliveryPartnerId(fallbackId);
-      debugLog('? Delivery Partner ID restored from local client auth:', fallbackId);
+      debugLog('Delivery Partner ID restored from local client auth:', fallbackId);
     }
+
+    let cancelled = false;
 
     const fetchDeliveryPartnerId = async () => {
       try {
         const response = await deliveryAPI.getMe();
+        if (cancelled) return;
         if (response.data?.success && response.data.data) {
           const deliveryPartner = response.data.data.user || response.data.data.deliveryPartner;
           if (deliveryPartner) {
-            const id = deliveryPartner.id?.toString() || 
-                      deliveryPartner._id?.toString() || 
-                      deliveryPartner.deliveryId;
+            const id =
+              deliveryPartner.id?.toString() ||
+              deliveryPartner._id?.toString() ||
+              deliveryPartner.deliveryId;
             if (id) {
               setDeliveryPartnerId(id);
-              debugLog('? Delivery Partner ID fetched:', id);
+              debugLog('Delivery Partner ID fetched:', id);
             } else {
-              debugWarn('?? Could not extract delivery partner ID from response');
+              debugWarn('Could not extract delivery partner ID from response');
             }
           } else {
-            debugWarn('?? No delivery partner data in API response');
+            debugWarn('No delivery partner data in API response');
           }
         } else {
-          debugWarn('?? Could not fetch delivery partner ID from API');
+          debugWarn('Could not fetch delivery partner ID from API');
         }
       } catch (error) {
-        debugError('Error fetching delivery partner:', error);
+        if (cancelled) return;
+        const msg = String(error?.message || '').toLowerCase();
+        if (msg.includes('not authenticated') || msg.includes('unauthorized')) {
+          debugLog('Delivery getMe skipped — no active delivery session');
+          return;
+        }
+        debugWarn('Error fetching delivery partner:', error);
       }
     };
-    fetchDeliveryPartnerId();
+
+    void fetchDeliveryPartnerId();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deliverySessionToken]);
+
+  // Keep delivery session in sync (login/logout) so socket effect can reconnect.
+  useEffect(() => {
+    const syncDeliverySession = () => {
+      setDeliverySessionToken(getDeliveryAuthToken());
+    };
+    syncDeliverySession();
+    window.addEventListener('deliveryAuthChanged', syncDeliverySession);
+    window.addEventListener('storage', syncDeliverySession);
+    return () => {
+      window.removeEventListener('deliveryAuthChanged', syncDeliverySession);
+      window.removeEventListener('storage', syncDeliverySession);
+    };
   }, []);
 
-  // Socket connection effect (no backend when API_BASE_URL is empty)
-  useEffect(() => {
-    if (!isModuleAuthenticated('delivery')) {
-      setIsConnected(false);
-      return;
+  const reconnectSocketWithToken = useCallback((newToken) => {
+    if (!socketRef.current || !newToken) return;
+    debugLog('Reconnecting delivery socket with refreshed token');
+    socketRef.current.auth = { token: newToken };
+    if (socketRef.current.io?.opts) {
+      socketRef.current.io.opts.query = { token: newToken };
     }
+    joinedDeliveryRoomRef.current = null;
+    joinedTrackingOrdersRef.current.clear();
+    if (socketRef.current.connected) {
+      socketRef.current.disconnect();
+    }
+    socketRef.current.connect();
+  }, []);
+
+  // Socket connection — only for authenticated delivery partners
+  useEffect(() => {
     if (!API_BASE_URL || !String(API_BASE_URL).trim()) {
       setIsConnected(false);
-      return;
+      return undefined;
     }
 
-    // IMPORTANT: Socket.IO server is on the origin (not /api/v1).
-    // Our API baseURL is typically like: http://localhost:5000/api/v1
-    // So for sockets we always connect to: http://localhost:5000
-    let backendUrl = API_BASE_URL;
-    try {
-      const base =
-        String(backendUrl).startsWith('http')
-          ? undefined
-          : (typeof window !== 'undefined' ? window.location.origin : undefined);
-      backendUrl = new URL(backendUrl, base).origin;
-    } catch {
-      // best-effort fallback: strip common API prefixes
-      backendUrl = String(backendUrl || "")
-        .replace(/\/api\/v\d+\/?$/i, "")
-        .replace(/\/api\/?$/i, "")
-        .replace(/\/+$/, "");
-
-      if ((!backendUrl || !backendUrl.startsWith('http')) && typeof window !== 'undefined') {
-        backendUrl = window.location.origin;
+    const token = deliverySessionToken;
+    if (!token) {
+      debugLog('No delivery session — socket idle');
+      setIsConnected(false);
+      if (socketRef.current) {
+        socketRef.current.removeAllListeners();
+        socketRef.current.disconnect();
+        socketRef.current = null;
       }
+      return undefined;
     }
-    
-    // Backend uses default namespace; rooms handle role separation.
-    const socketUrl = `${backendUrl}`;
+
+    const backendUrl = resolveSocketOrigin();
+    const socketUrl = backendUrl;
     
     debugLog('?? Attempting to connect to Delivery Socket.IO:', socketUrl);
     debugLog('?? Backend URL:', backendUrl);
@@ -733,12 +747,10 @@ export const useDeliveryNotifications = () => {
       return;
     }
     
-    // Validate backend URL format
-    if (!backendUrl || !backendUrl.startsWith('http')) {
+    if (!isValidSocketOrigin(backendUrl)) {
       debugError('? CRITICAL: Invalid backend URL format:', backendUrl);
       debugError('?? API_BASE_URL:', API_BASE_URL);
-      debugError('?? Expected format: https://your-domain.com or ');
-      return; // Don't try to connect with invalid URL
+      return;
     }
     
     // Validate socket URL format
@@ -752,7 +764,6 @@ export const useDeliveryNotifications = () => {
       return; // Don't try to connect with invalid URL
     }
 
-    const token = localStorage.getItem('delivery_accessToken') || localStorage.getItem('accessToken');
     const tokenPreview = token ? `${String(token).slice(0, 12)}...` : null;
     debugLog('Preparing socket auth payload', {
       tokenPresent: Boolean(token),
@@ -763,7 +774,8 @@ export const useDeliveryNotifications = () => {
 
     socketRef.current = io(socketUrl, {
       path: '/socket.io/',
-      transports: ['polling', 'websocket'], // Allow both
+      transports: ['websocket', 'polling'], // WebSocket-first for instant delivery
+      upgrade: true,
       reconnection: true,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -793,6 +805,7 @@ export const useDeliveryNotifications = () => {
       setIsConnected(true);
 
       joinedDeliveryRoomRef.current = null;
+      joinedTrackingOrdersRef.current.clear();
       if (!joinDeliveryRoomIfPossible()) {
         debugLog('Socket connected before deliveryPartnerId was ready; waiting to join room.');
       }
@@ -810,6 +823,31 @@ export const useDeliveryNotifications = () => {
 
     socketRef.current.on('resync_complete', (data) => {
       debugLog('Resync completed', data);
+    });
+
+    socketRef.current.on('active_order', (activeOrderData) => {
+      debugLog('Active order recovered via socket resync', {
+        orderId: activeOrderData?.orderId || activeOrderData?.orderMongoId || activeOrderData?._id,
+      });
+      if (!activeOrderData) return;
+      setOrderStatusUpdate({
+        ...activeOrderData,
+        recoverySource: 'socket_resync',
+      });
+    });
+
+    socketRef.current.on('pending_offers', ({ offers = [] } = {}) => {
+      debugLog('Pending offers batch from resync', { count: offers.length });
+      if (!isRiderOnline() || !Array.isArray(offers) || offers.length === 0) return;
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('deliveryPendingOffers', {
+            detail: {
+              offers: offers.map((offer) => normalizeIncomingOrder(offer)).filter(Boolean),
+            },
+          }),
+        );
+      }
     });
 
     socketRef.current.on('connect_error', (error) => {
@@ -837,6 +875,7 @@ export const useDeliveryNotifications = () => {
       });
       setIsConnected(false);
       joinedDeliveryRoomRef.current = null;
+      joinedTrackingOrdersRef.current.clear();
       
       if (reason === 'io server disconnect') {
         socketRef.current.connect();
@@ -861,6 +900,7 @@ export const useDeliveryNotifications = () => {
       setIsConnected(true);
 
       joinedDeliveryRoomRef.current = null;
+      joinedTrackingOrdersRef.current.clear();
       joinDeliveryRoomIfPossible();
       socketRef.current.emit('resync');
       void recoverDeliveryState();
@@ -870,47 +910,66 @@ export const useDeliveryNotifications = () => {
       debugLog('New order received via socket', {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
         dispatchStatus: orderData?.dispatch?.status,
+        channel: orderData?.channel,
       });
-      addDeliveryNotification({
-        title: 'New Order Proposal',
-        message: `You have received a new order proposal #${orderData?.orderId || orderData?.id || ''}.`,
-        link: '/food/delivery/feed'
-      });
-      setNewOrder(orderData);
-      handleIncomingOrderAlert(orderData);
+      if (!isRiderOnline()) {
+        debugLog('?? Ignored new_order - rider is offline');
+        return;
+      }
+      const fallbackOnly = shouldUseSocketOrderFallback(orderData);
+      if (!fallbackOnly) {
+        debugLog('Using socket new_order as direct popup source even though Firebase is healthy', {
+          orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
+          channel: orderData?.channel,
+        });
+      }
+      const normalized = normalizeIncomingOrder(orderData);
+      setNewOrder(normalized);
+      handleIncomingOrderAlert(normalized);
     });
 
-    // Listen for priority-based order notifications (new_order_available)
+    // Socket fallback for dispatch offers when Firebase publish fails on the server.
     socketRef.current.on('new_order_available', (orderData) => {
+      const normalized = normalizeIncomingOrder(orderData);
       debugLog('New order available received via socket', {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
+        normalizedOrderId: normalized?.orderId,
+        normalizedMongoId: normalized?.orderMongoId,
         phase: orderData?.phase || 'unknown',
         dispatchStatus: orderData?.dispatch?.status,
+        channel: orderData?.channel,
       });
-      addDeliveryNotification({
-        title: 'New Order Available',
-        message: `A new order #${orderData?.orderId || orderData?.id || ''} is available in your area.`,
-        link: '/food/delivery/feed'
-      });
-      // Treat it the same as new_order for now - delivery boy can accept it
-      setNewOrder(orderData);
-      handleIncomingOrderAlert(orderData);
+      if (!isRiderOnline()) {
+        debugLog('?? Ignored new_order_available - rider is offline');
+        return;
+      }
+      const fallbackOnly = shouldUseSocketOrderFallback(orderData);
+      if (!fallbackOnly) {
+        debugLog('Using socket new_order_available as direct popup source even though Firebase is healthy', {
+          orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
+          normalizedOrderId: normalized?.orderId,
+          normalizedMongoId: normalized?.orderMongoId,
+          channel: orderData?.channel,
+        });
+      }
+      setNewOrder(normalized);
+      handleIncomingOrderAlert(normalized);
     });
 
     socketRef.current.on('play_notification_sound', (data) => {
       debugLog('play_notification_sound received', {
         orderId: data?.orderId || data?.orderMongoId || data?.order_id,
       });
-      const normalizedData = {
+      if (!isRiderOnline()) {
+        debugLog('?? Ignored play_notification_sound - rider is offline');
+        return;
+      }
+      const normalizedData = normalizeIncomingOrder({
         orderId: data?.orderId || data?.order_id,
         orderMongoId: data?.orderMongoId || data?.order_mongo_id,
         ...data
-      };
-      addDeliveryNotification({
-        title: 'Order Alert',
-        message: `New order sound alert for order #${data?.orderId || data?.order_id || ''}.`,
-        link: '/food/delivery/feed'
       });
+      setNewOrder(normalizedData);
       // Force immediate buzz for notification events, even if dedupe would skip.
       activeOrderRef.current = normalizedData || { id: Date.now() };
       playNotificationSound(normalizedData);
@@ -918,17 +977,11 @@ export const useDeliveryNotifications = () => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
         showBackgroundOrderNotification(normalizedData);
       }
-      handleIncomingOrderAlert(normalizedData);
     });
 
     socketRef.current.on('order_ready', (orderData) => {
       debugLog('order_ready received via socket', {
         orderId: orderData?.orderId || orderData?.orderMongoId || orderData?._id,
-      });
-      addDeliveryNotification({
-        title: 'Order Ready',
-        message: `Order #${orderData?.orderId || orderData?.id || ''} is ready. Proceed to pickup.`,
-        link: '/food/delivery/feed'
       });
       setOrderReady(orderData);
       playNotificationSound(orderData);
@@ -936,21 +989,63 @@ export const useDeliveryNotifications = () => {
 
     socketRef.current.on('order_status_update', (statusData) => {
       debugLog('?? Delivery order status update received via socket:', statusData);
-      addDeliveryNotification({
-        title: 'Order Status Updated',
-        message: `Order #${statusData?.orderId || statusData?.id || ''} status is now ${statusData?.orderStatus || 'updated'}.`,
-        link: '/food/delivery/feed'
-      });
-      setOrderStatusUpdate(statusData || null);
+
+      const statusValue = String(
+        statusData?.status || statusData?.orderStatus || ''
+      ).toLowerCase();
+      const orderStatusPayload = statusData || null;
+      const affectedOrderId =
+        statusData?.orderMongoId || statusData?.orderId || statusData?._id;
+
+      if (statusValue.includes('cancel') || statusValue === 'dead') {
+        stopAlertLoop();
+        activeOrderRef.current = null;
+        setNewOrder(null);
+        if (affectedOrderId) {
+          setClaimedOrderId({
+            orderId: affectedOrderId,
+            orderMongoId: statusData?.orderMongoId || affectedOrderId,
+            claimedBy: 'cancelled',
+          });
+        }
+        setOrderStatusUpdate({
+          ...orderStatusPayload,
+          status: 'cancelled',
+          orderStatus: statusData?.orderStatus || statusData?.status || 'cancelled',
+        });
+        return;
+      }
+
+      if (statusValue === 'deleted') {
+        stopAlertLoop();
+        activeOrderRef.current = null;
+        setNewOrder(null);
+        if (affectedOrderId) {
+          setClaimedOrderId({
+            orderId: affectedOrderId,
+            orderMongoId: statusData?.orderMongoId || affectedOrderId,
+            claimedBy: 'deleted',
+          });
+        }
+        setOrderStatusUpdate({
+          ...orderStatusPayload,
+          status: 'deleted',
+        });
+        return;
+      }
+
+      setOrderStatusUpdate(orderStatusPayload);
     });
 
     socketRef.current.on('order_cancelled', (statusData) => {
       debugLog('?? Delivery order cancelled event received via socket:', statusData);
-      addDeliveryNotification({
-        title: 'Order Cancelled',
-        message: `Order #${statusData?.orderId || statusData?.id || ''} has been cancelled.`,
-        link: '/food/delivery/feed'
-      });
+      stopAlertLoop();
+      activeOrderRef.current = null;
+      setNewOrder(null);
+      
+      const cancelledId = statusData?.orderId || statusData?.orderMongoId || statusData?._id;
+      if (cancelledId) setClaimedOrderId({ orderId: cancelledId, claimedBy: 'cancelled' });
+      
       setOrderStatusUpdate({
         ...(statusData || {}),
         status: 'cancelled'
@@ -959,108 +1054,117 @@ export const useDeliveryNotifications = () => {
 
     socketRef.current.on('order_deleted', (statusData) => {
       debugLog('?? Delivery order deleted event received via socket:', statusData);
-      addDeliveryNotification({
-        title: 'Order Deleted',
-        message: `Order #${statusData?.orderId || statusData?.id || ''} was deleted.`,
-        link: '/food/delivery/feed'
-      });
       setOrderStatusUpdate({
         ...(statusData || {}),
         status: 'deleted'
       });
     });
 
-    socketRef.current.on('order_reassigned_elsewhere', (data) => {
-      debugLog('?? Order reassigned to another partner:', data);
-      addDeliveryNotification({
-        title: 'Order Reassigned',
-        message: `Order #${data?.orderId || ''} was reassigned to another partner.`,
-        link: '/food/delivery/feed'
-      });
+    socketRef.current.on('order_auto_killed', (data) => {
+      debugLog('?? Delivery order auto-killed event received via socket:', data);
       stopAlertLoop();
       activeOrderRef.current = null;
       setNewOrder(null);
-      if (data?.orderId) setClaimedOrderId(data.orderId);
+      
+      const cancelledId = data?.orderId || data?.orderMongoId || data?._id;
+      if (cancelledId) setClaimedOrderId({ orderId: cancelledId, claimedBy: 'cancelled' });
+      
+      setOrderStatusUpdate({
+        ...(data || {}),
+        status: 'cancelled'
+      });
+      setAutoKilledOrder(data);
+    });
+
+    socketRef.current.on('order_reassigned_elsewhere', (data) => {
+      debugLog('?? Order reassigned to another partner:', data);
+      stopAlertLoop();
+      activeOrderRef.current = null;
+      setNewOrder(null);
+      const reassignedId = getOrderMongoId(data) || data?.orderId;
+      if (reassignedId) {
+        setClaimedOrderId({
+          orderId: reassignedId,
+          orderMongoId: getOrderMongoId(data) || reassignedId,
+          claimedBy: data?.claimedBy || 'reassigned',
+        });
+      }
     });
 
     // Backend emits 'order_claimed' when another delivery boy accepts an offered order
     socketRef.current.on('order_claimed', (data) => {
-      debugLog('?? order_claimed received - order taken by another partner:', data);
-      addDeliveryNotification({
-        title: 'Order Claimed',
-        message: `Order #${data?.orderId || data?.order_id || ''} has been claimed by another partner.`,
-        link: '/food/delivery/feed'
+      const claimedMongoId = getOrderMongoId(data) || data?.orderId || data?.order_id;
+      const activeOrderRefId = getOrderMongoId(activeOrderRef.current) || activeOrderRef.current?.orderId || activeOrderRef.current?._id;
+      const isCurrentAlertOrder = Boolean(claimedMongoId && activeOrderRefId && String(claimedMongoId) == String(activeOrderRefId));
+      debugLog('?? order_claimed received - order taken by another partner:', {
+        raw: data,
+        claimedMongoId,
+        claimedBy: data?.claimedBy,
+        activeOrderRefId,
+        isCurrentAlertOrder,
       });
-      stopAlertLoop();
-      activeOrderRef.current = null;
-      setNewOrder(null);
-      const claimedId = data?.orderId || data?.orderMongoId || data?.order_id;
-      if (claimedId) setClaimedOrderId(claimedId);
+      if (isCurrentAlertOrder) {
+        stopAlertLoop();
+        activeOrderRef.current = null;
+        setNewOrder(null);
+      }
+      if (claimedMongoId) {
+        setClaimedOrderId({
+          orderId: claimedMongoId,
+          orderMongoId: getOrderMongoId(data) || claimedMongoId,
+          claimedBy: data?.claimedBy,
+        });
+      }
     });
 
     socketRef.current.on('admin_notification', (payload) => {
       debugLog('Admin broadcast received via socket', payload);
-      
-      const title = payload?.title || 'Notification';
-      const body = payload?.message || 'New broadcast notification received.';
-
-      // Show native browser notification popup
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
-        try {
-          if ('serviceWorker' in navigator) {
-            navigator.serviceWorker.getRegistration().then(registration => {
-              if (registration) {
-                registration.showNotification(title, {
-                  body,
-                  icon: '/logo.png',
-                  tag: `admin-broadcast-${Date.now()}`,
-                  requireInteraction: true,
-                  vibrate: [200, 100, 200, 100, 300],
-                  data: { targetUrl: payload?.link || '/' }
-                });
-              } else {
-                new Notification(title, { body, icon: '/logo.png' });
-              }
-            }).catch(() => {
-              new Notification(title, { body, icon: '/logo.png' });
-            });
-          } else {
-            new Notification(title, { body, icon: '/logo.png' });
-          }
-        } catch (e) {
-          // Fallback silently
-        }
-      }
-
-      addDeliveryNotification({
-        title: payload?.title || 'System Notification',
-        message: payload?.message || 'New broadcast notification received.',
-        link: payload?.link || '/food/delivery/feed'
-      });
       setAdminNotification(payload);
       dispatchNotificationInboxRefresh();
     });
 
+    socketRef.current.on('admin_force_status', async (payload) => {
+      debugLog('Admin force status received via socket', payload);
+      try {
+        const { useDeliveryStore } = await import('@/modules/DeliveryV2/store/useDeliveryStore');
+        const isOnline = payload?.status === 'online';
+        useDeliveryStore.getState().setOnline(isOnline);
+        
+        if (isOnline) {
+            toast.success(payload?.message || 'You have been marked online by the Admin.', { duration: 5000 });
+        } else {
+            toast.error(payload?.message || 'You have been marked offline by the Admin.', { duration: 8000 });
+            stopAlertLoop();
+            activeOrderRef.current = null;
+            setNewOrder(null);
+        }
+      } catch (err) {
+        debugError('Error handling admin_force_status:', err);
+      }
+    });
+
     // Auth change/refresh listeners
     const handleAuthChange = () => {
-      const newToken = localStorage.getItem('delivery_accessToken') || localStorage.getItem('accessToken');
-      if (socketRef.current && newToken) {
-        debugLog('?? Auth changed, updating socket token');
-        socketRef.current.auth.token = newToken;
-        // Only reconnect if not already connecting/connected or if token changed significantly
-        if (!socketRef.current.connected) {
-          socketRef.current.connect();
+      const newToken = getDeliveryAuthToken();
+      if (!newToken) {
+        setDeliveryPartnerId(null);
+        setIsConnected(false);
+        joinedDeliveryRoomRef.current = null;
+        joinedTrackingOrdersRef.current.clear();
+        if (socketRef.current) {
+          socketRef.current.removeAllListeners();
+          socketRef.current.disconnect();
+          socketRef.current = null;
         }
+        return;
       }
+      reconnectSocketWithToken(newToken);
     };
 
     const handleAuthRefreshed = (e) => {
-      if (e.detail?.module === 'delivery' && socketRef.current && e.detail.token) {
-        debugLog('?? Auth refreshed for delivery, updating socket token');
-        socketRef.current.auth.token = e.detail.token;
-        if (!socketRef.current.connected) {
-          socketRef.current.connect();
-        }
+      if (e.detail?.module === 'delivery' && e.detail.token) {
+        debugLog('?? Auth refreshed for delivery, reconnecting socket');
+        reconnectSocketWithToken(e.detail.token);
       }
     };
 
@@ -1083,6 +1187,7 @@ export const useDeliveryNotifications = () => {
       debugLog('? Cleaning up socket connection...');
       stopAlertLoop();
       joinedDeliveryRoomRef.current = null;
+      joinedTrackingOrdersRef.current.clear();
       window.removeEventListener('deliveryAuthChanged', handleAuthChange);
       window.removeEventListener('authRefreshed', handleAuthRefreshed);
       window.removeEventListener('focus', handleWindowFocus);
@@ -1093,11 +1198,13 @@ export const useDeliveryNotifications = () => {
         socketRef.current = null;
       }
     };
-  }, [deliveryPartnerId, handleIncomingOrderAlert, joinDeliveryRoomIfPossible, playNotificationSound, recoverDeliveryState, showBackgroundOrderNotification, startAlertLoop, stopAlertLoop]);
+  }, [deliveryPartnerId, deliverySessionToken, handleIncomingOrderAlert, joinDeliveryRoomIfPossible, playNotificationSound, recoverDeliveryState, reconnectSocketWithToken, shouldUseSocketOrderFallback, showBackgroundOrderNotification, startAlertLoop, stopAlertLoop]);
 
   useEffect(() => {
     if (!deliveryPartnerId) {
-      debugLog('? Waiting for deliveryPartnerId...');
+      if (deliverySessionToken) {
+        debugLog('Waiting for deliveryPartnerId (delivery session active)');
+      }
       return;
     }
 
@@ -1111,7 +1218,83 @@ export const useDeliveryNotifications = () => {
       socketRef.current.emit('resync');
       void recoverDeliveryState();
     }
-  }, [deliveryPartnerId, joinDeliveryRoomIfPossible, recoverDeliveryState]);
+  }, [deliveryPartnerId, deliverySessionToken, joinDeliveryRoomIfPossible, recoverDeliveryState]);
+
+  useEffect(() => {
+    if (!deliveryPartnerId) return undefined;
+
+    debugLog('Subscribing to Firebase delivery partner offers', { deliveryPartnerId });
+
+    const unsubscribe = subscribeDeliveryPartnerOffers(
+      deliveryPartnerId,
+      (offersMap = {}) => {
+        if (!isRiderOnline()) return;
+        firebaseDeliveryOffersHealthyRef.current = true;
+
+        const currentKeys = new Set(Object.keys(offersMap || {}));
+
+        for (const previousKey of prevFirebaseOfferKeysRef.current) {
+          if (!currentKeys.has(previousKey)) {
+            const activeKey =
+              getOrderMongoId(activeOrderRef.current) ||
+              activeOrderRef.current?.orderId ||
+              activeOrderRef.current?._id;
+            if (activeKey && String(activeKey) === String(previousKey)) {
+              debugLog('Firebase offer removed for active alert order', { orderId: previousKey });
+              stopAlertLoop();
+              activeOrderRef.current = null;
+              setNewOrder(null);
+            }
+            setClaimedOrderId({
+              orderId: previousKey,
+              orderMongoId: previousKey,
+              claimedBy: 'claimed',
+            });
+          }
+        }
+        prevFirebaseOfferKeysRef.current = currentKeys;
+
+        Object.entries(offersMap || {}).forEach(([orderMongoId, offerData]) => {
+          if (!offerData || typeof offerData !== 'object') return;
+
+          const offerStatus = String(offerData.status || 'offered').toLowerCase();
+          if (offerStatus !== 'offered') return;
+
+          const offeredAt = Number(offerData.offeredAt || offerData.last_updated || 0);
+          const lastSeen = lastFirebaseOfferAtByOrderRef.current.get(orderMongoId) || 0;
+          if (!offeredAt || offeredAt <= lastSeen) return;
+
+          lastFirebaseOfferAtByOrderRef.current.set(orderMongoId, offeredAt);
+
+          const normalized = normalizeIncomingOrder({
+            ...offerData,
+            orderMongoId,
+            _id: offerData._id || orderMongoId,
+            source: 'firebase',
+          });
+
+          debugLog('New order offer received via Firebase', {
+            orderMongoId,
+            orderId: normalized?.orderId,
+            offeredAt,
+          });
+
+          setNewOrder(normalized);
+          handleIncomingOrderAlert(normalized);
+        });
+      },
+      (error) => {
+        firebaseDeliveryOffersHealthyRef.current = false;
+        debugWarn('Firebase delivery-offer listener error:', error?.message || error);
+      },
+    );
+
+    return () => {
+      debugLog('Unsubscribing Firebase delivery partner offers', { deliveryPartnerId });
+      prevFirebaseOfferKeysRef.current = new Set();
+      unsubscribe();
+    };
+  }, [deliveryPartnerId, handleIncomingOrderAlert, stopAlertLoop]);
 
   // Helper functions
   const clearNewOrder = () => {
@@ -1135,12 +1318,23 @@ export const useDeliveryNotifications = () => {
   };
 
   const emitLocation = useCallback((data) => {
-    if (socketRef.current && socketRef.current.connected) {
-      // debugLog('? Emitting location via socket:', data);
-      socketRef.current.emit('update-location', data);
-      return true;
+    if (!socketRef.current?.connected || !data) return false;
+
+    const orderId = String(getOrderMongoId(data) || getOrderAcceptId(data) || data.orderId || '').trim();
+    if (!orderId) return false;
+
+    if (!joinedTrackingOrdersRef.current.has(orderId)) {
+      joinedTrackingOrdersRef.current.add(orderId);
+      socketRef.current.emit('join-tracking', orderId);
     }
-    return false;
+
+    socketRef.current.emit('update-location', {
+      ...data,
+      orderId,
+      userId: data.userId,
+      restaurantId: data.restaurantId,
+    });
+    return true;
   }, []);
 
   return {
@@ -1154,6 +1348,8 @@ export const useDeliveryNotifications = () => {
     clearAdminNotification,
     claimedOrderId,
     clearClaimedOrderId,
+    autoKilledOrder,
+    clearAutoKilledOrder: () => setAutoKilledOrder(null),
     isConnected,
     playNotificationSound,
     emitLocation

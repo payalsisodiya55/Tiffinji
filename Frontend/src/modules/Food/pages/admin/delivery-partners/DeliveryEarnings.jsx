@@ -101,27 +101,6 @@ export default function DeliveryEarnings() {
   }, [fetchEarnings])
 
   const handleFilterChange = (key, value) => {
-    const todayStr = new Date().toISOString().split('T')[0]
-    if (key === 'fromDate' && value) {
-      if (value > todayStr) {
-        toast.error("From Date cannot be in the future")
-        return
-      }
-      if (filters.toDate && value > filters.toDate) {
-        toast.error("From Date cannot be later than To Date")
-        return
-      }
-    }
-    if (key === 'toDate' && value) {
-      if (value > todayStr) {
-        toast.error("To Date cannot be in the future")
-        return
-      }
-      if (filters.fromDate && value < filters.fromDate) {
-        toast.error("To Date cannot be earlier than From Date")
-        return
-      }
-    }
     setFilters(prev => ({ ...prev, [key]: value }))
     setPagination(prev => ({ ...prev, page: 1 }))
   }
@@ -155,9 +134,9 @@ export default function DeliveryEarnings() {
       deliveryPartnerPhone: earning.deliveryPartnerPhone || 'N/A',
       orderId: earning.orderId || 'N/A',
       restaurantName: earning.restaurantName || 'N/A',
-      amount: formatCurrency(earning.amount),
-      orderTotal: formatCurrency(earning.orderTotal),
-      deliveryFee: formatCurrency(earning.deliveryFee),
+      amount: Number(earning.amount || 0).toFixed(2),
+      orderTotal: Number(earning.orderTotal || 0).toFixed(2),
+      deliveryFee: Number(earning.deliveryFee || 0).toFixed(2),
       orderStatus: earning.orderStatus || 'N/A',
       createdAt: formatDate(earning.createdAt)
     }))
@@ -168,7 +147,7 @@ export default function DeliveryEarnings() {
           headers.map(h => h.label).join(","),
           ...data.map(row => headers.map(h => `"${row[h.key] || ''}"`).join(","))
         ].join("\n")
-        const csvBlob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" })
+        const csvBlob = new Blob(["\uFEFF" + csvContent], { type: "text/csv;charset=utf-8;" })
         const csvLink = document.createElement("a")
         csvLink.href = URL.createObjectURL(csvBlob)
         csvLink.download = `delivery_earnings_${new Date().toISOString().split('T')[0]}.csv`
@@ -296,7 +275,6 @@ export default function DeliveryEarnings() {
                 type="date"
                 value={filters.fromDate}
                 onChange={(e) => handleFilterChange('fromDate', e.target.value)}
-                max={new Date().toISOString().split('T')[0]}
                 className="w-full px-3 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>

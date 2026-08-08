@@ -16,6 +16,7 @@ import {
 import { DateRangeCalendar } from "@food/components/ui/date-range-calendar"
 import { restaurantAPI } from "@food/api"
 import { useRestaurantNotifications } from "@food/hooks/useRestaurantNotifications"
+import OrderDetails from "./OrderDetails"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -70,9 +71,7 @@ const dateRangeOptions = [
 const filterCategories = [
   { id: "Order status", label: "Order status" },
   { id: "Ratings", label: "Ratings" },
-  { id: "KPT delay", label: "KPT delay" },
-  { id: "Complaints", label: "Complaints" },
-  { id: "Order type", label: "Order type" }
+  { id: "Complaints", label: "Complaints" }
 ]
 
 const filterOptions = {
@@ -91,12 +90,6 @@ const filterOptions = {
     { id: "2-star", label: "2★ or less", key: "ratings", value: 2 },
     { id: "1-star", label: "1★", key: "ratings", value: 1 }
   ],
-  "KPT delay": [
-    { id: "0-10", label: "0-10 mins", key: "kptDelay" },
-    { id: "10-20", label: "10-20 mins", key: "kptDelay" },
-    { id: "20-30", label: "20-30 mins", key: "kptDelay" },
-    { id: "30-plus", label: "30+ mins", key: "kptDelay" }
-  ],
   "Complaints": [
     { id: "order-delayed", label: "Order delayed", key: "complaints" },
     { id: "wrong-items", label: "Wrong item(s) delivered", key: "complaints" },
@@ -105,15 +98,6 @@ const filterOptions = {
     { id: "poor-packaging", label: "Poor packaging or spillage", key: "complaints" },
     { id: "out-of-stock", label: "Item(s) out of stock", key: "complaints" },
     { id: "not-delivered", label: "Order not delivered", key: "complaints" }
-  ],
-  "Order type": [
-    { id: "self-delivery", label: "Self delivery", key: "orderType" },
-    { id: "food-rescue", label: "Food rescue", key: "orderType" },
-    { id: "large-order", label: "Large order", key: "orderType" },
-    { id: "veg-only", label: "Veg only", key: "orderType" },
-    { id: "irctc", label: "IRCTC", key: "orderType" },
-    { id: "replacement", label: "Replacement", key: "orderType" },
-    { id: "hospital", label: "Hospital", key: "orderType" }
   ]
 }
 
@@ -128,6 +112,9 @@ export default function AllOrdersPage() {
   const [endDate, setEndDate] = useState(currentWeekDates.end)
   const calendarRef = useRef(null)
   
+  // Side panel state
+  const [selectedOrder, setSelectedOrder] = useState(null)
+  
   // Filter states
   const [showFilterPopup, setShowFilterPopup] = useState(false)
   const [activeFilterCategory, setActiveFilterCategory] = useState("Order status")
@@ -136,9 +123,7 @@ export default function AllOrdersPage() {
   const [filters, setFilters] = useState({
     orderStatus: [],
     ratings: [],
-    kptDelay: [],
-    complaints: [],
-    orderType: []
+    complaints: []
   })
   
   // Toast state
@@ -227,8 +212,26 @@ export default function AllOrdersPage() {
     const allVeg = items.every(item => item.isVeg !== false)
     if (allVeg && items.length > 0) tags.push('VEG ONLY')
     
+    // Calculate Net Payout for the Restaurant
+    let restaurantPayout = 0;
+    if (order.pricing) {
+        const p = order.pricing;
+        const itemSubtotal = p.subtotal || p.itemsTotal || p.itemSubtotal || 0;
+        const packagingFee = p.packagingFee || 0;
+        const restaurantCommission = p.restaurantCommission || 0;
+        const gstOnItem = p.gstOnItem || 0;
+        const gstOnCommission = p.gstOnCommission || 0;
+        const paymentGatewayFee = p.paymentGatewayFee || 0;
+        const tcs = p.tcs || 0;
+        
+        // Match exact logic from OrderDetails.jsx
+        restaurantPayout = Math.max(0, itemSubtotal + packagingFee - restaurantCommission - gstOnItem - gstOnCommission - paymentGatewayFee - tcs);
+    } else {
+        restaurantPayout = order.pricing?.total || 0;
+    }
+    
     return {
-      id: order.orderId || order._id?.toString() || '',
+      id: order.order_id || order.orderId || order._id?.toString() || '',
       status,
       date,
       time,
@@ -236,7 +239,7 @@ export default function AllOrdersPage() {
       address,
       customer: customerName,
       items,
-      totalPrice: order.pricing?.total || 0,
+      totalPrice: restaurantPayout || (order.pricing?.total || 0),
       reason,
       tags: tags.length > 0 ? tags : undefined,
       createdAt: order.createdAt,
@@ -396,9 +399,7 @@ export default function AllOrdersPage() {
     setFilters({
       orderStatus: [],
       ratings: [],
-      kptDelay: [],
-      complaints: [],
-      orderType: []
+      complaints: []
     })
     setFilterSearch("")
   }
@@ -465,22 +466,16 @@ export default function AllOrdersPage() {
       if (!matchesStatus) return false
     }
 
-    // Order type filter
-    if (filters.orderType.length > 0) {
-      const hasMatchingTag = order.tags?.some(tag => {
-        const tagLower = tag.toLowerCase().replace(/\s+/g, '-')
-        return filters.orderType.includes(tagLower)
-      })
-      if (!hasMatchingTag) return false
-    }
-
     return true
   })
 
   return (
-    <div className="min-h-screen bg-gray-100">
+    <div className="restaurant-page h-[100dvh] flex flex-col md:flex-row relative overflow-hidden bg-gray-100">
+      
+      {/* Main List Column */}
+      <div className={`flex-1 flex flex-col min-w-0 transition-all duration-300 h-full overflow-y-auto ${selectedOrder ? 'hidden md:flex' : 'flex'}`}>
       {/* Header */}
-      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-50">
+      <div className="bg-white border-b border-gray-200 px-4 py-3 sticky top-0 z-40">
         <div className="flex items-center gap-3">
           <button
             onClick={goBack}
@@ -622,8 +617,8 @@ export default function AllOrdersPage() {
                 delay: Math.min(index * 0.05, 0.3),
                 layout: { duration: 0.3 }
               }}
-              onClick={() => navigate(`/food/restaurant/orders/${order.id}`, { state: { mongoId: order.mongoId } })}
-              className="bg-white border border-gray-200 rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow"
+              onClick={() => setSelectedOrder({ id: order.id, mongoId: order.mongoId })}
+              className={`bg-white border rounded-lg p-4 cursor-pointer hover:shadow-md transition-shadow ${selectedOrder?.id === order.id ? 'border-blue-500 shadow-sm ring-1 ring-blue-500' : 'border-gray-200'}`}
             >
             {/* Status and Order ID Row */}
             <div className="flex items-start justify-between mb-3">
@@ -632,12 +627,7 @@ export default function AllOrdersPage() {
                   {order.status}
                 </span>
                 {order.tags && order.tags.map((tag, idx) => (
-                  <span
-                    key={idx}
-                    className="px-2.5 py-1 rounded text-xs font-bold text-white"
-                    style={{
-                      backgroundColor: tag === 'VEG ONLY' ? '#16a34a' : (tag === 'HOME DELIVERY' ? '#2563eb' : '#4b5563')
-                    }}>
+                  <span key={idx} className="px-2.5 py-1 rounded text-xs font-bold bg-green-600 text-white">
                     {tag}
                   </span>
                 ))}
@@ -690,7 +680,7 @@ export default function AllOrdersPage() {
 
             {/* Price Footer */}
             <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
-              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Total Amount</span>
+              <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Net Payout</span>
               <span className="text-base font-bold text-gray-900">{formatMoney(order.totalPrice)}</span>
             </div>
 
@@ -705,6 +695,26 @@ export default function AllOrdersPage() {
           </AnimatePresence>
         )}
       </div>
+      </div>
+
+      {/* Side Panel for Order Details */}
+      <AnimatePresence>
+        {selectedOrder && (
+          <motion.div
+            initial={{ x: "100%", opacity: 0.5 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: "100%", opacity: 0.5 }}
+            transition={{ type: "spring", damping: 25, stiffness: 200 }}
+            className="w-full md:w-[450px] lg:w-[500px] border-l border-gray-200 bg-white h-[100dvh] md:h-full z-[100] md:z-auto fixed md:static top-0 right-0 overflow-y-auto flex-shrink-0 shadow-2xl md:shadow-none"
+          >
+            <OrderDetails 
+               idProp={selectedOrder.id} 
+               mongoIdProp={selectedOrder.mongoId} 
+               onClose={() => setSelectedOrder(null)} 
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Date Range Popup */}
       <AnimatePresence>
@@ -728,7 +738,7 @@ export default function AllOrdersPage() {
                 damping: 30,
                 stiffness: 300
               }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50"
+              className="restaurant-modal-sheet bg-white rounded-t-2xl shadow-2xl z-50"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="flex justify-center pt-2 pb-1">
@@ -805,7 +815,7 @@ export default function AllOrdersPage() {
               className="fixed inset-0 z-[60] flex items-center justify-center p-4"
               onClick={() => setShowCalendar(false)}
             >
-              <div onClick={(e) => e.stopPropagation()} className="w-full max-w-sm">
+              <div onClick={(e) => e.stopPropagation()} className="restaurant-modal-inline max-w-sm">
                 <DateRangeCalendar
                   startDate={startDate}
                   endDate={endDate}
@@ -842,7 +852,7 @@ export default function AllOrdersPage() {
                 damping: 30,
                 stiffness: 300
               }}
-              className="fixed bottom-0 left-0 right-0 bg-white rounded-t-2xl shadow-2xl z-50 flex flex-col"
+              className="restaurant-modal-sheet bg-white rounded-t-2xl shadow-2xl z-50 flex flex-col"
               style={{ height: '65vh' }}
               onClick={(e) => e.stopPropagation()}
             >

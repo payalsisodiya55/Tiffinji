@@ -1,12 +1,12 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { Bell, X, ShoppingBag, MapPin, Clock, IndianRupee } from 'lucide-react';
+import { Bell, X, ShoppingBag, MapPin, Clock, IndianRupee, Volume2, VolumeX } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 /**
  * New Order Notification Component
  * Displays a notification popup when a new order is received
  */
-export default function NewOrderNotification({ order, onClose, onViewOrder }) {
+export default function NewOrderNotification({ order, onClose, onViewOrder, isMuted = false, onToggleMute = null, showSoundToggle = false }) {
   const navigate = useNavigate();
 
   if (!order) return null;
@@ -38,15 +38,31 @@ export default function NewOrderNotification({ order, onClose, onViewOrder }) {
               </div>
               <div>
                 <h3 className="text-white font-bold text-lg">New Order!</h3>
-                <p className="text-white/90 text-sm">Order #{order.orderId}</p>
+                <p className="text-white/90 text-sm">Order #{order.order_id || order.orderId || order._id}</p>
               </div>
             </div>
-            <button
-              onClick={onClose}
-              className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
-            >
-              <X className="w-5 h-5 text-white" />
-            </button>
+            <div className="flex items-center gap-2">
+              {showSoundToggle && typeof onToggleMute === "function" && (
+                <button
+                  onClick={onToggleMute}
+                  className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+                  aria-label={isMuted ? "Enable order sound" : "Mute order sound"}
+                  title={isMuted ? "Enable order sound" : "Mute order sound"}
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-5 h-5 text-white" />
+                  ) : (
+                    <Volume2 className="w-5 h-5 text-white" />
+                  )}
+                </button>
+              )}
+              <button
+                onClick={onClose}
+                className="w-8 h-8 rounded-full bg-white/20 hover:bg-white/30 flex items-center justify-center transition-colors"
+              >
+                <X className="w-5 h-5 text-white" />
+              </button>
+            </div>
           </div>
 
           {/* Order Details */}
@@ -72,9 +88,9 @@ export default function NewOrderNotification({ order, onClose, onViewOrder }) {
                       <div className="flex items-center gap-3">
                         {item.image && (
                           <div className="w-8 h-8 rounded-md overflow-hidden bg-gray-100 flex-shrink-0">
-                            <img 
-                              src={item.image} 
-                              alt={item.name} 
+                            <img
+                              src={item.image}
+                              alt={item.name}
                               className="w-full h-full object-cover"
                               onError={(e) => { e.target.style.display = 'none'; }}
                             />

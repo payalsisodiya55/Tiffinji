@@ -1,11 +1,9 @@
 import { useState, useEffect, useRef } from "react"
 import { useNavigate } from "react-router-dom"
 import useRestaurantBackNavigation from "@food/hooks/useRestaurantBackNavigation"
-import { MapPin, Search, Save, Loader2, ArrowLeft } from "lucide-react"
-import RestaurantNavbar from "@food/components/restaurant/RestaurantNavbar"
+import { MapPin, Search, Save, Loader2, ArrowLeft, Navigation } from "lucide-react"
 import { restaurantAPI, zoneAPI } from "@food/api"
-import { getGoogleMapsApiKey } from "@food/utils/googleMapsApiKey"
-import { Loader } from "@googlemaps/js-api-loader"
+import { loadGoogleMaps as loadGoogleMapsScript } from "@food/utils/googleMapsLoader"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -60,9 +58,10 @@ export default function ZoneSetup() {
   const autocompleteRef = useRef(null)
   const geocoderRef = useRef(null)
   
-  const [googleMapsApiKey, setGoogleMapsApiKey] = useState("")
   const [mapLoading, setMapLoading] = useState(true)
+  const [mapError, setMapError] = useState("")
   const [saving, setSaving] = useState(false)
+  const [fetchingLocation, setFetchingLocation] = useState(false)
   const [restaurantData, setRestaurantData] = useState(null)
   const [locationSearch, setLocationSearch] = useState("")
   const [selectedLocation, setSelectedLocation] = useState(null)
@@ -71,14 +70,53 @@ export default function ZoneSetup() {
   const [currentZone, setCurrentZone] = useState(null)
   const [isInZone, setIsInZone] = useState(false)
   const [checkingZone, setCheckingZone] = useState(false)
-  const [searchFocused, setSearchFocused] = useState(false)
   const polygonRefs = useRef([])
 
   useEffect(() => {
     fetchRestaurantData()
     fetchZones()
-    loadGoogleMaps()
+    bootstrapZoneMap()
   }, [])
+
+  const waitForMapContainer = () =>
+    new Promise((resolve, reject) => {
+      let attempts = 0
+      const tick = () => {
+        if (mapRef.current) {
+          resolve(mapRef.current)
+          return
+        }
+        attempts += 1
+        if (attempts >= 50) {
+          reject(new Error("Map container not ready. Please refresh the page."))
+          return
+        }
+        setTimeout(tick, 100)
+      }
+      tick()
+    })
+
+  const bootstrapZoneMap = async () => {
+    try {
+      setMapLoading(true)
+      setMapError("")
+      await waitForMapContainer()
+
+      const google = window.google?.maps
+        ? window.google
+        : await loadGoogleMapsScript({ libraries: ["places", "geometry"] })
+
+      initializeMap(google)
+    } catch (error) {
+      debugError("Error loading Google Maps:", error)
+      setMapLoading(false)
+      const message =
+        error?.message?.includes("API key")
+          ? "Google Maps API key is not configured. Please contact your administrator."
+          : error?.message || "Failed to load Google Maps. Please refresh and try again."
+      setMapError(message)
+    }
+  }
 
   const fetchZones = async () => {
     try {
@@ -118,6 +156,7 @@ export default function ZoneSetup() {
           
           // Set selected location
           setSelectedLocation({ lat, lng, address })
+          checkLocationInZone(lat, lng)
         }
       })
       
@@ -148,11 +187,13 @@ export default function ZoneSetup() {
               setSelectedAddress(address)
               setSelectedLocation({ lat, lng, address })
               updateMarker(lat, lng, address)
+              checkLocationInZone(lat, lng)
             } else {
               setLocationSearch(existingAddress)
               setSelectedAddress(existingAddress)
               setSelectedLocation({ lat, lng, address: existingAddress })
               updateMarker(lat, lng, existingAddress)
+              checkLocationInZone(lat, lng)
             }
           })
         } else {
@@ -160,6 +201,7 @@ export default function ZoneSetup() {
           setSelectedAddress(existingAddress)
           setSelectedLocation({ lat, lng, address: existingAddress })
           updateMarker(lat, lng, existingAddress)
+          checkLocationInZone(lat, lng)
         }
       }
     }
@@ -257,87 +299,6 @@ export default function ZoneSetup() {
     }
   }
 
-  const loadGoogleMaps = async () => {
-    try {
-      debugLog("?? Starting Google Maps load...")
-      
-      // Fetch API key from database
-      let apiKey = null
-      try {
-        apiKey = await getGoogleMapsApiKey()
-        debugLog("?? API Key received:", apiKey ? `Yes (${apiKey.substring(0, 10)}...)` : "No")
-        
-        if (!apiKey || apiKey.trim() === "") {
-          debugError("? API key is empty or not found in database")
-          setMapLoading(false)
-          alert("Google Maps API key not found in database. Please contact administrator to add the API key in admin panel.")
-          return
-        }
-      } catch (apiKeyError) {
-        debugError("? Error fetching API key from database:", apiKeyError)
-        setMapLoading(false)
-        alert("Failed to fetch Google Maps API key from database. Please check your connection or contact administrator.")
-        return
-      }
-      
-      setGoogleMapsApiKey(apiKey)
-      
-      // Wait for Google Maps to be loaded from main.jsx if it's loading
-      let retries = 0
-      const maxRetries = 100 // Wait up to 10 seconds
-      
-      debugLog("?? Waiting for Google Maps to load from main.jsx...")
-      while (!window.google && retries < maxRetries) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        retries++
-      }
-
-      // Wait for mapRef to be available (retry mechanism)
-      let refRetries = 0
-      const maxRefRetries = 50 // Wait up to 5 seconds for ref
-      while (!mapRef.current && refRetries < maxRefRetries) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        refRetries++
-      }
-
-      if (!mapRef.current) {
-        debugError("? mapRef.current is still null after waiting")
-        setMapLoading(false)
-        alert("Failed to initialize map container. Please refresh the page.")
-        return
-      }
-
-      // If Google Maps is already loaded, use it directly
-      if (window.google && window.google.maps) {
-        debugLog("? Google Maps already loaded from main.jsx, initializing map...")
-        initializeMap(window.google)
-        return
-      }
-
-      // If Google Maps is not loaded yet and we have an API key, use Loader as fallback
-      if (apiKey) {
-        debugLog("?? Google Maps not loaded from main.jsx, loading with Loader...")
-        const loader = new Loader({
-          apiKey: apiKey,
-          version: "weekly",
-          libraries: ["places"]
-        })
-
-        const google = await loader.load()
-        debugLog("? Google Maps loaded via Loader, initializing map...")
-        initializeMap(google)
-      } else {
-        debugError("? No API key available")
-        setMapLoading(false)
-        alert("Google Maps API key not found. Please contact administrator.")
-      }
-    } catch (error) {
-      debugError("? Error loading Google Maps:", error)
-      setMapLoading(false)
-      alert(`Failed to load Google Maps: ${error.message}. Please refresh the page or contact administrator.`)
-    }
-  }
-
   const initializeMap = (google) => {
     try {
       if (!mapRef.current) {
@@ -408,11 +369,12 @@ export default function ZoneSetup() {
       })
 
       setMapLoading(false)
+      setMapError("")
       debugLog("? Map loading complete")
     } catch (error) {
       debugError("? Error in initializeMap:", error)
       setMapLoading(false)
-      alert("Failed to initialize map. Please refresh the page.")
+      setMapError("Failed to initialize map. Please refresh the page.")
     }
   }
 
@@ -564,9 +526,63 @@ export default function ZoneSetup() {
     }
   }
 
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser")
+      return
+    }
+
+    setFetchingLocation(true)
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const lat = position.coords.latitude
+        const lng = position.coords.longitude
+        
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.setCenter({ lat, lng })
+          mapInstanceRef.current.setZoom(17)
+        }
+        
+        if (geocoderRef.current) {
+          geocoderRef.current.geocode({ location: { lat, lng } }, (results, status) => {
+            if (status === "OK" && results[0]) {
+              const address = results[0].formatted_address
+              setLocationSearch(address)
+              setSelectedAddress(address)
+              setSelectedLocation({ lat, lng, address })
+              updateMarker(lat, lng, address)
+              checkLocationInZone(lat, lng)
+            } else {
+              const address = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+              setLocationSearch(address)
+              setSelectedAddress(address)
+              setSelectedLocation({ lat, lng, address })
+              updateMarker(lat, lng, address)
+              checkLocationInZone(lat, lng)
+            }
+            setFetchingLocation(false)
+          })
+        } else {
+          const address = `${lat.toFixed(6)}, ${lng.toFixed(6)}`
+          setLocationSearch(address)
+          setSelectedAddress(address)
+          setSelectedLocation({ lat, lng, address })
+          updateMarker(lat, lng, address)
+          checkLocationInZone(lat, lng)
+          setFetchingLocation(false)
+        }
+      },
+      (error) => {
+        debugError("Error fetching location:", error)
+        alert("Failed to get your current location. Please allow location access in your browser.")
+        setFetchingLocation(false)
+      },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50">
-      <RestaurantNavbar />
+    <div className="restaurant-page min-h-full bg-gray-50">
       <div className="p-4 md:p-6 max-w-7xl mx-auto">
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6">
@@ -591,24 +607,37 @@ export default function ZoneSetup() {
 
         {/* Search Bar */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
-          <div className={`flex gap-3 transition-all duration-300 ${searchFocused ? "flex-col" : "flex-row items-center"}`}>
-            <div className={`relative transition-all duration-300 ${searchFocused ? "w-full" : "flex-1"}`}>
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1 relative w-full">
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
               <input
                 ref={autocompleteInputRef}
                 type="text"
                 value={locationSearch}
                 onChange={(e) => setLocationSearch(e.target.value)}
-                onFocus={() => setSearchFocused(true)}
-                onBlur={() => setSearchFocused(false)}
                 placeholder="Search for your restaurant location..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent transition-all duration-300"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
               />
             </div>
+            
+            <button
+              onClick={handleUseCurrentLocation}
+              disabled={fetchingLocation || mapLoading}
+              title="Use current location"
+              className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              {fetchingLocation ? (
+                <Loader2 className="w-5 h-5 animate-spin" />
+              ) : (
+                <Navigation className="w-5 h-5" />
+              )}
+              <span className="hidden sm:inline">Current Location</span>
+            </button>
+
             <button
               onClick={handleSaveLocation}
               disabled={!selectedLocation || saving}
-              className={`flex items-center gap-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-all duration-300 disabled:bg-gray-400 disabled:cursor-not-allowed ${searchFocused ? "w-full justify-center" : "shrink-0"}`}
+              className="flex items-center justify-center gap-2 px-6 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed whitespace-nowrap"
             >
               {saving ? (
                 <>
@@ -669,6 +698,21 @@ export default function ZoneSetup() {
                 <Loader2 className="w-8 h-8 animate-spin text-red-600 mx-auto mb-2" />
                 <p className="text-gray-600">Loading map...</p>
                 <p className="text-xs text-gray-400 mt-2">If this takes too long, please refresh the page</p>
+              </div>
+            </div>
+          )}
+          {!mapLoading && mapError && (
+            <div className="absolute inset-0 bg-white flex items-center justify-center z-10 p-6">
+              <div className="text-center max-w-md">
+                <p className="text-red-600 font-semibold mb-2">Unable to load map</p>
+                <p className="text-sm text-gray-600 mb-4">{mapError}</p>
+                <button
+                  type="button"
+                  onClick={() => bootstrapZoneMap()}
+                  className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                >
+                  Retry
+                </button>
               </div>
             </div>
           )}

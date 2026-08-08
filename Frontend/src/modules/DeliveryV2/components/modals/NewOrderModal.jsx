@@ -3,15 +3,21 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { User, MapPin, FastForward, Clock, Phone, ChefHat, ChevronDown } from 'lucide-react';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
-import { getHaversineDistance, calculateETA } from '@/modules/DeliveryV2/utils/geo';
+import { getHaversineDistance } from '@/modules/DeliveryV2/utils/geo';
+import { getOrderMongoId, getOrderDisplayId, isSameOrder } from '@food/utils/orderDispatchId';
 
 /**
  * NewOrderModal - Ported to Original 1:1 Theme with Slider Accept.
  * Matches the Zomato/Swiggy style Green Header + White Card.
  */
-export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
+export const NewOrderModal = ({ order, queuedOrders = [], onSelectOrder, onAccept, onReject, onMinimize }) => {
   const { riderLocation } = useDeliveryStore();
-  const [timeLeft, setTimeLeft] = useState(30);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const orderKey = getOrderMongoId(order) || getOrderDisplayId(order);
+
+  useEffect(() => {
+    setTimeLeft(60);
+  }, [orderKey]);
 
   useEffect(() => {
     if (timeLeft <= 0) {
@@ -22,46 +28,112 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
     return () => clearInterval(timer);
   }, [timeLeft, onReject]);
 
-  const { distanceKm, etaMins } = useMemo(() => {
-    if (!order) return { distanceKm: null, etaMins: null };
+  const { pickup, drop, total } = useMemo(() => {
+    const unknown = {
+      pickup: { distanceKm: '??', etaMins: '??' },
+      drop: { distanceKm: '??', etaMins: '??' },
+      total: { distanceKm: '??', etaMins: '??' },
+    };
+    if (!order) return unknown;
 
-    // A. Use provided data if available (Direct distance from socket)
-    const rawDist = order.pickupDistanceKm || order.distanceKm;
-    const rawEta = order.estimatedTime || order.duration || order.eta;
-    
-    if (rawDist != null) {
-      return { 
-        distanceKm: Number(rawDist).toFixed(1), 
-        etaMins: rawEta && rawEta > 0 ? Math.ceil(rawEta) : Math.ceil((rawDist * 1000) / 416) + 5
-      };
+    const resolveRestaurantCoords = () => {
+      const rest = order.restaurantLocation || order.restaurantId?.location || {};
+      let lat = parseFloat(order.restaurant_lat || order.restaurantLat || rest.latitude || rest.lat);
+      let lng = parseFloat(order.restaurant_lng || order.restaurantLng || rest.longitude || rest.lng);
+      if ((Number.isNaN(lat) || Number.isNaN(lng)) && Array.isArray(rest.coordinates) && rest.coordinates.length >= 2) {
+        lng = parseFloat(rest.coordinates[0]);
+        lat = parseFloat(rest.coordinates[1]);
+      }
+      return { lat, lng };
+    };
+
+    const resolveCustomerCoords = () => {
+      const deliveryAddress = order?.deliveryAddress || {};
+      const geoCoords =
+        Array.isArray(deliveryAddress?.location?.coordinates) &&
+        deliveryAddress.location.coordinates.length >= 2
+          ? {
+              lng: parseFloat(deliveryAddress.location.coordinates[0]),
+              lat: parseFloat(deliveryAddress.location.coordinates[1]),
+            }
+          : null;
+      const loc = order.customerLocation || order.deliveryLocation || geoCoords;
+      if (!loc) return { lat: NaN, lng: NaN };
+      return { lat: parseFloat(loc.lat), lng: parseFloat(loc.lng) };
+    };
+
+    const etaFromMeters = (meters, extraMins = 0) =>
+      Math.max(1, Math.ceil(meters / 416) + extraMins);
+
+    const fmtKm = (km) => (km != null && Number.isFinite(km) ? km.toFixed(1) : '??');
+    const fmtMins = (mins) => (mins != null && Number.isFinite(mins) ? mins : '??');
+
+    let pickupDistKm = null;
+    let pickupEta = null;
+    const rawPickup = order.pickupDistanceKm ?? order.distanceKm;
+    if (rawPickup != null) {
+      pickupDistKm = Number(rawPickup);
+      const rawEta = order.estimatedTime || order.duration || order.eta;
+      pickupEta =
+        rawEta && rawEta > 0 ? Math.ceil(rawEta) : etaFromMeters(pickupDistKm * 1000, 5);
+    } else {
+      const { lat: resLat, lng: resLng } = resolveRestaurantCoords();
+      if (riderLocation && !Number.isNaN(resLat) && !Number.isNaN(resLng)) {
+        const distM = getHaversineDistance(riderLocation.lat, riderLocation.lng, resLat, resLng);
+        pickupDistKm = distM / 1000;
+        pickupEta = etaFromMeters(distM, order.prepTime || 5);
+      }
     }
 
-    // B. Calculate from locations (Local calculation fallback)
-    const rest = order.restaurantLocation || order.restaurantId?.location || {};
-    const resLat = parseFloat(order.restaurant_lat || order.restaurantLat || rest.latitude || rest.lat);
-    const resLng = parseFloat(order.restaurant_lng || order.restaurantLng || rest.longitude || rest.lng);
-
-    if (riderLocation && !isNaN(resLat) && !isNaN(resLng)) {
-      const distM = getHaversineDistance(
-        riderLocation.lat, riderLocation.lng,
-        resLat, resLng
-      );
-      const km = distM / 1000;
-      // Assume 25km/h avg for initial estimate (roughly 416m/min)
-      const mins = Math.ceil(distM / 416) + (order.prepTime || 5);
-      
-      return { 
-        distanceKm: km.toFixed(1), 
-        etaMins: mins 
-      };
+    let dropDistKm = null;
+    let dropEta = null;
+    const rawDrop = order.dropDistanceKm ?? order.deliveryDistanceKm;
+    if (rawDrop != null) {
+      dropDistKm = Number(rawDrop);
+      dropEta = order.dropEta ? Math.ceil(order.dropEta) : etaFromMeters(dropDistKm * 1000, 0);
+    } else {
+      const { lat: resLat, lng: resLng } = resolveRestaurantCoords();
+      const { lat: custLat, lng: custLng } = resolveCustomerCoords();
+      if (!Number.isNaN(resLat) && !Number.isNaN(resLng) && !Number.isNaN(custLat) && !Number.isNaN(custLng)) {
+        const distM = getHaversineDistance(resLat, resLng, custLat, custLng);
+        dropDistKm = distM / 1000;
+        dropEta = etaFromMeters(distM, 0);
+      }
     }
 
-    return { distanceKm: '??', etaMins: order.prepTime || 15 };
+    const totalKm =
+      pickupDistKm != null && dropDistKm != null ? pickupDistKm + dropDistKm : null;
+    const totalEta =
+      pickupEta != null && dropEta != null ? pickupEta + dropEta : null;
+
+    return {
+      pickup: { distanceKm: fmtKm(pickupDistKm), etaMins: fmtMins(pickupEta) },
+      drop: { distanceKm: fmtKm(dropDistKm), etaMins: fmtMins(dropEta) },
+      total: { distanceKm: fmtKm(totalKm), etaMins: fmtMins(totalEta) },
+    };
   }, [order, riderLocation]);
 
   if (!order) return null;
 
+  useEffect(() => {
+    console.log('[DeliveryPopupTrace] NewOrderModal mounted', {
+      popupOrderId: orderKey,
+      displayId: getOrderDisplayId(order),
+      queuedCount: queuedOrders.length,
+    });
+
+    return () => {
+      console.log('[DeliveryPopupTrace] NewOrderModal unmounted', {
+        popupOrderId: orderKey,
+        displayId: getOrderDisplayId(order),
+      });
+    };
+  }, [orderKey, order, queuedOrders.length]);
+
+  const bonus = order.deliveryBonusAmount || 0;
   const earnings = order.earnings || order.riderEarning || (order.orderAmount ? order.orderAmount * 0.1 : 0);
+  const baseEarnings = Math.max(0, earnings - bonus);
+
   const restaurantName = order.restaurantName || order.restaurant_name || (order.restaurantId?.name) || 'Restaurant';
   const restaurantAddress = order.restaurantAddress || order.restaurant_address || (order.restaurantId?.location?.address) || 'Address not available';
   const deliveryAddress = order?.deliveryAddress || {};
@@ -130,12 +202,61 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
         >
           <div>
             <p className="text-white/80 text-[10px] font-bold uppercase tracking-widest mb-1">Incoming Request</p>
-            <h2 className="text-2xl sm:text-4xl font-bold tracking-tighter">₹{Number(earnings || 0).toFixed(2)}</h2>
+            <div className="flex items-end gap-2">
+              <h2 className="text-2xl sm:text-4xl font-bold tracking-tighter">₹{Number(earnings || 0).toFixed(2)}</h2>
+              {bonus > 0 && (
+                <p className="text-white/70 text-xs font-semibold mb-1">
+                  (₹{Number(baseEarnings).toFixed(0)} + ₹{Number(bonus).toFixed(0)} Bonus)
+                </p>
+              )}
+            </div>
           </div>
           <div className="bg-white/20 border border-white/30 rounded-2xl sm:rounded-3xl px-3 sm:px-6 py-2 sm:py-3 text-white font-bold text-lg sm:text-2xl shadow-inner tabular-nums">
             {timeLeft}s
           </div>
         </div>
+
+        {queuedOrders.length > 1 && (
+          <div className="px-4 sm:px-6 py-3 bg-gray-50 border-b border-gray-100">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-gray-400 mb-2">
+              {queuedOrders.length} orders available — tap to switch
+            </p>
+            <div className="flex gap-2 overflow-x-auto pb-1">
+              {queuedOrders.map((queuedOrder, index) => {
+                const queuedId = getOrderMongoId(queuedOrder) || getOrderDisplayId(queuedOrder);
+                const isActive = isSameOrder(queuedOrder, order);
+                const earnings =
+                  queuedOrder.earnings ||
+                  queuedOrder.riderEarning ||
+                  queuedOrder.pricing?.deliveryFee ||
+                  0;
+                const label =
+                  getOrderDisplayId(queuedOrder) ||
+                  `Order ${index + 1}`;
+
+                return (
+                  <button
+                    key={queuedId || `order-${index}`}
+                    type="button"
+                    onClick={() => onSelectOrder?.(queuedOrder)}
+                    className={`shrink-0 rounded-2xl px-4 py-2.5 border text-left transition-all ${
+                      isActive
+                        ? 'bg-gray-900 text-white border-gray-900 shadow-lg'
+                        : 'bg-white text-gray-700 border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <span className="block text-[10px] font-bold uppercase tracking-wider opacity-80">
+                      {label.length > 12 ? `${label.slice(0, 12)}…` : label}
+                    </span>
+                    <span className="block text-sm font-bold mt-0.5">
+                      ₹{Number(earnings || 0).toFixed(0)}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Info Body */}
         <div className="p-4 sm:p-8 pb-6 sm:pb-12 space-y-5 sm:space-y-10 overflow-y-auto max-h-[78vh]">
@@ -176,37 +297,65 @@ export const NewOrderModal = ({ order, onAccept, onReject, onMinimize }) => {
           </div>
 
            <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
-             <div className="p-3 sm:p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-2.5 sm:gap-3">
-               <Clock className="w-5 h-5 text-orange-500" />
+             <div className="p-3 sm:p-4 bg-green-50 rounded-2xl border border-green-100 flex items-center gap-2.5 sm:gap-3">
+               <MapPin className="w-5 h-5 text-green-600" />
                <div className="flex flex-col">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Time</span>
-                  <span className="text-sm font-bold text-gray-900">{etaMins} MINS</span>
+                  <span className="text-[10px] text-green-600/80 font-bold uppercase tracking-widest">To Restaurant</span>
+                  <span className="text-sm font-bold text-gray-900">{pickup.distanceKm} KM</span>
                </div>
              </div>
-             <div className="p-3 sm:p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-2.5 sm:gap-3">
-               <MapPin className="w-5 h-5 text-gray-400" />
+             <div className="p-3 sm:p-4 bg-green-50 rounded-2xl border border-green-100 flex items-center gap-2.5 sm:gap-3">
+               <Clock className="w-5 h-5 text-green-600" />
                <div className="flex flex-col">
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Distance</span>
-                  <span className="text-sm font-bold text-gray-900">{distanceKm} KM</span>
+                  <span className="text-[10px] text-green-600/80 font-bold uppercase tracking-widest">Pickup Time</span>
+                  <span className="text-sm font-bold text-gray-900">{pickup.etaMins} MINS</span>
+               </div>
+             </div>
+             <div className="p-3 sm:p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-center gap-2.5 sm:gap-3">
+               <MapPin className="w-5 h-5 text-blue-600" />
+               <div className="flex flex-col">
+                  <span className="text-[10px] text-blue-600/80 font-bold uppercase tracking-widest">To Customer</span>
+                  <span className="text-sm font-bold text-gray-900">{drop.distanceKm} KM</span>
+               </div>
+             </div>
+             <div className="p-3 sm:p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-center gap-2.5 sm:gap-3">
+               <Clock className="w-5 h-5 text-blue-600" />
+               <div className="flex flex-col">
+                  <span className="text-[10px] text-blue-600/80 font-bold uppercase tracking-widest">Drop Time</span>
+                  <span className="text-sm font-bold text-gray-900">{drop.etaMins} MINS</span>
                </div>
              </div>
           </div>
+          {total.distanceKm !== '??' && (
+            <p className="text-center text-[11px] font-semibold text-gray-500">
+              Total trip ~ {total.distanceKm} KM · ~ {total.etaMins} MINS
+            </p>
+          )}
 
         {/* Action Area */}
           <div className="space-y-4 sm:space-y-6 pt-1 sm:pt-2">
             <ActionSlider 
+              key={orderKey}
               label="Slide to Accept" 
               onConfirm={() => onAccept(order)} 
               color="bg-black"
               successLabel="Order Accepted ✓"
             />
 
-            <button 
-              onClick={onReject}
-              className="w-full text-gray-400 font-bold text-[10px] uppercase tracking-widest hover:text-red-500 transition-colors py-2 active:scale-95"
-            >
-              Pass this task
-            </button>
+            <div className="flex justify-between items-center px-4 pt-2">
+              <button 
+                onClick={onMinimize}
+                className="text-gray-400 font-bold text-[10px] uppercase tracking-widest hover:text-gray-600 transition-colors active:scale-95"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={onReject}
+                className="text-gray-400 font-bold text-[10px] uppercase tracking-widest hover:text-red-500 transition-colors active:scale-95"
+              >
+                Pass this task
+              </button>
+            </div>
           </div>
         </div>
       </motion.div>

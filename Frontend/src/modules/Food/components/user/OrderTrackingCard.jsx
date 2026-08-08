@@ -2,17 +2,16 @@ import { useState, useEffect, useMemo, useRef, useCallback, memo } from "react";
 import { useNavigate } from "react-router-dom";
 import { UtensilsCrossed, ChevronRight, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import { createPortal } from "react-dom";
 
 const CookingAnimation = memo(() => (
-  <div className="relative w-12 h-12 flex items-center justify-center rounded-xl bg-orange-50 dark:bg-orange-950/20 border border-orange-100 dark:border-orange-900/30 overflow-visible shadow-[0_4px_15px_rgba(235,89,14,0.15)] dark:shadow-[0_4px_15px_rgba(0,0,0,0.2)] shrink-0">
+  <div className="relative w-12 h-12 flex items-center justify-center rounded-xl bg-orange-50 border border-orange-100 overflow-visible shadow-[0_4px_15px_rgba(235,89,14,0.15)] shrink-0">
     <div className="absolute -top-3 flex gap-1.5">
       <motion.div animate={{ opacity: [0, 0.8, 0], y: [0, -8, -12], scale: [0.8, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0, ease: "easeOut" }} className="w-1.5 h-3 bg-orange-400/60 rounded-full blur-[1px]" />
       <motion.div animate={{ opacity: [0, 0.8, 0], y: [0, -10, -15], scale: [0.8, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.5, ease: "easeOut" }} className="w-1.5 h-3 bg-orange-400/60 rounded-full blur-[1px]" />
       <motion.div animate={{ opacity: [0, 0.8, 0], y: [0, -8, -12], scale: [0.8, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity, delay: 1, ease: "easeOut" }} className="w-1.5 h-3 bg-orange-400/60 rounded-full blur-[1px]" />
     </div>
     <motion.div animate={{ rotate: [-2, 2, -2] }} transition={{ duration: 0.6, repeat: Infinity, ease: "easeInOut" }} className="relative z-10 mt-1">
-      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-[#D51F10] drop-shadow-sm">
+      <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary drop-shadow-sm">
         {/* Cooker Body */}
         <path d="M6 10h12v6a4 4 0 0 1-4 4H10a4 4 0 0 1-4-4v-6z" />
         {/* Lid Rim */}
@@ -28,13 +27,17 @@ const CookingAnimation = memo(() => (
     </motion.div>
     {/* Flame below */}
     <motion.div animate={{ opacity: [0.4, 0.8, 0.4], scaleX: [0.8, 1.2, 0.8] }} transition={{ duration: 0.6, repeat: Infinity, ease: "easeInOut" }} className="absolute bottom-0 w-full flex justify-center z-0">
-      <div className="w-4 h-1 bg-[#D51F10] blur-[2px] rounded-full" />
+      <div className="w-4 h-1 bg-primary blur-[2px] rounded-full" />
     </motion.div>
   </div>
 ));
 
 import { useOrders } from "@food/context/OrdersContext";
 import { orderAPI } from "@food/api";
+import {
+  patchOrderFromSocketPayload,
+  socketPayloadNeedsRefetch,
+} from "@food/utils/orderSocketPatch";
 
 const getOrderKey = (order) => order?.id || order?._id || order?.orderId || null;
 
@@ -81,6 +84,7 @@ const TERMINAL_STATUSES = new Set([
   "canceled_by_restaurant",
   "cancelled_by_admin",
   "canceled_by_admin",
+  "dead",
 ]);
 
 const isActiveOrder = (order) => {
@@ -143,6 +147,8 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
   const [invalidOrderIds, setInvalidOrderIds] = useState(new Set());
 
   const fetchOrders = useCallback(async () => {
+    const token = localStorage.getItem("food_user_token") || localStorage.getItem("token");
+    if (!token) return;
     try {
       const response = await orderAPI.getOrders({ limit: 10, page: 1 });
       let nextOrders = [];
@@ -180,10 +186,36 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
   }, []);
 
   useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 30000);
-    return () => clearInterval(interval);
+    fetchOrders(); // Fetch once on mount to check if any order is active
   }, [fetchOrders]);
+
+  // Smart Polling fallback: Only poll if there is an active order, and only fetch that specific order's details
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (document.hidden) return;
+
+      const currentKey = activeOrderKeyRef.current;
+      if (!currentKey) return; // Do nothing if no active order exists
+
+      try {
+        const response = await orderAPI.getOrderDetails(currentKey);
+        const fresh = response?.data?.data?.order || response?.data?.order || response?.data?.data || null;
+        if (fresh) {
+          setActiveOrderOverride(fresh);
+        }
+      } catch (error) {
+        if (error?.response?.status === 404 || error?.response?.status === 400) {
+          setInvalidOrderIds((prev) => {
+            const next = new Set(prev);
+            next.add(currentKey);
+            return next;
+          });
+        }
+      }
+    }, 90000); // Poll every 90 seconds only for the active order
+
+    return () => clearInterval(interval);
+  }, []);
 
   const uniqueOrders = useMemo(() => {
     const isMongoObjectId = (value) => /^[a-f0-9]{24}$/i.test(String(value || ""));
@@ -239,17 +271,14 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
 
       const snap = activeOrderSnapshotRef.current;
 
-      setActiveOrderOverride((prev) => ({
-        ...(prev || snap || {}),
-        orderStatus: detail?.orderStatus || prev?.orderStatus || snap?.orderStatus,
-        deliveryState: detail?.deliveryState
-          ? { ...(prev?.deliveryState || snap?.deliveryState || {}), ...detail.deliveryState }
-          : prev?.deliveryState || snap?.deliveryState,
-        status: detail?.status || prev?.status || snap?.status,
-      }));
+      setActiveOrderOverride((prev) =>
+        patchOrderFromSocketPayload(prev || snap || {}, detail),
+      );
 
+      const needsRefetch = socketPayloadNeedsRefetch(detail, detail?.orderStatus);
       const now = Date.now();
-      if (now - lastRefreshRef.current < 1500) return;
+      if (!needsRefetch) return;
+      if (now - lastRefreshRef.current < 30000) return;
       lastRefreshRef.current = now;
 
       try {
@@ -325,15 +354,24 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
 
   const [dismissedKey, setDismissedKey] = useState(null);
 
-  const currentOrderKey = activeOrder ? getOrderKey(activeOrder) : null;
-  const isDismissed = dismissedKey === currentOrderKey;
-  
-  const restaurantName = activeOrder?.restaurant || activeOrder?.restaurantName || "Restaurant";
-  const orderStatus = activeOrder ? getOrderStatus(activeOrder) : "preparing";
-  const orderPhase = activeOrder ? getOrderPhase(activeOrder) : "";
+  if (!activeOrder) {
+    return null;
+  }
 
+  const currentOrderKey = activeOrder.id || activeOrder._id || activeOrder.orderId;
+  if (dismissedKey === currentOrderKey) {
+    return null;
+  }
+
+  const orderStatus = getOrderStatus(activeOrder) || "preparing";
+  const orderPhase = getOrderPhase(activeOrder);
+  if (TERMINAL_STATUSES.has(orderStatus) || orderPhase === "cancelled" || orderPhase === "canceled") {
+    return null;
+  }
+
+  const restaurantName =
+    activeOrder.restaurant || activeOrder.restaurantName || "Restaurant";
   const statusText = (() => {
-    if (!activeOrder) return "";
     const s = String(orderStatus);
     const p = String(orderPhase);
 
@@ -349,70 +387,59 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
     return "Preparing your order";
   })();
 
-  const card = (
+  return (
     <AnimatePresence>
-      {activeOrder && !isDismissed && !TERMINAL_STATUSES.has(orderStatus) && orderPhase !== "completed" && orderPhase !== "delivered" && (
-        <motion.div
-          initial={{ y: 100, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          exit={{ y: 100, opacity: 0 }}
-          transition={{ type: "spring", damping: 25, stiffness: 200 }}
-          className={`fixed ${hasBottomNav ? "bottom-24" : "bottom-6"} left-4 right-4 z-[9999]`}
+      <motion.div
+        initial={{ y: 100, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        exit={{ y: 100, opacity: 0 }}
+        transition={{ type: "spring", damping: 25, stiffness: 200 }}
+        className={`fixed ${hasBottomNav ? "bottom-20" : "bottom-6"} left-4 right-4 z-[9999]`}
+      >
+        <div 
+          onClick={() =>
+            navigate(
+              `/food/user/orders/${activeOrder.id || activeOrder._id || activeOrder.orderId}`,
+            )
+          }
+          className="relative bg-white/95 backdrop-blur-xl rounded-[20px] p-4 shadow-[0_8px_30px_rgba(235,89,14,0.15)] border border-orange-100/60 overflow-visible cursor-pointer group"
         >
-          <div 
-            onClick={() =>
-              navigate(
-                `/food/user/orders/${activeOrder.id || activeOrder._id || activeOrder.orderId}`,
-              )
-            }
-            className="relative bg-white/95 dark:bg-[#1a1a1a]/95 backdrop-blur-xl rounded-[20px] p-4 shadow-[0_8px_30px_rgba(235,89,14,0.15)] dark:shadow-[0_8px_30px_rgba(0,0,0,0.3)] border border-orange-100/60 dark:border-zinc-800/80 overflow-visible cursor-pointer group"
+          {/* Subtle gradient background mesh */}
+          <div className="absolute inset-0 bg-gradient-to-r from-orange-50/50 via-white/40 to-white/80 opacity-60 pointer-events-none rounded-[20px]" />
+          
+          <button 
+             onClick={(e) => { e.stopPropagation(); setDismissedKey(currentOrderKey); }}
+             className="absolute top-2 right-2 p-1.5 rounded-full bg-orange-50/80 text-orange-400 hover:text-#55254b hover:bg-orange-100/80 transition-colors z-20 shadow-sm"
           >
-            {/* Subtle gradient background mesh */}
-            <div className="absolute inset-0 bg-gradient-to-r from-orange-50/50 via-white/40 to-white/80 dark:from-zinc-900/30 dark:via-zinc-900/10 dark:to-zinc-900/40 opacity-60 pointer-events-none rounded-[20px]" />
-            
-            <button 
-               onClick={(e) => { e.stopPropagation(); setDismissedKey(currentOrderKey); }}
-               className="absolute top-2 right-2 p-1.5 rounded-full bg-orange-50/80 dark:bg-zinc-800 text-orange-400 dark:text-zinc-500 hover:text-[#55254b] dark:hover:text-zinc-300 hover:bg-orange-100/80 dark:hover:bg-zinc-700 transition-colors z-20 shadow-sm"
-            >
-              <X className="w-3.5 h-3.5 pointer-events-none" />
-            </button>
+            <X className="w-3.5 h-3.5 pointer-events-none" />
+          </button>
 
-            <div className="flex items-center gap-4 relative z-10 w-full">
-              <CookingAnimation />
+          <div className="flex items-center gap-4 relative z-10 w-full">
+            <CookingAnimation />
 
-              <div className="flex-1 min-w-0 pr-4">
-                <p className="text-gray-900 dark:text-white font-bold text-base md:text-lg truncate tracking-tight">{restaurantName}</p>
-                <div className="flex items-center gap-1.5 mt-0.5">
-                  <p className="text-gray-500 dark:text-gray-400 font-medium text-xs md:text-sm truncate">{statusText}</p>
-                  <ChevronRight className="w-3.5 h-3.5 text-[#D51F10] shrink-0 group-hover:translate-x-1 transition-transform" />
-                </div>
-              </div>
-
-              <div 
-                style={{
-                  background: "linear-gradient(135deg, #D51F10, #E04236)",
-                  boxShadow: "0 10px 15px -3px rgba(213, 31, 16, 0.3), 0 4px 6px -4px rgba(213, 31, 16, 0.3)"
-                }}
-                className="rounded-xl px-4 py-2 shrink-0 flex flex-col items-center justify-center border border-white/20"
-              >
-                <p className="text-orange-50 text-[10px] font-bold uppercase tracking-wider opacity-95 leading-tight mb-[2px]">
-                  arriving in
-                </p>
-                <p className="text-white text-base md:text-[17px] font-black leading-tight drop-shadow-sm">
-                  {timeRemaining !== null
-                    ? `${Math.max(1, timeRemaining)} min`
-                    : "--"}
-                </p>
+            <div className="flex-1 min-w-0 pr-4">
+              <p className="text-gray-900 font-bold text-base md:text-lg truncate tracking-tight">{restaurantName}</p>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <p className="text-gray-500 font-medium text-xs md:text-sm truncate">{statusText}</p>
+                <ChevronRight className="w-3.5 h-3.5 text-primary shrink-0 group-hover:translate-x-1 transition-transform" />
               </div>
             </div>
+
+            <div className="bg-gradient-to-br from-primary to-[#D94E0A] shadow-lg shadow-primary/20 rounded-xl px-4 py-2 shrink-0 flex flex-col items-center justify-center border border-orange-200">
+              <p className="text-orange-50 text-[10px] font-bold uppercase tracking-wider opacity-95 leading-tight mb-[2px]">
+                arriving in
+              </p>
+              <p className="text-white text-base md:text-[17px] font-black leading-tight drop-shadow-sm">
+                {timeRemaining !== null
+                  ? `${Math.max(1, timeRemaining)} min`
+                  : "--"}
+              </p>
+            </div>
           </div>
-        </motion.div>
-      )}
+        </div>
+      </motion.div>
     </AnimatePresence>
   );
-
-  if (typeof document === "undefined") return null;
-  return createPortal(card, document.body);
 }
 
 const OrderTrackingCard = memo(OrderTrackingCardInner);

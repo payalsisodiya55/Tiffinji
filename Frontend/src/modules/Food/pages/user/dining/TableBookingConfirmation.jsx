@@ -1,11 +1,11 @@
-import { useMemo, useState, useEffect, useRef } from "react"
+import { useMemo, useState } from "react"
 import { useLocation, useNavigate } from "react-router-dom"
 import { ArrowLeft, Calendar, Users, MapPin, Ticket, ChevronRight, Edit2, ShieldCheck, Info, X } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import { diningAPI, authAPI } from "@food/api"
-import { isModuleAuthenticated } from "@food/utils/auth"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
+import { useEffect } from "react"
 import { toast } from "sonner"
 import Loader from "@food/components/Loader"
 const debugLog = (...args) => {}
@@ -39,15 +39,8 @@ export default function TableBookingConfirmation() {
     const [user, setUser] = useState(null)
     const [loading, setLoading] = useState(true)
     const [bookingInProgress, setBookingInProgress] = useState(false)
-    const bookingRef = useRef(false)
 
     useEffect(() => {
-        if (!isModuleAuthenticated('user')) {
-            toast.error("Please login to proceed")
-            navigate("/user/auth/login", { state: { from: location.pathname } })
-            return
-        }
-
         if (!restaurant) {
             navigate("/food/user/dining")
             return
@@ -62,20 +55,11 @@ export default function TableBookingConfirmation() {
                         response?.data?.data ||
                         response?.data?.user ||
                         null
-                    if (!userData) {
-                        toast.error("Please login to proceed")
-                        navigate("/user/auth/login", { state: { from: location.pathname } })
-                        return
-                    }
                     setUser(userData)
-                } else {
-                    toast.error("Please login to proceed")
-                    navigate("/user/auth/login", { state: { from: location.pathname } })
                 }
             } catch (error) {
                 debugError("Error fetching user:", error)
-                toast.error("Please login to proceed")
-                navigate("/user/auth/login", { state: { from: location.pathname } })
+                // If not logged in, navigate to sign-in but the ProtectedRoute should handle this
             } finally {
                 setLoading(false)
             }
@@ -84,9 +68,7 @@ export default function TableBookingConfirmation() {
     }, [restaurant, navigate])
 
     const handleBooking = async () => {
-        if (bookingRef.current) return
         try {
-            bookingRef.current = true
             setBookingInProgress(true)
             const restaurantId =
                 restaurant?._id ||
@@ -117,13 +99,12 @@ export default function TableBookingConfirmation() {
                     sessionStorage.removeItem(BOOKING_DRAFT_KEY)
                 } catch {}
                 // Navigate to success page with booking details
-                navigate("/food/user/dining/book-success", { state: { booking: { ...response.data.data, restaurant } } })
+                navigate("/food/user/dining/book-success", { state: { booking: response.data.data } })
             }
         } catch (error) {
             debugError("Booking error:", error)
-            toast.error(error.response?.data?.error || error.response?.data?.message || "Failed to confirm booking")
+            toast.error(error.response?.data?.message || "Failed to confirm booking")
         } finally {
-            bookingRef.current = false
             setBookingInProgress(false)
         }
     }
@@ -138,7 +119,7 @@ export default function TableBookingConfirmation() {
     return (
         <AnimatedPage className="bg-slate-50 dark:bg-slate-950 min-h-screen pb-24 transition-colors">
             {/* Header */}
-            <div className="bg-[#7e3866] text-white px-4 py-4 sticky top-0 z-50 shadow-md">
+            <div className="bg-primary text-white px-4 py-4 sticky top-0 z-50 shadow-md">
                 <div className="flex items-center gap-3">
                     <button onClick={goBack} className="p-1 hover:bg-white/10 rounded-full transition-colors">
                         <ArrowLeft className="w-6 h-6" />
@@ -153,7 +134,7 @@ export default function TableBookingConfirmation() {
                     <div className="p-4 space-y-4">
                         <div className="flex items-start gap-3">
                             <div className="bg-[#F9F9FB] dark:bg-slate-800 p-2 rounded-xl">
-                                <Calendar className="w-5 h-5 text-[#7e3866]" />
+                                <Calendar className="w-5 h-5 text-primary" />
                             </div>
                              <div>
                                 <p className="font-bold text-gray-900 dark:text-slate-100">{formattedDate} at {timeSlot}</p>
@@ -191,7 +172,7 @@ export default function TableBookingConfirmation() {
                 >
                     <div className="flex items-center gap-3">
                         <div className={`p-2 rounded-xl transition-colors ${specialRequest ? 'bg-purple-50 dark:bg-purple-950/30' : 'bg-slate-100 dark:bg-slate-800 group-hover:bg-slate-200 dark:group-hover:bg-slate-700'}`}>
-                            <Info className={`w-5 h-5 ${specialRequest ? 'text-[#7e3866]' : 'text-slate-600 dark:text-slate-400'}`} />
+                            <Info className={`w-5 h-5 ${specialRequest ? 'text-primary' : 'text-slate-600 dark:text-slate-400'}`} />
                         </div>
                         <div className="text-left">
                             <span className="font-bold text-gray-700 dark:text-slate-200 block">
@@ -204,7 +185,7 @@ export default function TableBookingConfirmation() {
                     </div>
                     <div className="flex items-center gap-2">
                         {specialRequest && (
-                            <span className="text-[10px] font-black text-[#7e3866]/40 uppercase tracking-widest">Edit</span>
+                            <span className="text-[10px] font-black text-primary/40 uppercase tracking-widest">Edit</span>
                         )}
                         <ChevronRight className="w-5 h-5 text-slate-400" />
                     </div>
@@ -232,15 +213,14 @@ export default function TableBookingConfirmation() {
                                         date, 
                                         timeSlot, 
                                         discount,
-                                        isModifying: true,
-                                        backTo: location.pathname
+                                        isModifying: true 
                                     } 
                                 });
                             }}
                              className="w-full bg-white dark:bg-slate-900 rounded-2xl p-4 shadow-sm border border-slate-100 dark:border-slate-800 flex items-center justify-between active:scale-[0.98] transition-all"
                         >
                             <div className="flex items-start gap-3">
-                                <div className="text-[#7e3866] dark:text-purple-400 mt-1">
+                                <div className="text-primary dark:text-purple-400 mt-1">
                                     <Edit2 className="w-5 h-5" />
                                 </div>
                                 <div className="text-left">
@@ -286,8 +266,8 @@ export default function TableBookingConfirmation() {
                     </p>
                      <div className="bg-white dark:bg-slate-900 rounded-2xl p-5 shadow-sm border border-slate-100 dark:border-slate-800 flex items-center justify-between transition-colors">
                         <div className="text-left">
-                            <p className="font-bold text-gray-900 dark:text-slate-100">{user?.name || ""}</p>
-                            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">{user?.phone || user?.email || ""}</p>
+                            <p className="font-bold text-gray-900 dark:text-slate-100">{user?.name || "Shailu"}</p>
+                            <p className="text-sm text-slate-400 dark:text-slate-500 mt-1">{user?.phone || user?.email || "8090512291"}</p>
                         </div>
                         <button 
                             type="button"
@@ -370,7 +350,7 @@ export default function TableBookingConfirmation() {
                                 value={tempRequest}
                                 onChange={(e) => setTempRequest(e.target.value)}
                                 placeholder="E.g. I have a peanut allergy, or we are celebrating a birthday..."
-                                className="w-full h-32 p-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-[#7e3866]/20 focus:border-[#7e3866] transition-all resize-none"
+                                className="w-full h-32 p-4 rounded-2xl bg-slate-50 border border-slate-100 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary transition-all resize-none"
                                 autoFocus
                             />
 
@@ -386,7 +366,7 @@ export default function TableBookingConfirmation() {
                                         setSpecialRequest(tempRequest)
                                         setShowRequestModal(false)
                                     }}
-                                    className="h-12 rounded-xl bg-[#7e3866] text-white font-bold text-sm uppercase tracking-widest shadow-lg shadow-purple-200 active:scale-95 transition-all"
+                                    className="h-12 rounded-xl bg-primary text-white font-bold text-sm uppercase tracking-widest shadow-lg shadow-purple-200 active:scale-95 transition-all"
                                 >
                                     Save
                                 </button>
@@ -461,7 +441,7 @@ export default function TableBookingConfirmation() {
                                 <input 
                                     type="text"
                                     value={tempUser.name}
-                                    onChange={(e) => setTempUser({ ...tempUser, name: e.target.value.replace(/[^A-Za-z\s]/g, "") })}
+                                    onChange={(e) => setTempUser({ ...tempUser, name: e.target.value })}
                                     className="w-full h-12 px-4 rounded-xl bg-slate-50 border border-slate-100 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-red-500/10 focus:border-red-500 transition-all"
                                     placeholder="Enter your name"
                                 />
@@ -471,7 +451,7 @@ export default function TableBookingConfirmation() {
                                 <input 
                                     type="tel"
                                     value={tempUser.phone}
-                                    onChange={(e) => setTempUser({ ...tempUser, phone: e.target.value.replace(/\D/g, "").slice(0, 10) })}
+                                    onChange={(e) => setTempUser({ ...tempUser, phone: e.target.value })}
                                     className="w-full h-12 px-4 rounded-xl bg-slate-50 border border-slate-100 font-bold text-sm focus:outline-none focus:ring-2 focus:ring-red-500/10 focus:border-red-500 transition-all"
                                     placeholder="Enter phone number"
                                 />
@@ -480,14 +460,6 @@ export default function TableBookingConfirmation() {
                                 <button onClick={() => setShowUserModal(false)} className="h-12 rounded-xl bg-slate-100 text-slate-600 font-bold text-sm uppercase tracking-widest active:scale-95 transition-all">Cancel</button>
                                 <button 
                                     onClick={() => {
-                                        if (!tempUser.name.trim()) {
-                                            toast.error("Please enter a valid name")
-                                            return
-                                        }
-                                        if (tempUser.phone.length !== 10) {
-                                            toast.error("Please enter a valid 10-digit phone number")
-                                            return
-                                        }
                                         setUser({ ...user, name: tempUser.name, phone: tempUser.phone })
                                         setShowUserModal(false)
                                     }}

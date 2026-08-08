@@ -21,9 +21,10 @@ export const createHeroBannersFromFiles = async (files, meta = {}) => {
 
     for (const file of files) {
         try {
+            const isVideo = file.mimetype && file.mimetype.startsWith('video/');
             const uploadResult = await new Promise((resolve, reject) => {
                 const stream = cloudinary.uploader.upload_stream(
-                    { folder: 'food/hero-banners', resource_type: 'image' },
+                    { folder: 'food/hero-banners', resource_type: isVideo ? 'video' : 'image' },
                     (error, result) => {
                         if (error) return reject(error);
                         return resolve(result);
@@ -35,6 +36,7 @@ export const createHeroBannersFromFiles = async (files, meta = {}) => {
             const banner = await FoodHeroBanner.create({
                 imageUrl: uploadResult.secure_url,
                 publicId: uploadResult.public_id,
+                type: isVideo ? 'video' : 'image',
                 title: meta.title,
                 ctaText: meta.ctaText,
                 ctaLink: meta.ctaLink,

@@ -106,16 +106,13 @@ const getMealPeriod = (slot) => {
   if (meridiem === "AM" && hour === 12) hour = 0
 
   const totalMinutes = hour * 60 + minute
-  if (totalMinutes < 12 * 60) return "breakfast"
   if (totalMinutes < 17 * 60) return "lunch"
   return "dinner"
 }
 
 const getOfferLabel = (slot) => {
   const period = getMealPeriod(slot)
-  if (period === "breakfast") return "Breakfast"
-  if (period === "lunch") return "Lunch"
-  return "Carnival"
+  return period === "lunch" ? "Lunch" : "Carnival"
 }
 
 export default function TableBooking() {
@@ -127,38 +124,13 @@ export default function TableBooking() {
   const [restaurant, setRestaurant] = useState(location.state?.restaurant || null)
   const [loading, setLoading] = useState(!location.state?.restaurant)
   const [outletTimings, setOutletTimings] = useState({})
-  const [selectedGuests, setSelectedGuests] = useState(location.state?.guestCount || location.state?.guests || 2)
+  const [selectedGuests, setSelectedGuests] = useState(location.state?.guestCount || 2)
   const [selectedDate, setSelectedDate] = useState(() => {
-    const initial = location.state?.selectedDate || location.state?.date ? new Date(location.state.selectedDate || location.state.date) : new Date()
+    const initial = location.state?.selectedDate ? new Date(location.state.selectedDate) : new Date()
     return Number.isNaN(initial.getTime()) ? new Date() : initial
   })
-  const [selectedSlot, setSelectedSlot] = useState(location.state?.selectedTime || location.state?.timeSlot || null)
-
-  // Meal sessions the restaurant supports (e.g. ["breakfast", "lunch", "dinner"])
-  const restaurantMealSessions = useMemo(() => {
-    const raw = restaurant?.diningSettings?.mealSessions
-    if (Array.isArray(raw) && raw.length > 0) return raw
-    // default: lunch + dinner
-    return ["lunch", "dinner"]
-  }, [restaurant])
-
-  const MEAL_PERIOD_CONFIG = [
-    { id: "breakfast", label: "🌅 Breakfast" },
-    { id: "lunch",     label: "☀️ Lunch" },
-    { id: "dinner",   label: "🌙 Dinner" },
-  ]
-
-  const enabledMealPeriods = useMemo(
-    () => MEAL_PERIOD_CONFIG.filter((p) => restaurantMealSessions.includes(p.id)),
-    [restaurantMealSessions]
-  )
-
-  const [selectedMealPeriod, setSelectedMealPeriod] = useState(() => {
-    const raw = restaurant?.diningSettings?.mealSessions
-    const sessions = Array.isArray(raw) && raw.length > 0 ? raw : ["lunch", "dinner"]
-    if (sessions.includes("lunch")) return "lunch"
-    return sessions[0] || "lunch"
-  })
+  const [selectedSlot, setSelectedSlot] = useState(location.state?.selectedTime || null)
+  const [selectedMealPeriod, setSelectedMealPeriod] = useState("lunch")
   const [currentBookings, setCurrentBookings] = useState([])
   const [currentTime, setCurrentTime] = useState(new Date())
 
@@ -289,18 +261,18 @@ export default function TableBooking() {
     }
   }, [filteredSlots, selectedSlot])
 
-  // Auto-switch meal period if the current one has no slots (only among enabled sessions)
   useEffect(() => {
     if (availableSlots.length === 0) return
-    const enabledIds = restaurantMealSessions
-    const hasCurrentPeriod = availableSlots.some((slot) => getMealPeriod(slot) === selectedMealPeriod)
-    if (!hasCurrentPeriod) {
-      // Find first enabled session that has slots
-      const fallback = enabledIds.find((id) => availableSlots.some((slot) => getMealPeriod(slot) === id))
-      if (fallback) setSelectedMealPeriod(fallback)
+    const hasLunch = availableSlots.some((slot) => getMealPeriod(slot) === "lunch")
+    const hasDinner = availableSlots.some((slot) => getMealPeriod(slot) === "dinner")
+
+    if (selectedMealPeriod === "lunch" && !hasLunch && hasDinner) {
+      setSelectedMealPeriod("dinner")
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [availableSlots, restaurantMealSessions])
+    if (selectedMealPeriod === "dinner" && !hasDinner && hasLunch) {
+      setSelectedMealPeriod("lunch")
+    }
+  }, [availableSlots, selectedMealPeriod])
 
   if (loading) return <Loader />
   if (!restaurant) return <div className="p-6 text-center">Restaurant not found</div>
@@ -334,7 +306,6 @@ export default function TableBooking() {
       date: selectedDate,
       timeSlot: selectedSlot,
       discount: selectedSlot,
-      backTo: `/food/user/dining/book/${restaurant?.slug || slug || restaurant?.restaurant?.slug}`
     }
 
     try {
@@ -375,7 +346,7 @@ export default function TableBooking() {
         <section className="rounded-[22px] bg-white p-4 shadow-[0_8px_24px_rgba(15,23,42,0.06)]">
           <div className="flex items-center justify-between gap-3 mb-4">
             <span className="text-sm font-medium text-[#2f3545]">Select number of guests</span>
-            <span className="text-xs font-bold text-[#7e3866] bg-[#fdfafc] px-2 py-1 rounded-lg">
+            <span className="text-xs font-bold text-primary bg-[#fdfafc] px-2 py-1 rounded-lg">
                 {remainingSeats} left
             </span>
           </div>
@@ -440,7 +411,10 @@ export default function TableBooking() {
           <h3 className="text-sm font-medium text-[#2f3545]">Select time of day</h3>
 
           <div className="mt-4 flex gap-2">
-            {enabledMealPeriods.map((period) => {
+            {[
+              { id: "lunch", label: "Lunch" },
+              { id: "dinner", label: "Dinner" },
+            ].map((period) => {
               const active = selectedMealPeriod === period.id
               return (
                 <button
@@ -459,20 +433,11 @@ export default function TableBooking() {
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-3">
-            {filteredSlots.length === 0 ? (() => {
-              const isToday = selectedDate.toDateString() === currentTime.toDateString()
-              const sessionHasSlotsInDay = allSlots.some((s) => getMealPeriod(s) === selectedMealPeriod)
-              const sessionLabel = selectedMealPeriod.charAt(0).toUpperCase() + selectedMealPeriod.slice(1)
-              let msg = `No ${selectedMealPeriod} slots available for the selected date.`
-              if (isToday && sessionHasSlotsInDay) {
-                msg = `${sessionLabel} time is over for today. Please choose another session or date.`
-              }
-              return (
-                <div className="col-span-3 rounded-[18px] border border-dashed border-[#e5e7ef] px-4 py-8 text-center text-sm text-[#7c8394]">
-                  {msg}
-                </div>
-              )
-            })() : (
+            {filteredSlots.length === 0 ? (
+              <div className="col-span-3 rounded-[18px] border border-dashed border-[#e5e7ef] px-4 py-8 text-center text-sm text-[#7c8394]">
+                No {selectedMealPeriod} slots available for the selected date.
+              </div>
+            ) : (
               filteredSlots.map((slot) => {
                 const active = selectedSlot === slot
                 return (

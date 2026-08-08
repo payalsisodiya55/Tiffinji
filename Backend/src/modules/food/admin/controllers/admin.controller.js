@@ -439,6 +439,20 @@ export async function updateRestaurantLocation(req, res, next) {
     }
 }
 
+export async function updateRestaurantOutletTimings(req, res, next) {
+    try {
+        const { id } = req.params;
+        if (!id || !mongoose.Types.ObjectId.isValid(id)) {
+            return res.status(400).json({ success: false, message: 'Invalid restaurant id' });
+        }
+        const { upsertOutletTimingsForRestaurant } = await import('../../restaurant/services/outletTimings.service.js');
+        const data = await upsertOutletTimingsForRestaurant(id, req.body?.outletTimings);
+        res.status(200).json({ success: true, message: 'Restaurant outlet timings updated successfully', data });
+    } catch (error) {
+        next(error);
+    }
+}
+
 // ----- Foods -----
 export async function getFoods(req, res, next) {
     try {
@@ -1548,6 +1562,191 @@ export async function getExpiredFssaiNotifications(req, res, next) {
             success: true,
             message: 'Expired FSSAI notifications fetched successfully',
             data: { items }
+        });
+    } catch (error) {
+        next(error);
+    }
+}
+
+export async function getLiveMonitorStatus(req, res, next) {
+    try {
+        const { FoodDeliveryPartner } = await import('../../delivery/models/deliveryPartner.model.js');
+        const { FoodOrder } = await import('../../orders/models/order.model.js');
+
+        // 1. Fetch approved restaurants
+        const rawRestaurants = await FoodRestaurant.find({ status: 'approved' }).lean();
+
+        // 2. Fetch approved delivery partners
+        const rawPartners = await FoodDeliveryPartner.find({ status: 'approved' }).lean();
+
+        // 3. Compute stats for restaurants using orders
+        const restaurantIds = rawRestaurants.map(r => r._id);
+        const restaurantStats = await FoodOrder.aggregate([
+            { $match: { restaurantId: { $in: restaurantIds } } },
+            {
+                $group: {
+                    _id: '$restaurantId',
+                    totalOrders: { $sum: 1 },
+                    deliveredOrders: { $sum: { $cond: [{ $eq: ['$orderStatus', 'delivered'] }, 1, 0] } },
+                    cancelledOrders: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $in: [
+                                        '$orderStatus',
+                                        ['cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin']
+                                    ]
+                                },
+                                1,
+                                0
+                            ]
+                        }
+                    },
+                    activeOrders: {
+                        $sum: {
+                            $cond: [
+                                {
+                                    $and: [
+                                        { $ne: ['$orderStatus', 'delivered'] },
+                                        {
+                                            $not: {
+                                                $in: [
+                                                    '$orderStatus',
+                                                    ['cancelled_by_user', 'cancelled_by_restaurant', 'cancelled_by_admin']
+                                                ]
+                                            }
+                                        }
+                                    ]
+                                },
+                                1,
+                                0
+                            ]
+                        }
+                    },
+                    revenue: {
+                        $sum: {
+                            $cond: [
+                                { $eq: ['$orderStatus', 'delivered'] },
+                                '$pricing.total',
+                                0
+                            ]
+                        }
+                    }
+                }
+            }
+        ]);
+
+        const statsMap = {};
+        restaurantStats.forEach(s => {
+            statsMap[s._id.toString()] = {
+                totalOrders: s.totalOrders || 0,
+                activeOrders: s.activeOrders || 0,
+                deliveredOrders: s.deliveredOrders || 0,
+                cancelledOrders: s.cancelledOrders || 0,
+                revenue: s.revenue || 0
+            };
+        });
+
+        const restaurants = rawRestaurants.map(r => ({
+            ...r,
+            stats: statsMap[r._id.toString()] || {
+                totalOrders: 0,
+                activeOrders: 0,
+                deliveredOrders: 0,
+                cancelledOrders: 0,
+                revenue: 0
+            }
+        }));
+
+        // 4. Compute stats for delivery partners
+        const partnerIds = rawPartners.map(p => p._id);
+
+        // Fetch active order status for partners
+        const activeOrdersForPartners = await FoodOrder.find({
+            'dispatch.deliveryPartnerId': { $in: partnerIds },
+            orderStatus: { $in: ['preparing', 'ready_for_pickup', 'reached_pickup', 'picked_up', 'reached_drop'] }
+        }).lean();
+
+        const activeOrderMap = {};
+        activeOrdersForPartners.forEach(o => {
+            if (o.dispatch?.deliveryPartnerId) {
+                activeOrderMap[o.dispatch.deliveryPartnerId.toString()] = o;
+            }
+        });
+
+        // Compute delivered counts today
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+
+        const deliveredTodayStats = await FoodOrder.aggregate([
+            {
+                $match: {
+                    'dispatch.deliveryPartnerId': { $in: partnerIds },
+                    orderStatus: 'delivered',
+                    createdAt: { $gte: startOfDay }
+                }
+            },
+            {
+                $group: {
+                    _id: '$dispatch.deliveryPartnerId',
+                    count: { $sum: 1 }
+                }
+            }
+        ]);
+
+        const deliveredTodayMap = {};
+        deliveredTodayStats.forEach(s => {
+            deliveredTodayMap[s._id.toString()] = s.count;
+        });
+
+        // Fetch today's orders details
+        const todayOrders = await FoodOrder.find({
+            'dispatch.deliveryPartnerId': { $in: partnerIds },
+            createdAt: { $gte: startOfDay }
+        }).lean();
+
+        const restMap = {};
+        rawRestaurants.forEach(r => {
+            restMap[r._id.toString()] = r.restaurantName;
+        });
+
+        const todayOrdersMap = {};
+        todayOrders.forEach(o => {
+            if (o.dispatch?.deliveryPartnerId) {
+                const partnerIdStr = o.dispatch.deliveryPartnerId.toString();
+                if (!todayOrdersMap[partnerIdStr]) {
+                    todayOrdersMap[partnerIdStr] = [];
+                }
+                todayOrdersMap[partnerIdStr].push({
+                    orderId: o.orderId || o.order_id,
+                    time: o.createdAt,
+                    status: o.orderStatus,
+                    restaurantName: restMap[o.restaurantId?.toString()] || 'Restaurant',
+                    userName: o.customerName || 'Customer'
+                });
+            }
+        });
+
+        const deliveryPartners = rawPartners.map(p => {
+            const partnerIdStr = p._id.toString();
+            return {
+                ...p,
+                currentOrder: activeOrderMap[partnerIdStr] || null,
+                deliveredToday: deliveredTodayMap[partnerIdStr] || 0,
+                todayOrders: todayOrdersMap[partnerIdStr] || [],
+                shiftStartTime: p.createdAt,
+                shiftStartPic: p.profilePhoto,
+                shiftStartAddress: p.address || 'Address'
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            message: 'Live monitor status fetched successfully',
+            data: {
+                restaurants,
+                deliveryPartners
+            }
         });
     } catch (error) {
         next(error);

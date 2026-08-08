@@ -1,5 +1,11 @@
 <svg width="1200" height="400" viewBox="0 0 1200 400" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <rect width="1200" height="400" rx="32" fill="#FF4C4C"/>
+  <defs>
+    <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#F59E0B" />
+      <stop offset="100%" stop-color="#D97706" />
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="400" rx="32" fill="url(#goldGrad)"/>
   <text x="50%" y="45%" dominant-baseline="middle" text-anchor="middle" font-size="72" font-family="Arial, Helvetica, sans-serif" font-weight="bold" fill="#fff">
     Great Offers
   </text>

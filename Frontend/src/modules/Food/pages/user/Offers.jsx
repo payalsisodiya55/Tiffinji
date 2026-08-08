@@ -94,7 +94,7 @@ export default function Offers() {
             {/* Grouped Offers Sections */}
             {Object.keys(groupedOffers).length > 0 && Object.entries(groupedOffers).map(([offerText, dishes]) => (
               <section key={offerText}>
-                <h2 className="text-2xl sm:text-3xl font-black text-red-500 dark:text-red-400 text-center mb-4 tracking-wide">
+                <h2 className="text-2xl sm:text-3xl font-black text-amber-500 dark:text-amber-400 text-center mb-4 tracking-wide">
                   {offerText}
                 </h2>
                 

@@ -1,30 +1,22 @@
 import { useEffect, useState, useMemo } from "react"
-import { createPortal } from "react-dom"
-import { motion, AnimatePresence } from "framer-motion"
 import { useLocation, useNavigate, useParams } from "react-router-dom"
 import { restaurantAPI, diningAPI } from "@food/api"
 import { useProfile } from "@food/context/ProfileContext"
-import { isModuleAuthenticated } from "@food/utils/auth"
 import { getMenuFromResponse } from "@food/utils/menuItems"
 import useAppBackNavigation from "@food/hooks/useAppBackNavigation"
-import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
 import {
-    ArrowLeft,
-    Bookmark,
-    CheckCircle2,
-    Clock3,
-    IndianRupee,
-    Loader2,
-    MapPin,
-    Percent,
-    Share2,
-    Tag,
-    Ticket,
-    X,
-    Copy,
-    MessageCircle,
-    Send,
-    Mail,
+  ArrowLeft,
+  Bookmark,
+  CheckCircle2,
+  Clock3,
+  IndianRupee,
+  Loader2,
+  MapPin,
+  Percent,
+  Share2,
+  Tag,
+  Ticket,
+  X,
 } from "lucide-react"
 import { Button } from "@food/components/ui/button"
 import { toast } from "sonner"
@@ -55,23 +47,16 @@ const buildImageList = (restaurant) => {
 const buildFacilities = (restaurant) => {
   const facilities = []
 
-  const sessions = restaurant?.diningSettings?.mealSessions
-  if (Array.isArray(sessions) && sessions.length > 0) {
-    if (sessions.includes("breakfast")) facilities.push("Breakfast")
-    if (sessions.includes("lunch")) facilities.push("Lunch")
-    if (sessions.includes("dinner")) facilities.push("Dinner")
-  } else {
-    // fallback: show both lunch + dinner if sessions not set
-    facilities.push("Lunch")
-    facilities.push("Dinner")
-  }
-
+  if (restaurant?.diningSettings?.tableBookingEnabled !== false) facilities.push("Dinner")
+  if (restaurant?.isAcceptingOrders !== false) facilities.push("Lunch")
   if (restaurant?.diningSettings?.homeDeliveryAvailable || restaurant?.homeDeliveryAvailable) facilities.push("Home delivery")
   if (restaurant?.diningSettings?.takeawayAvailable || restaurant?.takeawayAvailable) facilities.push("Takeaway available")
   if (restaurant?.diningSettings?.vegOnly || restaurant?.vegOnly) facilities.push("Vegetarian only")
   if (restaurant?.diningSettings?.lessNoisy || restaurant?.ambience === "quiet") facilities.push("Less noisy")
 
-  return facilities
+  return facilities.length > 0
+    ? facilities
+    : ["Dinner", "Lunch", "Home delivery", "Takeaway available", "Vegetarian only", "Less noisy"]
 }
 
 const buildFeaturedSections = (menuSections) =>
@@ -121,19 +106,6 @@ export default function DiningRestaurantDetails() {
   const [activeTab, setActiveTab] = useState("prebook")
   const [occupiedSeats, setOccupiedSeats] = useState(0)
   const [isFetchingBookings, setIsFetchingBookings] = useState(false)
-  const [showShareModal, setShowShareModal] = useState(false)
-  const [sharePayload, setSharePayload] = useState(null)
-  const [outletTimings, setOutletTimings] = useState({})
-
-  // Merge fetched outletTimings into restaurant so availability utility uses today's real timing
-  const restaurantWithTimings = restaurant
-    ? { ...restaurant, outletTimings }
-    : null
-
-  const availability = useMemo(
-    () => getRestaurantAvailabilityStatus(restaurantWithTimings),
-    [restaurant, outletTimings]
-  )
 
   const fetchRestaurantData = async () => {
     try {
@@ -166,31 +138,23 @@ export default function DiningRestaurantDetails() {
       }
 
       setRestaurant(resolvedRestaurant)
-      
+
       const restaurantId = resolvedRestaurant?._id || resolvedRestaurant?.id || slug
-      
-      // Fetch outlet timings to get today's actual opening/closing time
-      restaurantAPI.getOutletTimingsByRestaurantId(restaurantId)
-        .then((res) => {
-          const timings = res?.data?.data?.outletTimings || {}
-          setOutletTimings(timings)
-        })
-        .catch(() => {})
-      
+
       // Fetch Occupied Seats for Availability Check
       setIsFetchingBookings(true)
       try {
-          const availabilityRes = await diningAPI.getOccupiedSeatsPublic(restaurantId)
-          if (availabilityRes.data.success) {
-              setOccupiedSeats(Number(availabilityRes.data.data?.occupiedSeats) || 0)
-          }
+        const availabilityRes = await diningAPI.getOccupiedSeatsPublic(restaurantId)
+        if (availabilityRes.data.success) {
+          setOccupiedSeats(Number(availabilityRes.data.data?.occupiedSeats) || 0)
+        }
       } catch (err) {
-          console.error("Error fetching availability:", err)
+        console.error("Error fetching availability:", err)
       } finally {
-          setIsFetchingBookings(false)
+        setIsFetchingBookings(false)
       }
 
-      const menuResponse = await restaurantAPI.getMenuByRestaurantId(restaurantId).catch(() => null)
+      const menuResponse = await restaurantAPI.getMenuByRestaurantId(restaurantId, { noCache: true }).catch(() => null)
       const resolvedMenu = menuResponse ? getMenuFromResponse(menuResponse) : null
       setMenuSections(Array.isArray(resolvedMenu?.sections) ? resolvedMenu.sections : [])
     } catch {
@@ -213,7 +177,7 @@ export default function DiningRestaurantDetails() {
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-[#f6f7fb]">
-        <Loader2 className="h-8 w-8 animate-spin text-[#7e3866]" />
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
       </div>
     )
   }
@@ -238,87 +202,43 @@ export default function DiningRestaurantDetails() {
   const cuisines =
     Array.isArray(restaurant?.cuisines) && restaurant.cuisines.length > 0
       ? restaurant.cuisines.join(", ")
-      : null
+      : "Asian, Italian, Continental, Chinese, North tiffinji, Desserts, Beverages, Coffee"
+  const costForTwo = restaurant?.costForTwo ? `${"\u20B9"}${restaurant.costForTwo} for two` : `${"\u20B9"}1900 for two`
   const facilities = buildFacilities(restaurant)
   const rating = Number(restaurant?.rating || restaurant?.avgRating || 0).toFixed(1)
   const reviewCount = restaurant?.totalRatings || restaurant?.reviewCount || restaurant?.reviewsCount || 0
-
-  // Opening/closing time — availability already uses today's outletTimings (merged above)
-  const openingTime = formatTimeLabel(availability?.openingTime || restaurant?.openingTime || restaurant?.diningSettings?.openingTime || "12:00")
-  const closingTime = formatTimeLabel(availability?.closingTime || restaurant?.closingTime || restaurant?.diningSettings?.closingTime || "23:00")
-
+  const openingTime = formatTimeLabel(restaurant?.openingTime || restaurant?.diningSettings?.openingTime || "12:00")
+  const closingTime = formatTimeLabel(restaurant?.closingTime || restaurant?.diningSettings?.closingTime || "23:59")
   const isDiningEnabled = restaurant?.diningSettings?.isEnabled !== false
-  const isCurrentlyOpen = availability?.isOpen !== false
-  const canBookTable = isDiningEnabled && isCurrentlyOpen
   const topTabs = [
+    { id: "prebook", label: "Pre-book offers", target: "restaurant-prebook" },
+    { id: "walkin", label: "Walk-in offers", target: "restaurant-prebook" },
     { id: "menu", label: "Menu", target: "restaurant-menu" },
     { id: "photos", label: "Photos", target: "restaurant-photos" },
     { id: "about", label: "About", target: "restaurant-about" },
   ]
 
-  const handleShare = () => {
-    const payload = {
+  const handleShare = async () => {
+    const shareData = {
       title: restaurantName,
-      text: `Check out ${restaurantName} on Foodelo!`,
+      text: `Check out ${restaurantName} on Tiffinji!`,
       url: window.location.href,
     }
-    setSharePayload(payload)
-    setShowShareModal(true)
-  }
 
-  const tryNativeShare = async (payload) => {
-    if (typeof navigator === "undefined" || !navigator.share) return false
     try {
-      await navigator.share(payload)
-      return true
-    } catch (error) {
-      if (error?.name === "AbortError") return true
-      return false
-    }
-  }
+      if (navigator.share) {
+        await navigator.share(shareData)
+        return
+      }
 
-  const handleSystemShareFromModal = async () => {
-    if (!sharePayload) return
-    const shared = await tryNativeShare(sharePayload)
-    if (shared) {
-      setShowShareModal(false)
-      toast.success("Shared successfully")
-    }
-  }
-
-  const openShareTarget = (target) => {
-    if (!sharePayload?.url) return
-
-    const text = sharePayload.text || ""
-    const url = sharePayload.url
-    const encodedText = encodeURIComponent(text)
-    const encodedUrl = encodeURIComponent(url)
-
-    let shareLink = ""
-
-    if (target === "whatsapp") {
-      shareLink = `https://wa.me/?text=${encodeURIComponent(`${text} ${url}`)}`
-    } else if (target === "telegram") {
-      shareLink = `https://t.me/share/url?url=${encodedUrl}&text=${encodedText}`
-    } else if (target === "email") {
-      shareLink = `mailto:?subject=${encodeURIComponent(sharePayload.title || "Check this out")}&body=${encodeURIComponent(`${text}\n\n${url}`)}`
-    }
-
-    if (shareLink) {
-      window.open(shareLink, "_blank", "noopener,noreferrer")
-      setShowShareModal(false)
-    }
-  }
-
-  const copyShareLink = async () => {
-    if (!sharePayload?.url) return
-    try {
-      await navigator.clipboard.writeText(sharePayload.url)
+      // Fallback for desktop
+      await navigator.clipboard.writeText(window.location.href)
       toast.success("Link copied to clipboard!")
     } catch (err) {
-      toast.error("Failed to copy link")
+      if (err.name !== 'AbortError') {
+        toast.error("Sharing failed. Please try again.")
+      }
     }
-    setShowShareModal(false)
   }
 
   const restaurantFavoriteSlug =
@@ -358,13 +278,12 @@ export default function DiningRestaurantDetails() {
   }
 
   const handleContinueBooking = () => {
-    if (!canBookTable) return
+    if (!isDiningEnabled) return
     setIsBookingSheetOpen(false)
     navigate(`/food/user/dining/book/${slug}`, {
       state: {
         guestCount: selectedGuests,
         restaurant,
-        backTo: location.pathname,
       },
     })
   }
@@ -401,9 +320,14 @@ export default function DiningRestaurantDetails() {
               <div className="min-w-0 flex-1">
                 <h1 className="text-[36px] font-black leading-none tracking-[-0.03em]">{restaurantName}</h1>
                 <p className="mt-2 max-w-[94%] text-[14px] leading-5 text-white/92">{address}</p>
+                <p className="mt-2 text-[14px] text-white/90">
+                  {costForTwo}
+                  <span className="mx-1.5 text-white/65">•</span>
+                  {cuisines}
+                </p>
                 <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-black/28 px-2.5 py-1 text-[13px] font-medium backdrop-blur-sm">
-                  <span className={`inline-block h-2 w-2 rounded-full ${availability?.isOpen ? "bg-[#48d597]" : "bg-rose-500"}`} />
-                  <span>{availability?.isOpen ? "Open now" : "Closed now"}</span>
+                  <CheckCircle2 className="h-4 w-4 text-[#48d597]" />
+                  <span>Open now</span>
                   <span className="text-white/70">|</span>
                   <span>{openingTime} to {closingTime}</span>
                 </div>
@@ -420,45 +344,26 @@ export default function DiningRestaurantDetails() {
           </div>
         </div>
 
-          <div className="px-3 pb-1 pt-3">
-            <div className="w-full">
-              <button
-                onClick={() => {
-                  if (!canBookTable) return
-                  if (!isModuleAuthenticated('user')) {
-                    toast.error("Please login to book a table")
-                    navigate("/user/auth/login", { state: { from: location.pathname } })
-                    return
-                  }
-                  setIsBookingSheetOpen(true)
-                }}
-                disabled={!canBookTable}
-                className={`flex h-[52px] w-full items-center justify-center gap-2 rounded-full border px-3 text-[15px] font-medium shadow-[0_10px_24px_rgba(15,23,42,0.05)] transition-all ${
-                  canBookTable
-                    ? "border-[#f1ebee] dark:border-slate-800 bg-white dark:bg-slate-900 text-[#2b2118] dark:text-slate-100"
-                    : "cursor-not-allowed border-[#f2d7da] dark:border-red-900/30 bg-[#fff5f6] dark:bg-red-950/20 text-[#c06a79] opacity-80"
+        <div className="px-3 pb-1 pt-3">
+          <div className="w-full">
+            <button
+              onClick={() => isDiningEnabled && setIsBookingSheetOpen(true)}
+              disabled={!isDiningEnabled}
+              className={`flex h-[52px] w-full items-center justify-center gap-2 rounded-full border px-3 text-[15px] font-medium shadow-[0_10px_24px_rgba(15,23,42,0.05)] transition-all ${isDiningEnabled
+                ? "border-[#f1ebee] dark:border-slate-800 bg-white dark:bg-slate-900 text-[#2b2118] dark:text-slate-100"
+                : "cursor-not-allowed border-[#f2d7da] dark:border-red-900/30 bg-[#fff5f6] dark:bg-red-950/20 text-[#c06a79] opacity-80"
                 }`}
-              >
-              <Ticket className="h-[15px] w-[15px] text-[#7e3866]" />
-              <span>
-                {canBookTable 
-                  ? "Book a table" 
-                  : !isDiningEnabled 
-                    ? "Dining paused" 
-                    : "Closed now"}
-              </span>
-              </button>
-            </div>
+            >
+              <Ticket className="h-[15px] w-[15px] text-primary" />
+              <span>{isDiningEnabled ? "Book a table" : "Dining paused"}</span>
+            </button>
+          </div>
 
-            {!isDiningEnabled ? (
-              <div className="mt-3 rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                Dining bookings are currently turned off by the restaurant.
-              </div>
-            ) : !isCurrentlyOpen ? (
-              <div className="mt-3 rounded-[18px] border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800">
-                This restaurant is currently closed and not accepting bookings.
-              </div>
-            ) : null}
+          {!isDiningEnabled && (
+            <div className="mt-3 rounded-[18px] border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Dining bookings are currently turned off by the restaurant.
+            </div>
+          )}
 
         </div>
       </section>
@@ -473,11 +378,10 @@ export default function DiningRestaurantDetails() {
                   setActiveTab(tab.id)
                   scrollToSection(tab.target)
                 }}
-                className={`shrink-0 rounded-full border px-4 py-2 text-sm transition-colors ${
-                  activeTab === tab.id
-                    ? "border-[#7e3866] bg-white dark:bg-slate-900 text-[#2a2018] dark:text-slate-100"
-                    : "border-[#ece9e1] dark:border-slate-800 bg-[#fafafa] dark:bg-slate-900 text-[#8b8881] dark:text-slate-400"
-                }`}
+                className={`shrink-0 rounded-full border px-4 py-2 text-sm transition-colors ${activeTab === tab.id
+                  ? "border-primary bg-white dark:bg-slate-900 text-[#2a2018] dark:text-slate-100"
+                  : "border-[#ece9e1] dark:border-slate-800 bg-[#fafafa] dark:bg-slate-900 text-[#8b8881] dark:text-slate-400"
+                  }`}
               >
                 {tab.label}
               </button>
@@ -487,7 +391,29 @@ export default function DiningRestaurantDetails() {
       </div>
 
       <div className="mx-auto max-w-md px-4 pt-4">
-        <section id="restaurant-menu" className="pt-4">
+        <section id="restaurant-prebook">
+          <div>
+            <h2 className="text-[29px] font-black leading-none text-[#23180f] dark:text-slate-100">Pre-book offers</h2>
+            <p className="mt-1 text-[15px] text-primary dark:text-purple-400">Limited slots with extra offers</p>
+          </div>
+
+          <div className="mt-3 overflow-hidden rounded-[18px] bg-[linear-gradient(135deg,#0f4a87,#0b2954_70%)] text-white shadow-[0_10px_26px_rgba(8,52,95,0.25)]">
+            <div className="flex items-start justify-between px-4 pb-3 pt-4">
+              <div>
+                <p className="text-[28px] font-black leading-none">Flat 50% OFF</p>
+                <p className="mt-2 text-[14px] text-white/80">Dining Carnival offer</p>
+              </div>
+              <button className="rounded-full bg-black/45 px-4 py-2 text-[13px] font-semibold text-white backdrop-blur-sm">
+                Book now
+              </button>
+            </div>
+            <div className="border-t border-white/10 px-4 py-2 text-center text-[12px] text-white/75">
+              3 slots available from 3:30 PM today
+            </div>
+          </div>
+        </section>
+
+        <section id="restaurant-menu" className="mt-5 border-t border-[#e8e8ef] dark:border-slate-800 pt-4">
           <div className="flex items-end justify-between gap-3">
             <div>
               <h2 className="text-[28px] font-black leading-none text-[#23180f] dark:text-slate-100">Menu</h2>
@@ -502,25 +428,25 @@ export default function DiningRestaurantDetails() {
             {(featuredSections.length > 0
               ? featuredSections
               : [
-                  { id: "food", title: "Food", pages: 16 },
-                  { id: "beverages", title: "Beverages", pages: 10 },
-                ]).map((section, index) => (
-              <div key={section.id} className="overflow-hidden rounded-[18px] border border-[#ede8dd] dark:border-slate-800 bg-white dark:bg-slate-900">
-                <div className="aspect-[0.88] bg-[#f7f1e7] dark:bg-slate-800">
-                  {menuPreviewImages[index] ? (
-                    <img src={menuPreviewImages[index]} alt={section.title} className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,#fff3e0,#f3eadf)] dark:bg-slate-800 text-sm font-medium text-[#a28868] dark:text-slate-400">
-                      Menu preview
-                    </div>
-                  )}
+                { id: "food", title: "Food", pages: 16 },
+                { id: "beverages", title: "Beverages", pages: 10 },
+              ]).map((section, index) => (
+                <div key={section.id} className="overflow-hidden rounded-[18px] border border-[#ede8dd] dark:border-slate-800 bg-white dark:bg-slate-900">
+                  <div className="aspect-[0.88] bg-[#f7f1e7] dark:bg-slate-800">
+                    {menuPreviewImages[index] ? (
+                      <img src={menuPreviewImages[index]} alt={section.title} className="h-full w-full object-cover" />
+                    ) : (
+                      <div className="flex h-full items-center justify-center bg-[radial-gradient(circle_at_top,#fff3e0,#f3eadf)] dark:bg-slate-800 text-sm font-medium text-[#a28868] dark:text-slate-400">
+                        Menu preview
+                      </div>
+                    )}
+                  </div>
+                  <div className="px-2 pb-3 pt-2 text-center">
+                    <p className="text-[16px] font-medium leading-tight text-[#2b2218] dark:text-slate-100">{section.title}</p>
+                    <p className="mt-1 text-[12px] text-[#7f7a73] dark:text-slate-400">{section.pages} pages</p>
+                  </div>
                 </div>
-                <div className="px-2 pb-3 pt-2 text-center">
-                  <p className="text-[16px] font-medium leading-tight text-[#2b2218] dark:text-slate-100">{section.title}</p>
-                  <p className="mt-1 text-[12px] text-[#7f7a73] dark:text-slate-400">{section.pages} pages</p>
-                </div>
-              </div>
-            ))}
+              ))}
           </div>
         </section>
 
@@ -530,9 +456,8 @@ export default function DiningRestaurantDetails() {
             {(imageGallery.length > 0 ? imageGallery.slice(0, 4) : menuPreviewImages.slice(0, 2)).map((image, index) => (
               <div
                 key={`${image || "placeholder"}-${index}`}
-                className={`overflow-hidden rounded-[18px] bg-[#f6efe4] dark:bg-slate-800 ${
-                  index === 0 ? "col-span-2 aspect-[1.72]" : "aspect-[1.08]"
-                }`}
+                className={`overflow-hidden rounded-[18px] bg-[#f6efe4] dark:bg-slate-800 ${index === 0 ? "col-span-2 aspect-[1.72]" : "aspect-[1.08]"
+                  }`}
               >
                 {image ? (
                   <img src={image} alt={`${restaurantName} ${index + 1}`} className="h-full w-full object-cover" />
@@ -549,7 +474,17 @@ export default function DiningRestaurantDetails() {
           <div className="mt-4 rounded-[18px] border border-[#ececf4] dark:border-slate-800 bg-[#fafbff] dark:bg-slate-900 p-4 transition-colors">
             <div className="space-y-4 text-[14px] text-[#5f6474] dark:text-slate-400">
               <div className="flex items-start gap-3">
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-[#7e3866]" />
+                <IndianRupee className="mt-0.5 h-4 w-4 shrink-0 text-[#f0b500]" />
+                <p>{costForTwo}</p>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <div className="mt-[7px] h-2 w-2 shrink-0 rounded-full bg-[#8a8f9d]" />
+                <p>{cuisines}</p>
+              </div>
+
+              <div className="flex items-start gap-3">
+                <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
                 <p>{address}</p>
               </div>
             </div>
@@ -588,27 +523,14 @@ export default function DiningRestaurantDetails() {
       <div className="fixed bottom-0 left-0 right-0 z-30 border-t border-[#ebe5da] dark:border-slate-800 bg-white/95 dark:bg-slate-950/95 p-4 backdrop-blur-xl transition-colors">
         <div className="mx-auto max-w-md">
           <Button
-            onClick={() => {
-              if (!canBookTable) return
-              if (!isModuleAuthenticated('user')) {
-                toast.error("Please login to book a table")
-                navigate("/user/auth/login", { state: { from: location.pathname } })
-                return
-              }
-              setIsBookingSheetOpen(true)
-            }}
-            disabled={!canBookTable}
-            className={`h-12 w-full rounded-2xl border text-[17px] font-medium transition-all ${
-              canBookTable
-                ? "border-[#b18da5] bg-white dark:bg-slate-900 text-[#7e3866] dark:text-purple-400 hover:bg-[#fdfafc] dark:hover:bg-slate-800"
-                : "cursor-not-allowed border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-gray-400 dark:text-slate-600 opacity-80"
-            }`}
+            onClick={() => isDiningEnabled && setIsBookingSheetOpen(true)}
+            disabled={!isDiningEnabled}
+            className={`h-12 w-full rounded-2xl border text-[17px] font-medium transition-all ${isDiningEnabled
+              ? "border-[#b18da5] bg-white dark:bg-slate-900 text-primary dark:text-purple-400 hover:bg-[#fdfafc] dark:hover:bg-slate-800"
+              : "cursor-not-allowed border-gray-200 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-gray-400 dark:text-slate-600 opacity-80"
+              }`}
           >
-            {canBookTable 
-              ? "Book a table" 
-              : !isDiningEnabled 
-                ? "Dining paused" 
-                : "Closed now"}
+            {isDiningEnabled ? "Book a table" : "Dining paused"}
           </Button>
         </div>
       </div>
@@ -628,9 +550,9 @@ export default function DiningRestaurantDetails() {
               <div>
                 <h3 className="text-xl font-black text-[#23180f] dark:text-slate-100">Select number of guests</h3>
                 <p className="mt-1 text-sm text-[#7b6651] dark:text-slate-400">
-                    {remainingSeats > 0 
-                        ? `Only ${remainingSeats} out of ${maxCapacity} seats available now.` 
-                        : "Fully booked for now. Try later!"}
+                  {remainingSeats > 0
+                    ? `Only ${remainingSeats} out of ${maxCapacity} seats available now.`
+                    : "Fully booked for now. Try later!"}
                 </p>
               </div>
               <button
@@ -648,29 +570,28 @@ export default function DiningRestaurantDetails() {
                 const isTooLarge = count > remainingSeats && !isBooked
 
                 return (
-                    <button
-                      key={`sheet-${count}`}
-                      disabled={isBooked || isTooLarge}
-                      onClick={() => setSelectedGuests(count)}
-                      className={`relative rounded-2xl border px-3 py-4 text-sm font-bold transition-all ${
-                          selectedGuests === count
-                            ? "border-[#7e3866] bg-[#fdfafc] dark:bg-purple-950/30 text-[#7e3866] scale-[1.02] shadow-sm"
-                            : isBooked
-                              ? "border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-950/20 text-red-400 cursor-not-allowed opacity-70"
-                              : isTooLarge
-                                ? "border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-gray-300 dark:text-slate-600 cursor-not-allowed"
-                                : "border-[#ece7de] dark:border-slate-800 bg-white dark:bg-slate-800 text-[#23180f] dark:text-slate-100 hover:border-[#7e3866]/30"
+                  <button
+                    key={`sheet-${count}`}
+                    disabled={isBooked || isTooLarge}
+                    onClick={() => setSelectedGuests(count)}
+                    className={`relative rounded-2xl border px-3 py-4 text-sm font-bold transition-all ${selectedGuests === count
+                      ? "border-primary bg-[#fdfafc] dark:bg-purple-950/30 text-primary scale-[1.02] shadow-sm"
+                      : isBooked
+                        ? "border-red-100 dark:border-red-900/30 bg-red-50 dark:bg-red-950/20 text-red-400 cursor-not-allowed opacity-70"
+                        : isTooLarge
+                          ? "border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-950 text-gray-300 dark:text-slate-600 cursor-not-allowed"
+                          : "border-[#ece7de] dark:border-slate-800 bg-white dark:bg-slate-800 text-[#23180f] dark:text-slate-100 hover:border-primary/30"
                       }`}
-                    >
-                      {isBooked ? (
-                          <div className="flex flex-col items-center gap-0.5">
-                              <span className="text-[10px] uppercase font-black tracking-tighter opacity-60">Booked</span>
-                              <span>{count}</span>
-                          </div>
-                      ) : (
-                          count
-                      )}
-                    </button>
+                  >
+                    {isBooked ? (
+                      <div className="flex flex-col items-center gap-0.5">
+                        <span className="text-[10px] uppercase font-black tracking-tighter opacity-60">Booked</span>
+                        <span>{count}</span>
+                      </div>
+                    ) : (
+                      count
+                    )}
+                  </button>
                 )
               })}
             </div>
@@ -678,91 +599,13 @@ export default function DiningRestaurantDetails() {
             <Button
               onClick={handleContinueBooking}
               disabled={remainingSeats === 0 || selectedGuests > remainingSeats}
-              className="mt-6 h-12 w-full rounded-2xl bg-[#7e3866] text-base font-bold text-white hover:bg-[#55254b] disabled:bg-gray-200 disabled:text-gray-400"
+              className="mt-6 h-12 w-full rounded-2xl bg-primary text-base font-bold text-white hover:bg-secondary disabled:bg-gray-200 disabled:text-gray-400"
             >
               {remainingSeats === 0 ? "Fully Booked" : "Continue"}
             </Button>
           </div>
         </div>
       )}
-
-      {/* Share Modal */}
-      {typeof window !== "undefined" &&
-        createPortal(
-          <AnimatePresence>
-            {showShareModal && sharePayload && (
-              <>
-                <motion.div
-                  className="fixed inset-0 bg-black/50 z-[10020]"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  onClick={() => setShowShareModal(false)}
-                />
-                <motion.div
-                  className="fixed left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-[10021] w-[92vw] max-w-md bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl"
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.95 }}
-                  transition={{ duration: 0.16 }}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="px-5 pt-5 pb-3 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3">
-                    <h3 className="text-lg font-semibold text-gray-900 dark:text-white truncate">Share</h3>
-                    <button
-                      className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800"
-                      onClick={() => setShowShareModal(false)}
-                      aria-label="Close share modal"
-                    >
-                      <X className="h-4 w-4 text-gray-600 dark:text-gray-300" />
-                    </button>
-                  </div>
-
-                  <div className="px-5 py-4 space-y-2">
-                    {typeof navigator !== "undefined" && navigator.share && (
-                      <button
-                        className="w-full flex items-center gap-3 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-left"
-                        onClick={handleSystemShareFromModal}
-                      >
-                        <Share2 className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-                        <span className="text-sm font-medium text-gray-900 dark:text-white">Share via system apps</span>
-                      </button>
-                    )}
-                    <button
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-left"
-                      onClick={() => openShareTarget("whatsapp")}
-                    >
-                      <MessageCircle className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">WhatsApp</span>
-                    </button>
-                    <button
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-left"
-                      onClick={() => openShareTarget("telegram")}
-                    >
-                      <Send className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">Telegram</span>
-                    </button>
-                    <button
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-left"
-                      onClick={() => openShareTarget("email")}
-                    >
-                      <Mail className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">Email</span>
-                    </button>
-                    <button
-                      className="w-full flex items-center gap-3 px-3 py-3 rounded-lg border border-gray-200 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-800 text-left"
-                      onClick={copyShareLink}
-                    >
-                      <Copy className="h-5 w-5 text-gray-700 dark:text-gray-300" />
-                      <span className="text-sm font-medium text-gray-900 dark:text-white">Copy link</span>
-                    </button>
-                  </div>
-                </motion.div>
-              </>
-            )}
-          </AnimatePresence>,
-          document.body
-        )}
     </div>
   )
 }

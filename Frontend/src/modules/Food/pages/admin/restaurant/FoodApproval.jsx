@@ -116,7 +116,6 @@ export default function FoodApproval() {
         toast.success('Food item approved successfully')
       }
       
-      setSelectedIds(prev => prev.filter(itemId => itemId !== id))
       await fetchFoodRequests()
       setShowDetailModal(false)
       setSelectedRequest(null)
@@ -151,7 +150,6 @@ export default function FoodApproval() {
         toast.success('Food item rejected')
       }
       
-      setSelectedIds(prev => prev.filter(itemId => itemId !== id))
       await fetchFoodRequests()
       setShowRejectModal(false)
       setShowDetailModal(false)

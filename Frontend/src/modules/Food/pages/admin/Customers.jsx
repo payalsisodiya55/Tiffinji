@@ -1,15 +1,17 @@
 import { useState, useMemo, useEffect } from "react"
 import { useSearchParams } from "react-router-dom"
-import { Search, Download, ChevronDown, Eye, FileDown, FileSpreadsheet, FileText, X, Mail, Phone, MapPin, Package, IndianRupee, Calendar as CalendarIcon, User, CheckCircle, XCircle } from "lucide-react"
+import { Search, Download, ChevronDown, Eye, FileDown, FileSpreadsheet, FileText, X, Mail, Phone, MapPin, Package, IndianRupee, Calendar as CalendarIcon, User, CheckCircle, XCircle, Wallet } from "lucide-react"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from "@food/components/ui/dropdown-menu"
 import { exportCustomersToCSV, exportCustomersToExcel, exportCustomersToPDF } from "@food/components/admin/customers/customersExportUtils"
 import { adminAPI } from "@food/api"
+import { API_BASE_URL } from "@food/api/config"
+import { normalizeImageUrl } from "@food/utils/common"
 import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@food/components/ui/dialog"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
-
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
+const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api(?:\/v\d+)?\/?$/, "")
 
 export default function Customers() {
   const [searchQuery, setSearchQuery] = useState("")
@@ -20,6 +22,14 @@ export default function Customers() {
   const [userDetails, setUserDetails] = useState(null)
   const [loadingDetails, setLoadingDetails] = useState(false)
   const [showUserDetails, setShowUserDetails] = useState(false)
+
+  const [showWalletDialog, setShowWalletDialog] = useState(false)
+  const [walletAmount, setWalletAmount] = useState("")
+  const [walletDescription, setWalletDescription] = useState("")
+  const [isWalletAction, setIsWalletAction] = useState(false)
+  const [customerToManage, setCustomerToManage] = useState(null)
+  const [walletActionType, setWalletActionType] = useState("topup") // "topup" | "deduct"
+
   const [filters, setFilters] = useState({
     orderDate: "",
     joiningDate: "",
@@ -28,60 +38,14 @@ export default function Customers() {
     chooseFirst: "",
   })
 
-  const filteredCustomers = useMemo(() => {
-    let result = [...customers]
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 50
 
-    // Filter by search query
-    if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim()
-      result = result.filter(customer =>
-        customer.name?.toLowerCase().includes(query) ||
-        (customer.email || "NA").toLowerCase().includes(query) ||
-        customer.phone?.includes(query)
-      )
-    }
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery, filters])
 
-    // Filter by order date when that field is available in the API payload.
-
-    // Filter by joining date
-    if (filters.joiningDate) {
-      result = result.filter(customer => {
-        // Parse joining date from format "17 Oct 2021"
-        const customerDate = new Date(customer.joiningDate)
-        const filterDate = new Date(filters.joiningDate)
-        return customerDate.toDateString() === filterDate.toDateString()
-      })
-    }
-
-    // Filter by status
-    if (filters.status) {
-      if (filters.status === "active") {
-        result = result.filter(customer => customer.status === true)
-      } else if (filters.status === "inactive") {
-        result = result.filter(customer => customer.status === false)
-      }
-    }
-
-    // Sort by options
-    if (filters.sortBy) {
-      if (filters.sortBy === "name-asc") {
-        result.sort((a, b) => a.name.localeCompare(b.name))
-      } else if (filters.sortBy === "name-desc") {
-        result.sort((a, b) => b.name.localeCompare(a.name))
-      } else if (filters.sortBy === "orders-asc") {
-        result.sort((a, b) => a.totalOrder - b.totalOrder)
-      } else if (filters.sortBy === "orders-desc") {
-        result.sort((a, b) => b.totalOrder - a.totalOrder)
-      }
-    }
-
-    // Limit results if "Choose First" is set
-    if (filters.chooseFirst && parseInt(filters.chooseFirst) > 0) {
-      result = result.slice(0, parseInt(filters.chooseFirst))
-    }
-
-    return result
-  }, [customers, searchQuery, filters])
+  const totalPages = Math.ceil(totalCustomers / itemsPerPage)
 
   const handleFilterChange = (field, value) => {
     setFilters(prev => ({ ...prev, [field]: value }))
@@ -113,8 +77,8 @@ export default function Customers() {
       try {
         setLoading(true)
         const params = {
-          limit: 1000,
-          page: 1,
+          limit: itemsPerPage,
+          page: currentPage,
           ...(searchQuery && { search: searchQuery }),
           ...(filters.status && { status: filters.status }),
           ...(filters.joiningDate && { joiningDate: filters.joiningDate }),
@@ -152,7 +116,7 @@ export default function Customers() {
       cancelled = true
       clearTimeout(t)
     }
-  }, [searchQuery, filters.status, filters.joiningDate, filters.sortBy, filters.chooseFirst])
+  }, [searchQuery, filters.status, filters.joiningDate, filters.sortBy, filters.chooseFirst, currentPage])
 
   const [searchParams] = useSearchParams()
   const userIdFromUrl = searchParams.get("userId")
@@ -216,8 +180,44 @@ export default function Customers() {
     }
   }
 
+  const submitWalletAction = async () => {
+    if (!walletAmount || isNaN(walletAmount) || Number(walletAmount) <= 0) {
+      toast.error("Please enter a valid amount");
+      return;
+    }
+    try {
+      setIsWalletAction(true);
+      if (walletActionType === "topup") {
+        await adminAPI.topupCustomerWallet(customerToManage, walletAmount, walletDescription);
+        toast.success("Wallet topped up successfully");
+      } else {
+        await adminAPI.deductCustomerWallet(customerToManage, walletAmount, walletDescription);
+        toast.success("Wallet deducted successfully");
+      }
+      setShowWalletDialog(false);
+      setWalletAmount("");
+      setWalletDescription("");
+
+      setCustomers(prev => prev.map(c =>
+        (c._id || c.id || c.sl) === customerToManage
+          ? { ...c, walletBalance: (c.walletBalance || 0) + (walletActionType === "topup" ? Number(walletAmount) : -Number(walletAmount)) }
+          : c
+      ));
+
+      // refresh user details if they are currently viewing the same user
+      if (showUserDetails && selectedCustomer === customerToManage) {
+        handleViewDetails(customerToManage);
+      }
+    } catch (error) {
+      debugError(`Error ${walletActionType} wallet:`, error);
+      toast.error(error?.response?.data?.message || `Failed to ${walletActionType} wallet`);
+    } finally {
+      setIsWalletAction(false);
+    }
+  }
+
   const handleExport = (format) => {
-    if (filteredCustomers.length === 0) {
+    if (customers.length === 0) {
       toast.error("No customers to export")
       return
     }
@@ -226,15 +226,15 @@ export default function Customers() {
     try {
       switch (format) {
         case "csv":
-          exportCustomersToCSV(filteredCustomers, filename)
+          exportCustomersToCSV(customers, filename)
           toast.success("CSV export started")
           break
         case "excel":
-          exportCustomersToExcel(filteredCustomers, filename)
+          exportCustomersToExcel(customers, filename)
           toast.success("Excel export started")
           break
         case "pdf":
-          exportCustomersToPDF(filteredCustomers, filename)
+          exportCustomersToPDF(customers, filename)
           toast.success("PDF download started")
           break
         default:
@@ -364,7 +364,7 @@ export default function Customers() {
               </button>
             </div>
             <div className="text-sm text-slate-600">
-              {loading ? 'Loading...' : `Showing ${filteredCustomers.length} of ${totalCustomers} customers`}
+              {loading ? 'Loading...' : `Showing page ${currentPage} of ${totalPages} (${totalCustomers} customers)`}
             </div>
           </div>
         </div>
@@ -375,7 +375,7 @@ export default function Customers() {
             <div className="flex items-center gap-2">
               <h2 className="text-xl font-bold text-slate-900">Customer list</h2>
               <span className="px-3 py-1 rounded-full text-sm font-semibold bg-slate-100 text-slate-700">
-                {filteredCustomers.length}
+                {totalCustomers}
               </span>
             </div>
 
@@ -427,8 +427,10 @@ export default function Customers() {
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Sl</th>
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Name</th>
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Contact Information</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Address</th>
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Total Order</th>
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Total Order Amount</th>
+                  <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Wallet Balance</th>
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Joining Date</th>
                   <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">Active/Inactive</th>
                   <th className="px-6 py-4 text-center text-[10px] font-bold text-slate-700 uppercase tracking-wider">Actions</th>
@@ -437,31 +439,31 @@ export default function Customers() {
               <tbody className="bg-white divide-y divide-slate-100">
                 {loading ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center">
+                    <td colSpan={9} className="px-6 py-8 text-center">
                       <div className="text-sm text-slate-500">Loading customers...</div>
                     </td>
                   </tr>
-                ) : filteredCustomers.length === 0 ? (
+                ) : customers.length === 0 ? (
                   <tr>
-                    <td colSpan={8} className="px-6 py-8 text-center">
+                    <td colSpan={9} className="px-6 py-8 text-center">
                       <div className="text-sm text-slate-500">No customers found</div>
                     </td>
                   </tr>
                 ) : (
-                  filteredCustomers.map((customer, index) => (
+                  customers.map((customer, index) => (
                     <tr key={customer.id || customer.sl} className="hover:bg-slate-50 transition-colors">
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className="text-sm font-medium text-slate-700">{index + 1}</span>
+                        <span className="text-sm font-medium text-slate-700">{(currentPage - 1) * itemsPerPage + index + 1}</span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          <div 
+                          <div
                             className="w-10 h-10 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center shrink-0 overflow-hidden cursor-pointer hover:opacity-80 transition-all border border-slate-100"
                             onClick={() => handleViewDetails(customer._id || customer.id || customer.sl)}
                           >
                             {customer.profileImage ? (
                               <img
-                                src={customer.profileImage}
+                                src={normalizeImageUrl(customer.profileImage, BACKEND_ORIGIN)}
                                 alt={customer.name}
                                 className="w-full h-full object-cover"
                                 onError={(e) => {
@@ -472,7 +474,7 @@ export default function Customers() {
                               <span className="text-xs font-semibold">{getInitials(customer.name)}</span>
                             )}
                           </div>
-                          <span 
+                          <span
                             className="text-sm font-medium text-slate-900 cursor-pointer hover:text-blue-600 transition-colors"
                             onClick={() => handleViewDetails(customer._id || customer.id || customer.sl)}
                           >
@@ -482,8 +484,20 @@ export default function Customers() {
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex flex-col">
-                          <span className="text-sm text-slate-700">{customer.email || "NA"}</span>
+                          <span className="text-sm text-slate-700">{customer.email || "email not given by client"}</span>
                           <span className="text-xs text-slate-500">{customer.phone}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="flex flex-col max-w-[200px]">
+                          {customer.addresses && customer.addresses.length > 0 ? (
+                            <span className="text-sm text-slate-700 truncate" title={`${customer.addresses[0].street}${customer.addresses[0].city ? `, ${customer.addresses[0].city}` : ''}`}>
+                              {customer.addresses[0].street}
+                              {customer.addresses[0].city && `, ${customer.addresses[0].city}`}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-500">Address not provided</span>
+                          )}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
@@ -491,6 +505,9 @@ export default function Customers() {
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm font-medium text-slate-900">{"\u20B9"} {(customer.totalOrderAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span className="text-sm font-medium text-green-600">{"\u20B9"} {(customer.walletBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
                         <span className="text-sm text-slate-700">{formatDateTime(customer.joiningDate)}</span>
@@ -508,12 +525,37 @@ export default function Customers() {
                         </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-center">
-                        <button
-                          onClick={() => handleViewDetails(customer._id || customer.id || customer.sl)}
-                          className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
-                        >
-                          <Eye className="w-4 h-4" />
-                        </button>
+                        <div className="flex justify-center gap-2">
+                          <button
+                            title="Top-up Wallet"
+                            onClick={() => {
+                              setCustomerToManage(customer._id || customer.id || customer.sl);
+                              setWalletActionType("topup");
+                              setShowWalletDialog(true);
+                            }}
+                            className="p-1.5 rounded text-green-600 hover:bg-green-50 transition-colors"
+                          >
+                            <Wallet className="w-4 h-4" />
+                          </button>
+                          <button
+                            title="Deduct Wallet"
+                            onClick={() => {
+                              setCustomerToManage(customer._id || customer.id || customer.sl);
+                              setWalletActionType("deduct");
+                              setShowWalletDialog(true);
+                            }}
+                            className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors"
+                          >
+                            <Wallet className="w-4 h-4" />
+                          </button>
+                          <button
+                            title="View Details"
+                            onClick={() => handleViewDetails(customer._id || customer.id || customer.sl)}
+                            className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
+                          >
+                            <Eye className="w-4 h-4" />
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   ))
@@ -521,6 +563,34 @@ export default function Customers() {
               </tbody>
             </table>
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between border-t border-slate-200 px-6 py-4 mt-4">
+              <div className="text-sm text-slate-500">
+                Showing <span className="font-medium">{(currentPage - 1) * itemsPerPage + 1}</span> to <span className="font-medium">{Math.min(currentPage * itemsPerPage, totalCustomers)}</span> of <span className="font-medium">{totalCustomers}</span> results
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  Previous
+                </button>
+                <div className="text-sm font-medium text-slate-700 px-2">
+                  Page {currentPage} of {totalPages}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1.5 rounded-lg border border-slate-300 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -542,7 +612,7 @@ export default function Customers() {
                 <div className="flex flex-col sm:flex-row sm:items-start gap-4">
                   <div className="w-16 h-16 rounded-full bg-slate-200 flex items-center justify-center flex-shrink-0">
                     {userDetails.profileImage ? (
-                      <img src={userDetails.profileImage} alt={userDetails.name} className="w-full h-full rounded-full object-cover" />
+                      <img src={normalizeImageUrl(userDetails.profileImage, BACKEND_ORIGIN)} alt={userDetails.name} className="w-full h-full rounded-full object-cover" />
                     ) : (
                       <User className="w-8 h-8 text-slate-400" />
                     )}
@@ -565,7 +635,7 @@ export default function Customers() {
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
                       <div className="flex items-center gap-2 text-sm text-slate-600 min-w-0">
                         <Mail className="w-4 h-4" />
-                        <span className="truncate">{userDetails.email || "NA"}</span>
+                        <span className="truncate">{userDetails.email || "email not given by client"}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-slate-600 min-w-0">
                         <Phone className="w-4 h-4" />
@@ -584,7 +654,7 @@ export default function Customers() {
               </div>
 
               {/* Statistics Section */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
                 <div className="bg-blue-50 rounded-lg p-3">
                   <div className="flex items-center gap-2 mb-1">
                     <Package className="w-4 h-4 text-blue-600" />
@@ -599,6 +669,15 @@ export default function Customers() {
                   </div>
                   <p className="text-xl font-bold text-green-600">
                     {"\u20B9"}{(userDetails.totalOrderAmount || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+                <div className="bg-amber-50 rounded-lg p-3">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Wallet className="w-4 h-4 text-amber-600" />
+                    <span className="text-xs font-semibold text-slate-700">Wallet Balance</span>
+                  </div>
+                  <p className="text-xl font-bold text-amber-600">
+                    {"\u20B9"}{(userDetails.walletBalance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                   </p>
                 </div>
                 <div className="bg-purple-50 rounded-lg p-3">
@@ -694,7 +773,71 @@ export default function Customers() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Manage Wallet Dialog */}
+      <Dialog open={showWalletDialog} onOpenChange={setShowWalletDialog}>
+        <DialogContent className="max-w-md mx-auto p-0 gap-0">
+          <DialogHeader className="px-6 pt-6 pb-4 border-b border-slate-200 bg-slate-50">
+            <DialogTitle className="pr-12 text-xl font-bold text-slate-900 flex items-center gap-2">
+              <Wallet className={`w-5 h-5 ${walletActionType === 'topup' ? 'text-green-600' : 'text-red-600'}`} />
+              {walletActionType === "topup" ? "Wallet Top-up" : "Deduct Wallet Balance"}
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-5 px-6 py-6">
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Amount ({"\u20B9"})
+              </label>
+              <input
+                type="number"
+                value={walletAmount}
+                onChange={(e) => setWalletAmount(e.target.value)}
+                placeholder={walletActionType === "topup" ? "Enter amount to add" : "Enter amount to deduct"}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                Description (Optional)
+              </label>
+              <input
+                type="text"
+                value={walletDescription}
+                onChange={(e) => setWalletDescription(e.target.value)}
+                placeholder={walletActionType === "topup" ? "Ex: Promotional bonus" : "Ex: Order adjustment"}
+                className="w-full px-4 py-2.5 border border-slate-300 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm transition-all"
+              />
+            </div>
+          </div>
+
+          <div className="px-6 py-4 bg-slate-50 border-t border-slate-200 flex justify-end gap-3 rounded-b-lg">
+            <button
+              onClick={() => setShowWalletDialog(false)}
+              className="px-4 py-2.5 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-100 transition-all"
+              disabled={isWalletAction}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={submitWalletAction}
+              disabled={isWalletAction}
+              className={`px-4 py-2.5 text-sm font-medium rounded-lg text-white transition-all flex items-center gap-2 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed ${walletActionType === 'topup' ? 'bg-green-600 hover:bg-green-700' : 'bg-red-600 hover:bg-red-700'}`}
+            >
+              {isWalletAction ? (
+                "Processing..."
+              ) : (
+                <>
+                  <Wallet className="w-4 h-4" />
+                  {walletActionType === "topup" ? "Top-up Wallet" : "Deduct Balance"}
+                </>
+              )}
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
+
 

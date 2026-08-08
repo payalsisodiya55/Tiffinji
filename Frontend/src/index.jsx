@@ -14,6 +14,11 @@ import('./modules/Food/utils/businessSettings.js')
   .then(({ loadBusinessSettings }) => loadBusinessSettings())
   .catch(() => { /* Silently fail — settings load when admin authenticates */ })
 
+// Apply dynamic theme configuration
+import('./modules/Food/utils/themeSettings.js')
+  .then(({ applyDynamicTheme }) => applyDynamicTheme())
+  .catch(() => { /* Silently fail */ })
+
 // Apply saved theme
 const savedTheme = localStorage.getItem('appTheme') || 'light'
 if (savedTheme === 'dark') {
@@ -74,6 +79,11 @@ function bootstrapNativeHashRoute() {
 
 bootstrapNativeHashRoute()
 
+// Preload Google Maps API key for web + mobile WebView (runtime from backend if .env empty)
+import('./modules/Food/utils/googleMapsApiKey.js')
+  .then(({ getGoogleMapsApiKey }) => getGoogleMapsApiKey())
+  .catch(() => { /* non-critical */ })
+
 // ─── Suppress known non-critical errors ──────────────────────────────────────
 
 const originalError = console.error
@@ -132,6 +142,22 @@ window.addEventListener('unhandledrejection', (event) => {
   const error = event.reason || event
   const errorMsg = error?.message || String(error) || ''
   const errorName = error?.name || ''
+  
+  if (
+    errorMsg.includes('Failed to fetch dynamically imported module') ||
+    errorMsg.includes('Importing a module script failed')
+  ) {
+    event.preventDefault()
+    const reloadKey = 'vite_preload_error_reload_count'
+    const reloadCount = parseInt(sessionStorage.getItem(reloadKey) || '0', 10)
+    
+    if (reloadCount < 2) {
+      sessionStorage.setItem(reloadKey, String(reloadCount + 1))
+      window.location.reload()
+    }
+    return
+  }
+
   if (
     errorMsg.includes('Timeout expired') ||
     errorMsg.includes('User denied Geolocation') ||
@@ -142,6 +168,18 @@ window.addEventListener('unhandledrejection', (event) => {
     return
   }
 })
+
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault()
+  const reloadKey = 'vite_preload_error_reload_count'
+  const reloadCount = parseInt(sessionStorage.getItem(reloadKey) || '0', 10)
+  
+  if (reloadCount < 2) {
+    sessionStorage.setItem(reloadKey, String(reloadCount + 1))
+    window.location.reload()
+  }
+})
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 

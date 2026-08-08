@@ -1,9 +1,7 @@
 import { useState, useEffect } from "react"
 import { useNavigate } from "react-router-dom"
 import { ArrowLeft, Wallet } from "lucide-react"
-import BottomNavOrders from "@food/components/restaurant/BottomNavOrders"
 import { restaurantAPI } from "@food/api"
-import useRestaurantBackNavigation from "@food/hooks/useRestaurantBackNavigation"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -11,7 +9,6 @@ const debugError = (...args) => {}
 
 export default function WithdrawalHistoryPage() {
   const navigate = useNavigate()
-  const goBack = useRestaurantBackNavigation()
   const [withdrawalHistoryTab, setWithdrawalHistoryTab] = useState('pending')
   const [withdrawalRequests, setWithdrawalRequests] = useState([])
   const [loadingWithdrawalRequests, setLoadingWithdrawalRequests] = useState(false)
@@ -48,12 +45,12 @@ export default function WithdrawalHistoryPage() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-gray-100 flex flex-col">
+    <div className="restaurant-page min-h-full bg-gray-100">
       {/* Header */}
       <div className="sticky bg-white top-0 z-40 px-4 py-3 border-b border-gray-200">
         <div className="flex items-center gap-3">
           <button
-            onClick={goBack}
+            onClick={() => navigate("/restaurant/hub-finance")}
             className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
             aria-label="Go back"
           >
@@ -92,7 +89,7 @@ export default function WithdrawalHistoryPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto px-4 py-6">
+      <div className="px-4 py-6">
         {loadingWithdrawalRequests ? (
           <div className="py-8 text-center text-gray-500">Loading...</div>
         ) : (
@@ -182,7 +179,6 @@ export default function WithdrawalHistoryPage() {
         )}
       </div>
 
-      <BottomNavOrders />
     </div>
   )
 }

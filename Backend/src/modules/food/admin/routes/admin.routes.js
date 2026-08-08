@@ -10,6 +10,7 @@ import * as diningAdminController from '../../dining/controllers/diningAdmin.con
 import * as orderController from '../../orders/controllers/order.controller.js';
 import { getAdminPageController, upsertAdminPageController } from '../controllers/pageContent.controller.js';
 import { upload } from '../../../../middleware/upload.js';
+import { bulkUploadMenuController, getMenuItemsStatusController, regenerateMenuItemImageController } from '../controllers/menuBulkUpload.controller.js';
 
 const router = express.Router();
 
@@ -68,6 +69,7 @@ router.post('/restaurants', adminController.createRestaurant);
 router.patch('/restaurants/:id', adminController.updateRestaurantById);
 router.patch('/restaurants/:id/status', adminController.updateRestaurantStatus);
 router.patch('/restaurants/:id/location', adminController.updateRestaurantLocation);
+router.patch('/restaurants/:id/outlet-timings', adminController.updateRestaurantOutletTimings);
 router.patch('/restaurants/:id/menu', adminController.updateRestaurantMenuById);
 router.patch('/restaurants/:id/approve', adminController.approveRestaurant);
 router.patch('/restaurants/:id/reject', adminController.rejectRestaurant);
@@ -109,6 +111,11 @@ router.get('/foods', adminController.getFoods);
 router.post('/foods', adminController.createFood);
 router.patch('/foods/:id', adminController.updateFood);
 router.delete('/foods/:id', adminController.deleteFood);
+
+// ----- Menu Bulk Upload -----
+router.post('/menu/bulk-upload', bulkUploadMenuController);
+router.get('/menu/items-status/:restaurantId', getMenuItemsStatusController);
+router.post('/menu/regenerate-image', regenerateMenuItemImageController);
 
 // ----- Offers & Coupons -----
 router.get('/offers', adminController.getAllOffers);
@@ -210,6 +217,7 @@ router.put('/pages-social-media/:key', upsertAdminPageController);
 
 router.get('/sidebar-badges', adminController.getSidebarBadges);
 router.get('/notifications/fssai-expired', adminController.getExpiredFssaiNotifications);
+router.get('/live-monitor/status', adminController.getLiveMonitorStatus);
 
 // ----- Franchise Management -----
 import franchiseAdminRoutes from '../../franchise/routes/franchise.admin.routes.js';

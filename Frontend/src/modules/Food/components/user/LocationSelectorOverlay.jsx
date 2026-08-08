@@ -6,6 +6,7 @@ import { Input } from "@food/components/ui/input"
 import { Label } from "@food/components/ui/label"
 import { Textarea } from "@food/components/ui/textarea"
 import { useLocation as useGeoLocation } from "@food/hooks/useLocation"
+import { useAppLocation } from "@food/hooks/useAppLocation"
 import { useProfile } from "@food/context/ProfileContext"
 import { toast } from "sonner"
 import { locationAPI, userAPI } from "@food/api"
@@ -49,6 +50,7 @@ const getAddressIcon = (address) => {
 
 export default function LocationSelectorOverlay({ isOpen, onClose }) {
   const { location, loading, requestLocation } = useGeoLocation()
+  const { setSavedLocation } = useAppLocation()
   const navigate = useNavigate()
   const { addresses = [], addAddress, updateAddress, setDefaultAddress, userProfile, isAuthenticated } = useProfile()
   const [showAddressForm, setShowAddressForm] = useState(false)
@@ -753,10 +755,11 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       // Request location - this will automatically prompt for permission if needed
       // Clear any cached location first to ensure fresh coordinates
       debugLog("?? Requesting fresh location (clearing cache and forcing fresh GPS)...")
-
+      localStorage.removeItem("userLocation")
+      
       // Increase timeout to 15 seconds to allow GPS to get accurate fix
       // The getLocation function already has a 15-second timeout, so we match it
-      const locationPromise = requestLocation()
+      const locationPromise = requestLocation(true)
       const timeoutPromise = new Promise((_, reject) =>
         setTimeout(() => reject(new Error("Location request is taking longer than expected. Please check your GPS settings.")), 15000)
       )
@@ -1613,7 +1616,8 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
         try {
           const response = await locationAPI.reverseGeocode(roundedLat, roundedLng)
           const backendData = response?.data?.data
-          const result = backendData?.results?.[0] || backendData?.result?.[0] || null
+          const locationSource = backendData?.location?.source
+          const result = locationSource !== 'coords_only' ? (backendData?.results?.[0] || backendData?.result?.[0] || null) : null
           if (result) {
             formattedAddress = result.formatted_address || result.formattedAddress || ""
             const addressComponents = result.address_components || {}
@@ -2069,31 +2073,19 @@ export default function LocationSelectorOverlay({ isOpen, onClose }) {
       const latitude = coordinates[1]
 
       if (latitude && longitude) {
-        // Update location in backend
-        await userAPI.updateLocation({
-          latitude,
-          longitude,
-          address: `${address.street}, ${address.city}`,
+        const locationData = {
+          label: address.label || "Home",
           city: address.city,
           state: address.state,
+          address: `${address.street}, ${address.city}`,
           area: address.additionalDetails || "",
+          zipCode: address.zipCode,
+          latitude,
+          longitude,
           formattedAddress: `${address.street}, ${address.city}, ${address.state}`
-        })
+        }
+        await setSavedLocation(locationData, { mode: 'saved', persistDb: true })
       }
-
-      // Update the location in localStorage with this address
-      const locationData = {
-        label: address.label || "Home",
-        city: address.city,
-        state: address.state,
-        address: `${address.street}, ${address.city}`,
-        area: address.additionalDetails || "",
-        zipCode: address.zipCode,
-        latitude,
-        longitude,
-        formattedAddress: `${address.street}, ${address.city}, ${address.state}`
-      }
-      localStorage.setItem("userLocation", JSON.stringify(locationData))
 
       // Update map position to show selected address
       setMapPosition([latitude, longitude])

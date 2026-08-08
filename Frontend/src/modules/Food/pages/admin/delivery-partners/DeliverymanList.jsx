@@ -5,8 +5,10 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@food/components/ui/dialog"
 import { exportDeliverymenToExcel, exportDeliverymenToPDF } from "@food/components/admin/deliveryman/deliverymanExportUtils"
 import { toast } from "sonner"
+import { API_BASE_URL } from "@food/api/config"
+import { normalizeImageUrl } from "@food/utils/common"
 const debugError = () => {}
-
+const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api(?:\/v\d+)?\/?$/, "")
 
 const formatCurrency = (amount) => {
   const numericAmount = Number(amount)
@@ -16,6 +18,8 @@ const formatCurrency = (amount) => {
 
 export default function DeliverymanList() {
   const [searchQuery, setSearchQuery] = useState("")
+  const [currentPage, setCurrentPage] = useState(1)
+  const itemsPerPage = 50
   const [deliverymen, setDeliverymen] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -207,6 +211,17 @@ export default function DeliverymanList() {
     // Backend already handles search, but we can do client-side filtering if needed
     return deliverymen
   }, [deliverymen])
+
+  // Reset to first page when search changes
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [searchQuery])
+
+  const totalPages = Math.ceil(filteredDeliverymen.length / itemsPerPage)
+  const paginatedDeliverymen = filteredDeliverymen.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  )
 
   const handleView = async (deliveryman) => {
     try {
@@ -591,11 +606,13 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                       </td>
                     </tr>
                   ) : (
-                    filteredDeliverymen.map((dm) => (
+                    paginatedDeliverymen.map((dm, index) => {
+                      const absoluteIndex = (currentPage - 1) * itemsPerPage + index + 1
+                      return (
                       <tr key={dm._id} className="hover:bg-slate-50 transition-colors">
                         {visibleColumns.si && (
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm font-medium text-slate-700">{dm.sl}</span>
+                            <span className="text-sm font-medium text-slate-700">{dm.sl ?? absoluteIndex}</span>
                           </td>
                         )}
                         {visibleColumns.name && (
@@ -607,7 +624,7 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                               >
                                 {(dm.profileImage?.url ?? dm.profilePhoto) ? (
                                   <img
-                                    src={dm.profileImage?.url ?? dm.profilePhoto}
+                                    src={normalizeImageUrl(dm.profileImage?.url ?? dm.profilePhoto, BACKEND_ORIGIN)}
                                     alt={dm.name}
                                     className="w-full h-full object-cover"
                                   />
@@ -752,12 +769,60 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                           </td>
                         )}
                       </tr>
-                    ))
+                    )})
                   )}
                 </tbody>
               </table>
             )}
           </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-6 pt-4 border-t border-slate-200">
+              <div className="text-sm text-slate-500">
+                Showing {((currentPage - 1) * itemsPerPage) + 1} to {Math.min(currentPage * itemsPerPage, filteredDeliverymen.length)} of {filteredDeliverymen.length} delivery partners
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  className="px-3 py-1 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                >
+                  Previous
+                </button>
+                <div className="flex items-center gap-1">
+                  {[...Array(Math.min(5, totalPages))].map((_, idx) => {
+                    let pageNum = currentPage;
+                    if (totalPages <= 5) pageNum = idx + 1;
+                    else if (currentPage <= 3) pageNum = idx + 1;
+                    else if (currentPage >= totalPages - 2) pageNum = totalPages - 4 + idx;
+                    else pageNum = currentPage - 2 + idx;
+                    
+                    return (
+                      <button
+                        key={pageNum}
+                        onClick={() => setCurrentPage(pageNum)}
+                        className={`w-8 h-8 flex items-center justify-center rounded-lg text-sm font-medium transition-colors ${
+                          currentPage === pageNum 
+                            ? "bg-blue-600 text-white" 
+                            : "bg-white border border-slate-300 text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {pageNum}
+                      </button>
+                    );
+                  })}
+                </div>
+                <button
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  className="px-3 py-1 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed hover:bg-slate-50 transition-colors"
+                >
+                  Next
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -775,7 +840,7 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                   <div className="flex-shrink-0">
                     {viewDetails.profileImage?.url ? (
                       <img 
-                        src={viewDetails.profileImage.url} 
+                        src={normalizeImageUrl(viewDetails.profileImage.url, BACKEND_ORIGIN)} 
                         alt={viewDetails.name}
                         className="w-24 h-24 rounded-full object-cover border-2 border-slate-200"
                       />
@@ -988,12 +1053,32 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                             {viewDetails.documents.aadhar.number && (
                               <p className="text-sm text-slate-700 mb-1">Number: {viewDetails.documents.aadhar.number}</p>
                             )}
-                            {viewDetails.documents.aadhar.document && (
+                            {viewDetails.documents.aadhar.front && (
+                              <a 
+                                href={viewDetails.documents.aadhar.front} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 block"
+                              >
+                                <ExternalLink className="w-3 h-3" /> View Front
+                              </a>
+                            )}
+                            {viewDetails.documents.aadhar.back && (
+                              <a 
+                                href={viewDetails.documents.aadhar.back} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 block mt-1"
+                              >
+                                <ExternalLink className="w-3 h-3" /> View Back
+                              </a>
+                            )}
+                            {!viewDetails.documents.aadhar.front && viewDetails.documents.aadhar.document && (
                               <a 
                                 href={viewDetails.documents.aadhar.document} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 block"
                               >
                                 <ExternalLink className="w-3 h-3" /> View Document
                               </a>
@@ -1037,12 +1122,32 @@ availableCashLimit: deliveryman.availableCashLimit || 0,
                                 Expiry: {new Date(viewDetails.documents.drivingLicense.expiryDate).toLocaleDateString('en-GB')}
                               </p>
                             )}
-                            {viewDetails.documents.drivingLicense.document && (
+                            {viewDetails.documents.drivingLicense.front && (
+                              <a 
+                                href={viewDetails.documents.drivingLicense.front} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 block"
+                              >
+                                <ExternalLink className="w-3 h-3" /> View Front
+                              </a>
+                            )}
+                            {viewDetails.documents.drivingLicense.back && (
+                              <a 
+                                href={viewDetails.documents.drivingLicense.back} 
+                                target="_blank" 
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 block mt-1"
+                              >
+                                <ExternalLink className="w-3 h-3" /> View Back
+                              </a>
+                            )}
+                            {!viewDetails.documents.drivingLicense.front && viewDetails.documents.drivingLicense.document && (
                               <a 
                                 href={viewDetails.documents.drivingLicense.document} 
                                 target="_blank" 
                                 rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700"
+                                className="inline-flex items-center gap-1 text-sm text-blue-600 hover:text-blue-700 block"
                               >
                                 <ExternalLink className="w-3 h-3" /> View Document
                               </a>

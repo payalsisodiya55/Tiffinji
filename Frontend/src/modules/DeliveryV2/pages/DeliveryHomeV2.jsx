@@ -3,10 +3,20 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useDeliveryStore } from '@/modules/DeliveryV2/store/useDeliveryStore';
 import { useProximityCheck } from '@/modules/DeliveryV2/hooks/useProximityCheck';
 import { useOrderManager } from '@/modules/DeliveryV2/hooks/useOrderManager';
-import { useDeliveryNotifications } from '@food/hooks/useDeliveryNotifications';
-import { writeOrderTracking, writeDeliveryLocation } from '@food/realtimeTracking';
+import { useDeliveryNotificationContext } from '@food/context/DeliveryNotificationContext';
 import { deliveryAPI } from '@food/api';
+import {
+  getOrderAcceptId,
+  getOrderMongoId,
+  getPrimaryIncomingOrder,
+  isSameOrder,
+  normalizeIncomingOrder,
+  removeIncomingOrderFromQueue,
+  upsertIncomingOrderInQueue,
+} from '@food/utils/orderDispatchId';
 import { toast } from 'sonner';
+
+const debugDeliveryPopup = (...args) => console.log('[DeliveryPopupTrace]', ...args);
 
 // Components
 import LiveMap from '@/modules/DeliveryV2/components/map/LiveMap';
@@ -14,6 +24,7 @@ import { NewOrderModal } from '@/modules/DeliveryV2/components/modals/NewOrderMo
 import { PickupActionModal } from '@/modules/DeliveryV2/components/modals/PickupActionModal';
 import { DeliveryVerificationModal } from '@/modules/DeliveryV2/components/modals/DeliveryVerificationModal';
 import { OrderSummaryModal } from '@/modules/DeliveryV2/components/modals/OrderSummaryModal';
+import { PhotoUploadModal } from '@/modules/DeliveryV2/components/modals/PhotoUploadModal';
 import ActionSlider from '@/modules/DeliveryV2/components/ui/ActionSlider';
 
 // Sub Pages
@@ -25,20 +36,42 @@ import ProfileV2 from '@/modules/DeliveryV2/pages/ProfileV2';
 import { 
   Bell, HelpCircle, AlertTriangle, 
   Wallet, History, User as UserIcon, LayoutGrid,
-  Plus, Minus, Navigation2, Target, Play, CheckCircle2, Clock, ChevronDown,
-  Contact, Package, Phone
+  Plus, Minus, Navigation2, Navigation, Target, Play, CheckCircle2, Clock, ChevronDown,
+  Contact, Package, Phone, MapPin
 } from 'lucide-react';
 
+import { shouldSendLocationUpdate } from "@delivery/utils/trackingInterval";
 import { getHaversineDistance, calculateETA, calculateHeading } from '@/modules/DeliveryV2/utils/geo';
+import { parseLatLng } from '@/modules/DeliveryV2/hooks/proximity.utils';
 import { useCompanyName } from "@food/hooks/useCompanyName";
 import { useNavigate } from 'react-router-dom';
 import useNotificationInbox from "@food/hooks/useNotificationInbox";
-import { 
-  getDeliveryNotifications, 
-  saveDeliveryNotifications, 
-  markDeliveryNotificationAsRead 
-} from '@food/utils/deliveryNotifications';
-import { getCurrentUser } from '@food/utils/auth';
+import { writeDeliveryLocation } from "@food/realtimeTracking";
+
+function getDeliveryPartnerId() {
+  try {
+    const userRaw = localStorage.getItem("delivery_user");
+    if (userRaw) {
+      const user = JSON.parse(userRaw);
+      const id = user?._id || user?.id || user?.deliveryPartnerId;
+      if (id) return String(id);
+    }
+    const token = localStorage.getItem("delivery_accessToken") || "";
+    if (token) {
+      const payload = JSON.parse(atob(token.split(".")[1]));
+      if (payload?.userId) return String(payload.userId);
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return null;
+}
+
+
+function isCancelledDeliveryStatus(statusLike) {
+  const normalized = String(statusLike || '').toLowerCase();
+  return normalized.includes('cancel') || normalized === 'dead';
+}
 
 /** Minimal bottom-sheet popup (Restored from legacy FeedNavbar) */
 function BottomPopup({ isOpen, onClose, title, children }) {
@@ -75,39 +108,63 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const { isOnline, toggleOnline, riderLocation, activeOrder, tripStatus, setRiderLocation, setActiveOrder, updateTripStatus, clearActiveOrder } = useDeliveryStore();
   const { isWithinRange, distanceToTarget } = useProximityCheck();
   const { acceptOrder, reachPickup, pickUpOrder, reachDrop, completeDelivery, resetTrip } = useOrderManager();
-  const { newOrder, clearNewOrder, orderStatusUpdate, clearOrderStatusUpdate, claimedOrderId, clearClaimedOrderId, adminNotification, clearAdminNotification, isConnected: isSocketConnected, emitLocation } = useDeliveryNotifications();
+  const { newOrder, clearNewOrder, orderStatusUpdate, clearOrderStatusUpdate, claimedOrderId, clearClaimedOrderId, autoKilledOrder, clearAutoKilledOrder, adminNotification, clearAdminNotification, isConnected: isSocketConnected, emitLocation, playNotificationSound } = useDeliveryNotificationContext();
   const companyName = useCompanyName();
   const { items: broadcastItems, unreadCount: notificationUnreadCount, markAsRead: markBroadcastAsRead, dismissAll: dismissAllBroadcast } = useNotificationInbox("delivery", { limit: 20 });
-  const [localNotifications, setLocalNotifications] = useState(() => getDeliveryNotifications());
 
-  useEffect(() => {
-    const handleUpdate = () => {
-      setLocalNotifications(getDeliveryNotifications());
-    };
-    window.addEventListener('deliveryNotificationsUpdated', handleUpdate);
-    window.addEventListener('storage', handleUpdate);
-    return () => {
-      window.removeEventListener('deliveryNotificationsUpdated', handleUpdate);
-      window.removeEventListener('storage', handleUpdate);
-    };
+  const [incomingOrders, setIncomingOrders] = useState([]);
+  const [selectedIncomingId, setSelectedIncomingId] = useState(null);
+  const lockedIncomingOrderIdRef = useRef(null);
+
+  const incomingOrder = useMemo(
+    () => getPrimaryIncomingOrder(incomingOrders, selectedIncomingId),
+    [incomingOrders, selectedIncomingId],
+  );
+
+  const selectIncomingOrder = useCallback((order) => {
+    const normalized = normalizeIncomingOrder(order);
+    const id = getOrderMongoId(normalized) || getOrderAcceptId(normalized);
+    if (!id) {
+      debugDeliveryPopup('selectIncomingOrder skipped: missing usable id', normalized);
+      return;
+    }
+    debugDeliveryPopup('selectIncomingOrder', {
+      selectedId: id,
+      displayId: getOrderAcceptId(normalized),
+    });
+    lockedIncomingOrderIdRef.current = id;
+    setSelectedIncomingId(id);
   }, []);
 
-  const mergedNotifications = useMemo(() => {
-    const combined = [
-      ...(localNotifications || []).map(item => ({ ...item, source: "local" })),
-      ...(broadcastItems || []).map(item => ({ ...item, source: "broadcast" }))
-    ];
-    return combined.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
-  }, [localNotifications, broadcastItems]);
-
-  const totalUnreadCount = useMemo(() => {
-    return mergedNotifications.filter(item => !item.read).length;
-  }, [mergedNotifications]);
-
-  const [incomingOrder, setIncomingOrder] = useState(null);
+  const syncSelectionAfterQueueChange = useCallback((nextQueue) => {
+    setSelectedIncomingId((currentSelected) => {
+      const stillExists = (nextQueue || []).some(
+        (item) =>
+          currentSelected &&
+          ((getOrderMongoId(item) || getOrderAcceptId(item)) === currentSelected ||
+            isSameOrder(item, { orderMongoId: currentSelected, _id: currentSelected, orderId: currentSelected })),
+      );
+      if (stillExists) {
+        debugDeliveryPopup('syncSelectionAfterQueueChange keeping current selection', {
+          currentSelected,
+          queueSize: nextQueue?.length || 0,
+        });
+        return currentSelected;
+      }
+      const nextId = nextQueue?.[0] ? (getOrderMongoId(nextQueue[0]) || getOrderAcceptId(nextQueue[0])) : null;
+      debugDeliveryPopup('syncSelectionAfterQueueChange switching selection', {
+        previousSelected: currentSelected,
+        nextSelected: nextId,
+        queueSize: nextQueue?.length || 0,
+      });
+      lockedIncomingOrderIdRef.current = nextId;
+      return nextId;
+    });
+  }, []);
   const [cashLimitNotice, setCashLimitNotice] = useState(null);
   const [currentTab, setCurrentTab] = useState(tab);
   const [showNotifications, setShowNotifications] = useState(false);
+  const [showPhotoModal, setShowPhotoModal] = useState(false);
   
   // Track URL changes (Prop changes) to update sub-page content
   useEffect(() => {
@@ -122,11 +179,13 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     accidentHelpline: "",
     contactPolice: "",
     insurance: "",
+    teamLeader: "",
   });
   
   const [isModalMinimized, setIsModalMinimized] = useState(false);
   const [eta, setEta] = useState(null);
   const lastLocationSentAt = useRef(0);
+  const lastHttpSyncAt = useRef(0);
   const lastCoordRef = useRef(null);
   const rollingSpeedRef = useRef([]);
   const lastAutoArrivalRef = useRef({ PICKING_UP: false, PICKED_UP: false });
@@ -137,8 +196,54 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   const [simIndex, setSimIndex] = useState(0);
   const [simProgress, setSimProgress] = useState(0); // 0 to 1 between points
   const [activePolyline, setActivePolyline] = useState(null);
+  const lastEmittedPolylineRef = useRef('');
   const mapRef = useRef(null);
   const simInitializedRef = useRef(false);
+
+  const resolveActiveOrderMeta = useCallback(() => {
+    if (!activeOrder) return null;
+    return {
+      orderId: getOrderMongoId(activeOrder) || getOrderAcceptId(activeOrder),
+      userId:
+        activeOrder.userId?._id?.toString?.() ||
+        activeOrder.userId?.toString?.() ||
+        activeOrder.user?._id?.toString?.() ||
+        activeOrder.user?.id ||
+        activeOrder.userId,
+      restaurantId:
+        activeOrder.restaurantId?._id?.toString?.() ||
+        activeOrder.restaurantId?.toString?.() ||
+        activeOrder.restaurantId,
+    };
+  }, [activeOrder]);
+
+  const pushRoutePolylineToCustomer = useCallback((polyline) => {
+    const encoded = typeof polyline === 'string' ? polyline : polyline?.points || '';
+    if (!encoded) return;
+
+    const meta = resolveActiveOrderMeta();
+    if (!meta?.orderId) return;
+
+    if (encoded === lastEmittedPolylineRef.current) return;
+    lastEmittedPolylineRef.current = encoded;
+
+    const coords = lastCoordRef.current || riderLocation;
+    if (!coords || coords.lat == null || coords.lng == null) return;
+
+    emitLocation({
+      ...meta,
+      lat: coords.lat,
+      lng: coords.lng,
+      heading: coords.heading || 0,
+      polyline: encoded,
+      status: tripStatus,
+      eta,
+    });
+  }, [resolveActiveOrderMeta, riderLocation, emitLocation, tripStatus, eta]);
+
+  useEffect(() => {
+    lastEmittedPolylineRef.current = '';
+  }, [activeOrder?._id, tripStatus]);
 
   const isLoggingOut = useRef(false);
   const handleLogout = useCallback(() => {
@@ -178,7 +283,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   useEffect(() => {
     let interval;
     if (isSimMode && simPath.length > 1 && simIndex < simPath.length - 1) {
-      console.log('[SimAuto] Glide Active √');
+      console.log('[SimAuto] Glide Active âˆš');
       
       interval = setInterval(() => {
         setSimProgress(prev => {
@@ -212,42 +317,12 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                 lat, 
                 lng, 
                 heading, 
-                orderId: activeOrder?.orderId || activeOrder?._id,
+                ...(resolveActiveOrderMeta() || {}),
                 status: 'on_the_way',
-                polyline: activePolyline // Include polyline in every stream update for resilience
+                polyline: activePolyline,
+                eta,
               };
-              // A. HTTP Backup
-              deliveryAPI.updateLocation(lat, lng, true, { heading }).catch(() => {});
-              
-              // B. SOCKET LIVE (SILKY SMOOTH)
               if (payload.orderId) emitLocation(payload);
-
-              // C. FIREBASE REALTIME DB (Persistent Route for Customer Map)
-              if (payload.orderId) {
-                writeOrderTracking(payload.orderId, { 
-                  lat, 
-                  lng, 
-                  heading, 
-                  polyline: activePolyline,
-                  status: tripStatus,
-                  eta: eta // Publish live ETA to Firebase
-                }).catch(() => {});
-              }
-
-              // D. FIREBASE DELIVERY BOYS DB (Persistent Route for Admin Map)
-              const user = getCurrentUser('delivery');
-              const deliveryId = user?._id || user?.id;
-              if (deliveryId) {
-                writeDeliveryLocation({
-                  deliveryId,
-                  lat,
-                  lng,
-                  heading,
-                  isOnline: true,
-                  activeOrderId: activeOrder?.orderId || activeOrder?._id || null,
-                  timestamp: now
-                }).catch(() => {});
-              }
             }
           }
           return nextProgress;
@@ -255,7 +330,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       }, 50); // 20 FPS movement
     }
     return () => clearInterval(interval);
-  }, [isSimMode, simPath, simIndex, activeOrder, emitLocation, activePolyline, eta, tripStatus]);
+  }, [isSimMode, simPath, simIndex, activeOrder, emitLocation, activePolyline, eta, tripStatus, resolveActiveOrderMeta]);
 
   // Fetch Emergency numbers and Profile (Restored logic)
   useEffect(() => {
@@ -281,6 +356,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     { title: "Accident Helpline", subtitle: "Report an accident", icon: <AlertTriangle className="text-orange-600" />, phone: emergencyNumbers.accidentHelpline },
     { title: "Contact Police", subtitle: "Nearest police support", icon: <AlertTriangle className="text-blue-600" />, phone: emergencyNumbers.contactPolice },
     { title: "Insurance", subtitle: "Policy & claim help", icon: <AlertTriangle className="text-green-600" />, phone: emergencyNumbers.insurance },
+    { title: "Team Leader", subtitle: "Contact your assigned team leader", icon: <UserIcon className="text-purple-600" />, phone: emergencyNumbers.teamLeader },
   ];
 
   // Reset simulation when trip phase/order/mode changes.
@@ -351,10 +427,66 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     setSimPath(fallbackPath);
   }, [isSimMode, simPath, activeOrder, tripStatus]);
 
-  // Auto-restore modal when status or content changes
+  const openCustomerDropInMaps = useCallback((order) => {
+    if (!order) return;
+
+    const customerCoords =
+      parseLatLng(order.customerLocation) ||
+      parseLatLng(order.customer_location) ||
+      parseLatLng(order.deliveryAddress?.location) ||
+      parseLatLng(order.deliveryAddress);
+
+    const restaurantCoords =
+      parseLatLng(order.restaurantLocation) ||
+      parseLatLng(order.restaurant_location) ||
+      parseLatLng(order.restaurantId?.location) ||
+      parseLatLng(order.restaurantId);
+
+    if (customerCoords && restaurantCoords) {
+      const { lat: rLat, lng: rLng } = restaurantCoords;
+      const { lat: cLat, lng: cLng } = customerCoords;
+      window.open(
+        `https://www.google.com/maps/dir/?api=1&origin=${rLat},${rLng}&destination=${cLat},${cLng}&travelmode=driving`,
+        '_blank',
+      );
+      return;
+    }
+
+    if (customerCoords) {
+      const { lat, lng } = customerCoords;
+      window.open(
+        `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`,
+        '_blank',
+      );
+      return;
+    }
+
+    const address =
+      order.customerAddress ||
+      order.deliveryAddress?.street ||
+      [
+        order.deliveryAddress?.street,
+        order.deliveryAddress?.additionalDetails,
+        order.deliveryAddress?.city,
+        order.deliveryAddress?.state,
+      ]
+        .filter(Boolean)
+        .join(', ') ||
+      'Customer Location';
+
+    window.open(
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(address)}`,
+      '_blank',
+    );
+  }, []);
 
   // Auto-restore modal when status or content changes
   useEffect(() => {
+    debugDeliveryPopup('auto-restoring modal state', {
+      tripStatus,
+      showVerification,
+      incomingOrderId: getOrderMongoId(incomingOrder) || getOrderAcceptId(incomingOrder),
+    });
     setIsModalMinimized(false);
   }, [tripStatus, showVerification, incomingOrder]);
 
@@ -444,23 +576,21 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   // 2. Online/Offline Status Sync (Low Frequency)
   useEffect(() => {
     deliveryAPI.updateOnlineStatus(isOnline).catch(() => {});
-    
-    // Also sync with Firebase Realtime Database
-    const user = getCurrentUser('delivery');
-    const deliveryId = user?._id || user?.id;
-    if (deliveryId) {
-      const currentLoc = useDeliveryStore.getState().riderLocation || lastCoordRef.current || { lat: 22.7196, lng: 75.8577 };
-      writeDeliveryLocation({
-        deliveryId,
-        lat: currentLoc.lat || currentLoc.latitude || 22.7196,
-        lng: currentLoc.lng || currentLoc.longitude || 75.8577,
-        heading: currentLoc.heading || 0,
-        isOnline: Boolean(isOnline),
-        activeOrderId: activeOrder?.orderId || activeOrder?._id || null,
-        timestamp: Date.now()
-      }).catch(() => {});
-    }
-  }, [isOnline]);
+
+    const partnerId = getDeliveryPartnerId();
+    if (!partnerId) return;
+
+    const coords = lastCoordRef.current || riderLocation;
+    void writeDeliveryLocation({
+      deliveryId: partnerId,
+      lat: coords?.lat,
+      lng: coords?.lng,
+      heading: coords?.heading || 0,
+      isOnline,
+      status: isOnline ? "online" : "offline",
+      activeOrderId: activeOrder?._id || activeOrder?.orderId || null,
+    });
+  }, [isOnline, riderLocation, activeOrder?._id, activeOrder?.orderId]);
 
   // 3. Location logic (Smart Frequency Tracking)
   useEffect(() => {
@@ -502,12 +632,14 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         lastAutoArrivalRef.current[tripStatus] = false;
       }
 
-      // Check threshold for Sync (distance-based or 7s time-based)
+      // Check threshold for Socket Sync (distance-based or 10s time-based)
+      // NOTE: Customer tracking UI uses 60 FPS interpolation (Glide), so 10s intervals
+      // still appear perfectly smooth on the map. This reduces server load by ~70%.
       const distMoved = lastCoordRef.current 
         ? getHaversineDistance(lat, lng, lastCoordRef.current.lat, lastCoordRef.current.lng) 
         : 1000;
 
-      if (distMoved >= 25 || (now - lastLocationSentAt.current >= 7000)) {
+      if (distMoved >= 50 || (now - lastLocationSentAt.current >= 10000)) {
         lastLocationSentAt.current = now;
         lastCoordRef.current = { lat, lng };
         
@@ -517,46 +649,36 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           heading: heading || 0,
           speed: speed || 0,
           accuracy: pos.coords.accuracy,
-          orderId: activeOrder?.orderId || activeOrder?._id,
+          ...(resolveActiveOrderMeta() || {}),
           status: 'on_the_way',
-          polyline: activePolyline
+          polyline:
+            typeof activePolyline === 'string'
+              ? activePolyline
+              : activePolyline?.points || activePolyline || null,
+          eta,
         };
-
-        deliveryAPI.updateLocation(lat, lng, true, { 
-          heading: heading || 0,
-          speed: speed || 0,
-          accuracy: pos.coords.accuracy 
-        }).catch(() => {});
 
         if (payload.orderId) emitLocation(payload);
 
-        if (payload.orderId) {
-          writeOrderTracking(payload.orderId, {
-            lat,
-            lng,
-            heading: heading || 0,
-            polyline: activePolyline,
-            status: tripStatus,
-            eta: eta
-          }).catch(() => {});
-        }
-
-        // D. FIREBASE DELIVERY BOYS DB (Persistent Route for Admin Map)
-        const user = getCurrentUser('delivery');
-        const deliveryId = user?._id || user?.id;
-        if (deliveryId) {
-          writeDeliveryLocation({
-            deliveryId,
+        const partnerId = getDeliveryPartnerId();
+        if (partnerId) {
+          void writeDeliveryLocation({
+            deliveryId: partnerId,
             lat,
             lng,
             heading: heading || 0,
             speed: speed || 0,
             accuracy: pos.coords.accuracy,
             isOnline: true,
-            activeOrderId: activeOrder?.orderId || activeOrder?._id || null,
-            timestamp: now
-          }).catch(() => {});
+            status: "online",
+            activeOrderId: payload.orderId || null,
+          });
         }
+      }
+
+      if (now - lastHttpSyncAt.current >= 45000) {
+        lastHttpSyncAt.current = now;
+        deliveryAPI.updateLocation(lat, lng, true, { heading: heading || 0, speed: speed || 0, accuracy: pos.coords.accuracy }).catch(() => {});
       }
     }, () => {
       // IF GPS FAILS/DENIED: Use Indore as a fallback for testing
@@ -566,21 +688,6 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         setRiderLocation(fallbackPos);
       }
       toast.error('GPS Blocked!', { description: 'Showing test location in Indore.' });
-
-      // Sync fallback to Firebase so they show up on admin map even if GPS is blocked
-      const user = getCurrentUser('delivery');
-      const deliveryId = user?._id || user?.id;
-      if (deliveryId) {
-        writeDeliveryLocation({
-          deliveryId,
-          lat: 22.7196,
-          lng: 75.8577,
-          heading: 0,
-          isOnline: true,
-          activeOrderId: activeOrder?.orderId || activeOrder?._id || null,
-          timestamp: Date.now()
-        }).catch(() => {});
-      }
     }, { 
       enableHighAccuracy: true,
       maximumAge: 3000,
@@ -590,70 +697,291 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
     return () => navigator.geolocation.clearWatch(watchId);
   }, [isOnline, setRiderLocation, isSimMode]);
 
-  // 3.5. Background Ping / Heartbeat
-  // If watchPosition stops firing (e.g. app in background or device stationary),
-  // this ensures we ping the backend periodically. This keeps the token fresh (via 401 interceptor)
-  // and keeps the Delivery Partner "online" in the backend.
+  // Refresh GPS when returning from external apps (e.g. Google Maps)
+  useEffect(() => {
+    if (!isOnline || isSimMode) return;
+
+    const refreshLocation = () => {
+      if (document.hidden) return;
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const { latitude: lat, longitude: lng, heading } = pos.coords;
+          setRiderLocation({ lat, lng, heading: heading || 0 });
+        },
+        () => {},
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 10000 },
+      );
+    };
+
+    document.addEventListener('visibilitychange', refreshLocation);
+    window.addEventListener('focus', refreshLocation);
+    return () => {
+      document.removeEventListener('visibilitychange', refreshLocation);
+      window.removeEventListener('focus', refreshLocation);
+    };
+  }, [isOnline, isSimMode, setRiderLocation]);
+
+  // Online heartbeat: keep rider visible in admin map / availability without per-tick HTTP.
   useEffect(() => {
     if (!isOnline) return;
     
     const pingInterval = setInterval(() => {
       const now = Date.now();
-      // If no natural GPS update happened in the last 15 seconds, force a ping
-      if (now - lastLocationSentAt.current >= 15000) {
-        lastLocationSentAt.current = now;
-        const currentLoc = useDeliveryStore.getState().riderLocation || lastCoordRef.current || { lat: 22.7196, lng: 75.8577 };
-        const latVal = currentLoc.lat || currentLoc.latitude || 22.7196;
-        const lngVal = currentLoc.lng || currentLoc.longitude || 75.8577;
-
+      if (now - lastHttpSyncAt.current >= 45000 && lastCoordRef.current) {
+        lastHttpSyncAt.current = now;
         deliveryAPI.updateLocation(
-          latVal, 
-          lngVal, 
+          lastCoordRef.current.lat, 
+          lastCoordRef.current.lng, 
           true, 
-          { heading: currentLoc.heading || 0, speed: 0, accuracy: null }
+          { heading: 0, speed: 0, accuracy: null }
         ).catch(() => {});
 
-        // Also sync with Firebase Realtime Database for Admin Map
-        const user = getCurrentUser('delivery');
-        const deliveryId = user?._id || user?.id;
-        if (deliveryId) {
-          writeDeliveryLocation({
-            deliveryId,
-            lat: latVal,
-            lng: lngVal,
-            heading: currentLoc.heading || 0,
-            speed: 0,
+        const partnerId = getDeliveryPartnerId();
+        if (partnerId) {
+          void writeDeliveryLocation({
+            deliveryId: partnerId,
+            lat: lastCoordRef.current.lat,
+            lng: lastCoordRef.current.lng,
             isOnline: true,
-            activeOrderId: activeOrder?.orderId || activeOrder?._id || null,
-            timestamp: now
-          }).catch(() => {});
+            status: "online",
+          });
         }
       }
-    }, 10000); // Check every 10 seconds
+    }, 45000);
     
     return () => clearInterval(pingInterval);
-  }, [isOnline, activeOrder]);
+  }, [isOnline]);
 
-  useEffect(() => { if (newOrder) setIncomingOrder(newOrder); }, [newOrder]);
+
+  // GHOST-ASSIGNMENT FIX: When a new socket/FCM order arrives:
+  // - If no popup is currently showing â†’ display it immediately.
+  // - If a popup IS already showing (lock is set) â†’ queue it as pending. DO NOT overwrite the visible popup.
+  //   This ensures the rider always accepts the order whose details are physically visible on screen.
+  useEffect(() => {
+    const onPendingOffers = (event) => {
+      const offers = event.detail?.offers || [];
+      if (!offers.length) return;
+
+      debugDeliveryPopup('deliveryPendingOffers received', {
+        offerIds: offers.map((offer) => getOrderMongoId(offer) || getOrderAcceptId(offer)),
+        count: offers.length,
+      });
+
+      setIncomingOrders((prev) => {
+        let next = prev;
+        offers.forEach((offer) => {
+          next = upsertIncomingOrderInQueue(next, offer);
+        });
+        debugDeliveryPopup('deliveryPendingOffers queue updated', {
+          previousQueueIds: prev.map((item) => getOrderMongoId(item) || getOrderAcceptId(item)),
+          nextQueueIds: next.map((item) => getOrderMongoId(item) || getOrderAcceptId(item)),
+        });
+        return next;
+      });
+
+      setSelectedIncomingId((prev) => {
+        if (prev) {
+          debugDeliveryPopup('deliveryPendingOffers keeping existing selectedIncomingId', { selectedIncomingId: prev });
+          return prev;
+        }
+        const firstId = getOrderMongoId(offers[0]) || getOrderAcceptId(offers[0]);
+        debugDeliveryPopup('deliveryPendingOffers selecting first offer', { firstId });
+        lockedIncomingOrderIdRef.current = firstId || null;
+        return firstId;
+      });
+    };
+
+    window.addEventListener('deliveryPendingOffers', onPendingOffers);
+    return () => window.removeEventListener('deliveryPendingOffers', onPendingOffers);
+  }, []);
 
   useEffect(() => {
-    if (activeOrder && incomingOrder) {
-      setIncomingOrder(null);
+    if (newOrder === undefined || newOrder === null) return;
+
+    const normalized = normalizeIncomingOrder(newOrder);
+    const newId = getOrderMongoId(normalized) || getOrderAcceptId(normalized);
+    debugDeliveryPopup('newOrder effect triggered', {
+      newId,
+      displayId: getOrderAcceptId(normalized),
+      hasMongoId: Boolean(getOrderMongoId(normalized)),
+    });
+    if (!newId) {
+      debugDeliveryPopup('newOrder ignored because usable id is missing', normalized);
+      return;
     }
-  }, [activeOrder, incomingOrder]);
 
-  // When another delivery partner claims the incoming order (via socket 'order_claimed'),
-  // dismiss the NewOrderModal and inform this delivery boy.
+    setIncomingOrders((prev) => {
+      const wasInQueue = prev.some((item) => isSameOrder(item, normalized));
+      const next = upsertIncomingOrderInQueue(prev, normalized);
+      debugDeliveryPopup('newOrder queue updated', {
+        wasInQueue,
+        previousQueueIds: prev.map((item) => getOrderMongoId(item) || getOrderAcceptId(item)),
+        nextQueueIds: next.map((item) => getOrderMongoId(item) || getOrderAcceptId(item)),
+      });
+      return next;
+    });
+
+    setSelectedIncomingId((prev) => {
+      if (prev) {
+        debugDeliveryPopup('newOrder keeping existing selectedIncomingId', { selectedIncomingId: prev, incomingId: newId });
+        return prev;
+      }
+      debugDeliveryPopup('newOrder selecting incoming order', { selectedIncomingId: newId });
+      lockedIncomingOrderIdRef.current = newId;
+      return newId;
+    });
+  }, [newOrder]);
+
+  const prevIncomingOrderRef = useRef(null);
   useEffect(() => {
-    if (!claimedOrderId) return;
-    const incomingId = incomingOrder?.orderId || incomingOrder?._id || incomingOrder?.orderMongoId;
-    if (incomingId && String(incomingId) === String(claimedOrderId)) {
-      toast.info('Order was taken by another delivery partner.', { duration: 4000 });
-      setIncomingOrder(null);
+    prevIncomingOrderRef.current = incomingOrder;
+  }, [incomingOrder]);
+
+  useEffect(() => {
+    const popupOrderId = getOrderMongoId(incomingOrder) || getOrderAcceptId(incomingOrder) || null;
+    const popupVisible = Boolean(!isModalMinimized && incomingOrder);
+    debugDeliveryPopup('popup state snapshot', {
+      popupVisible,
+      isModalMinimized,
+      popupOrderId,
+      selectedIncomingId,
+      queueSize: incomingOrders.length,
+      queueIds: incomingOrders.map((item) => getOrderMongoId(item) || getOrderAcceptId(item)),
+      hasActiveOrder: Boolean(activeOrder),
+      showVerification,
+      socketConnected: isSocketConnected,
+      riderOnline: isOnline,
+    });
+  }, [incomingOrder, incomingOrders, selectedIncomingId, isModalMinimized, activeOrder, showVerification, isSocketConnected, isOnline]);
+
+  useEffect(() => {
+    if (!incomingOrder) {
+      debugDeliveryPopup('popup closed - no incoming order available', {
+        isModalMinimized,
+        selectedIncomingId,
+        queueSize: incomingOrders.length,
+      });
+      return;
+    }
+
+    debugDeliveryPopup('popup order ready for modal render', {
+      popupOrderId: getOrderMongoId(incomingOrder) || getOrderAcceptId(incomingOrder),
+      displayId: getOrderAcceptId(incomingOrder),
+      isModalMinimized,
+      queueSize: incomingOrders.length,
+      selectedIncomingId,
+    });
+  }, [incomingOrder, isModalMinimized, incomingOrders.length, selectedIncomingId]);
+
+  const dismissCurrentIncomingOrder = useCallback(() => {
+    if (!incomingOrder) {
+      setIncomingOrders([]);
+      setSelectedIncomingId(null);
+      lockedIncomingOrderIdRef.current = null;
       clearNewOrder();
+      return;
     }
+
+    setIncomingOrders((prev) => {
+      const next = removeIncomingOrderFromQueue(prev, incomingOrder);
+      syncSelectionAfterQueueChange(next);
+      return next;
+    });
+    clearNewOrder();
+  }, [incomingOrder, clearNewOrder, syncSelectionAfterQueueChange]);
+
+  const clearAllIncomingOrders = useCallback(() => {
+    setIncomingOrders([]);
+    setSelectedIncomingId(null);
+    lockedIncomingOrderIdRef.current = null;
+    clearNewOrder();
+  }, [clearNewOrder]);
+
+  const removeClaimedOrderFromQueue = useCallback(
+    (claimedRef, { notify = true } = {}) => {
+      const claimedTarget = {
+        orderMongoId: claimedRef?.orderMongoId || claimedRef?.orderId || claimedRef?._id,
+        orderId: claimedRef?.orderId,
+        _id: claimedRef?._id,
+      };
+
+      const wasVisible =
+        incomingOrder && isSameOrder(incomingOrder, claimedTarget);
+      const wasQueued = incomingOrders.some(
+        (item) =>
+          isSameOrder(item, claimedTarget) &&
+          incomingOrder &&
+          !isSameOrder(item, incomingOrder),
+      );
+
+      setIncomingOrders((prev) => {
+        const next = removeIncomingOrderFromQueue(prev, claimedTarget);
+        syncSelectionAfterQueueChange(next);
+        return next;
+      });
+
+      if (notify && wasVisible) {
+        if (claimedRef?.claimedBy === 'cancelled') {
+          toast.error('Order was cancelled.', { duration: 4000 });
+        } else {
+          toast.info('Order was taken by another delivery partner.', { duration: 4000 });
+        }
+      } else if (notify && wasQueued) {
+        toast.info('One of your queued orders was taken.', { duration: 3000 });
+      }
+
+      clearNewOrder();
+    },
+    [incomingOrder, incomingOrders, syncSelectionAfterQueueChange, clearNewOrder],
+  );
+
+  useEffect(() => {
+    if (selectedIncomingId) {
+      debugDeliveryPopup('selectedIncomingId updated', { selectedIncomingId });
+      lockedIncomingOrderIdRef.current = selectedIncomingId;
+    } else {
+      debugDeliveryPopup('selectedIncomingId cleared');
+    }
+  }, [selectedIncomingId]);
+
+  useEffect(() => {
+    if (activeOrder && incomingOrders.length > 0) {
+      clearAllIncomingOrders();
+    }
+  }, [activeOrder, incomingOrders.length, clearAllIncomingOrders]);
+
+  useEffect(() => {
+    if (!claimedOrderId?.orderId && !claimedOrderId?.orderMongoId) return;
+
+    const token = localStorage.getItem('delivery_accessToken') || '';
+    let myUserId = null;
+    try {
+      if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        myUserId = payload.userId;
+      }
+    } catch (e) {}
+
+    const claimedRef = {
+      orderId: claimedOrderId.orderId,
+      orderMongoId: claimedOrderId.orderMongoId || claimedOrderId.orderId,
+      _id: claimedOrderId.orderMongoId || claimedOrderId.orderId,
+      claimedBy: claimedOrderId.claimedBy,
+    };
+
+    if (claimedOrderId.claimedBy && String(claimedOrderId.claimedBy) === String(myUserId)) {
+      removeClaimedOrderFromQueue(claimedRef, { notify: false });
+      clearClaimedOrderId();
+      return;
+    }
+
+    const inQueue = incomingOrders.some((item) => isSameOrder(item, claimedRef));
+    if (inQueue) {
+      removeClaimedOrderFromQueue(claimedRef, { notify: true });
+    }
+
     clearClaimedOrderId();
-  }, [claimedOrderId]);
+  }, [claimedOrderId, incomingOrders, removeClaimedOrderFromQueue, clearClaimedOrderId]);
 
   useEffect(() => {
     if (!isOnline) return;
@@ -733,24 +1061,31 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
           availablePayload?.cashLimit?.blocked ? availablePayload.cashLimit : null;
         if (!cancelled) setCashLimitNotice(nextCashLimitNotice);
 
-        const nextIncomingOrder = availableOrders.find((order) => {
-          const dispatchStatus = String(order?.dispatch?.status || '').toLowerCase();
-          const orderStatus = String(order?.orderStatus || order?.status || '').toLowerCase();
-          return (
-            ['unassigned', 'assigned'].includes(dispatchStatus) &&
-            ['confirmed', 'preparing', 'ready_for_pickup'].includes(orderStatus)
-          );
-        });
+        const availableIncoming = availableOrders
+          .map((order) => normalizeIncomingOrder(order))
+          .filter((order) => {
+            const dispatchStatus = String(order?.dispatch?.status || '').toLowerCase();
+            const orderStatus = String(order?.orderStatus || order?.status || '').toLowerCase();
+            return (
+              ['unassigned', 'assigned'].includes(dispatchStatus) &&
+              ['confirmed', 'preparing', 'ready_for_pickup'].includes(orderStatus)
+            );
+          });
 
-        if (!cancelled && nextIncomingOrder) {
+        if (!cancelled && availableIncoming.length > 0) {
           setCashLimitNotice(null);
-          setIncomingOrder((prev) => {
-            const prevId = prev?.orderId || prev?._id || prev?.orderMongoId;
-            const nextId =
-              nextIncomingOrder?.orderId ||
-              nextIncomingOrder?._id ||
-              nextIncomingOrder?.orderMongoId;
-            return prevId === nextId && prev ? prev : nextIncomingOrder;
+          setIncomingOrders((prev) => {
+            let next = prev;
+            availableIncoming.forEach((order) => {
+              next = upsertIncomingOrderInQueue(next, order);
+            });
+            return next;
+          });
+          setSelectedIncomingId((prev) => {
+            if (prev) return prev;
+            const firstId = getOrderMongoId(availableIncoming[0]);
+            lockedIncomingOrderIdRef.current = firstId || null;
+            return firstId;
           });
         }
       } catch (error) {
@@ -763,7 +1098,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       if (!document.hidden) {
         void hydrateAvailableOrder();
       }
-    }, isSocketConnected ? 12000 : 5000);
+    }, isSocketConnected ? 45000 : 15000);
 
     return () => {
       cancelled = true;
@@ -772,14 +1107,106 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   }, [activeOrder, currentTab, isOnline, isSocketConnected, setActiveOrder, tripStatus, updateTripStatus]);
 
   useEffect(() => {
-    if (orderStatusUpdate) {
-      if (orderStatusUpdate.status === 'cancelled') {
-        toast.error('Order cancelled');
+    if (!orderStatusUpdate) return;
+
+    const normalizedStatus = String(
+      orderStatusUpdate.status || orderStatusUpdate.orderStatus || '',
+    ).toLowerCase();
+    const targetOrderRef = {
+      orderMongoId:
+        orderStatusUpdate.orderMongoId || orderStatusUpdate._id || orderStatusUpdate.orderId,
+      orderId: orderStatusUpdate.orderId || orderStatusUpdate.order_id,
+      _id: orderStatusUpdate._id || orderStatusUpdate.orderMongoId || orderStatusUpdate.orderId,
+    };
+
+    if (isCancelledDeliveryStatus(normalizedStatus) || normalizedStatus === 'deleted') {
+      const isActiveTarget = activeOrder && isSameOrder(activeOrder, targetOrderRef);
+      const popupVisible = incomingOrder && isSameOrder(incomingOrder, targetOrderRef);
+      const queueHasOrder = incomingOrders.some((item) => isSameOrder(item, targetOrderRef));
+
+      setIncomingOrders((prev) => {
+        const next = removeIncomingOrderFromQueue(prev, targetOrderRef);
+        syncSelectionAfterQueueChange(next);
+        return next;
+      });
+
+      setIsModalMinimized(false);
+      setShowVerification(false);
+      setShowPhotoModal(false);
+      clearNewOrder();
+
+      if (isActiveTarget) {
         resetTrip();
       }
+
+      if (normalizedStatus === 'deleted') {
+        if (popupVisible || queueHasOrder || isActiveTarget) {
+          toast.error('Order was removed by admin.', { duration: 4000 });
+        }
+      } else if (popupVisible || queueHasOrder || isActiveTarget) {
+        toast.error('Order was cancelled.', { duration: 4000 });
+      }
+
       clearOrderStatusUpdate();
+      return;
     }
-  }, [orderStatusUpdate, resetTrip, clearOrderStatusUpdate]);
+
+    if (
+      orderStatusUpdate.recoverySource === 'socket_resync' ||
+      orderStatusUpdate.recoverySource === 'delivery_reconnect'
+    ) {
+      const payload = orderStatusUpdate;
+      if (payload && (payload._id || payload.orderId || payload.orderMongoId)) {
+        setActiveOrder({
+          ...payload,
+          _id: payload._id || payload.orderMongoId,
+          orderId: payload.orderId || payload.order_id || payload._id,
+        });
+        const backendStatus = String(
+          payload.deliveryStatus || payload.orderStatus || payload.status || '',
+        ).toLowerCase();
+        if (['delivered', 'completed'].includes(backendStatus)) {
+          updateTripStatus('COMPLETED');
+        } else if (['picked_up', 'delivering'].includes(backendStatus)) {
+          updateTripStatus('PICKED_UP');
+        } else if (backendStatus === 'reached_pickup' || payload.deliveryState?.currentPhase === 'at_pickup') {
+          updateTripStatus('REACHED_PICKUP');
+        } else {
+          updateTripStatus('PICKING_UP');
+        }
+      }
+    }
+
+    clearOrderStatusUpdate();
+  }, [
+    orderStatusUpdate,
+    activeOrder,
+    incomingOrder,
+    incomingOrders,
+    resetTrip,
+    clearNewOrder,
+    clearOrderStatusUpdate,
+    setActiveOrder,
+    syncSelectionAfterQueueChange,
+    updateTripStatus,
+  ]);
+
+  // Handle auto-killed order reasoning
+  useEffect(() => {
+    if (autoKilledOrder) {
+      setTimeout(() => {
+        const reason = window.prompt("Your order exceeded the 1 hour limit and was cancelled by the system. Please provide a reason for the failure/delay:");
+        if (reason && reason.trim() !== "") {
+          deliveryAPI.rejectOrder(autoKilledOrder.orderId || autoKilledOrder.orderMongoId || autoKilledOrder._id, { reason })
+            .then(() => toast.success("Reason saved successfully."))
+            .catch(() => toast.error("Failed to save reason."));
+        } else {
+          toast.error("You must provide a reason for the delayed delivery.");
+        }
+        clearAutoKilledOrder();
+      }, 500); // small delay to ensure UI doesn't block the unmount of previous modals
+    }
+  }, [autoKilledOrder, clearAutoKilledOrder]);
 
   // Handle Real-time Admin Notifications
   useEffect(() => {
@@ -815,9 +1242,12 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
 
   return (
     <div className="relative h-screen w-full bg-white text-gray-900 overflow-hidden flex flex-col">
-      {/* ─── 1. TOP HEADER (Premium Dark Gray) ─── */}
-      {currentTab !== 'history' && (
-      <div className="absolute top-0 inset-x-0 bg-[#121212]/95 backdrop-blur-2xl shadow-2xl z-[200] safe-top pb-2 border-b border-white/10">
+      {/* â”€â”€â”€ 1. TOP HEADER (Dynamic Theme Gradient) â”€â”€â”€ */}
+      {currentTab !== 'history' && currentTab !== 'profile' && currentTab !== 'pocket' && (
+      <div 
+        className="absolute top-0 inset-x-0 backdrop-blur-2xl shadow-2xl z-[200] safe-top pb-2 border-b border-white/10"
+        style={{ backgroundColor: 'var(--dv-primary)' }}
+      >
         <div className="flex items-center justify-between px-4 py-2">
           <div className="flex items-center gap-4">
              <div 
@@ -829,14 +1259,27 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               <button 
                 onClick={async () => {
                   const nextState = !isOnline;
-                  toggleOnline(); // Store action
                   if (nextState) {
-                     // Try to get location and sync immediately so we are visible for dispatch right away
-                     navigator.geolocation.getCurrentPosition((pos) => {
-                         deliveryAPI.updateLocation(pos.coords.latitude, pos.coords.longitude, true).catch(() => {});
-                     }, (err) => console.warn('Online sync position failed:', err), { enableHighAccuracy: true });
+                      if (!navigator.geolocation) {
+                          toast.error("Geolocation is not supported by your browser.");
+                          return;
+                      }
+                      
+                      // Show a small loading state if needed, but since it's fast we just request
+                      navigator.geolocation.getCurrentPosition(
+                        () => {
+                            // GPS is enabled and accessible
+                            setShowPhotoModal(true);
+                        },
+                        (err) => {
+                            // GPS is blocked or disabled
+                            toast.error("Please enable your GPS for current location");
+                        },
+                        { timeout: 10000, enableHighAccuracy: true }
+                      );
                   } else {
-                     deliveryAPI.updateOnlineStatus(false).catch(() => {});
+                      toggleOnline(); // Store action
+                      deliveryAPI.updateOnlineStatus(false).catch(() => {});
                   }
                 }}
                 className={`delivery-online-toggle relative w-[92px] h-8 rounded-full p-1 transition-all duration-500 flex items-center ${isOnline ? 'is-online bg-green-500 shadow-lg shadow-green-500/20' : 'is-offline bg-green-400 shadow-lg shadow-green-400/20'}`}
@@ -863,16 +1306,16 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
              <button onClick={() => navigate('/food/delivery/help/id-card')} className="w-9 h-9 rounded-full bg-blue-500/10 flex items-center justify-center text-blue-500 border border-blue-500/20 active:scale-95 transition-all shadow-lg"><Contact className="w-4 h-4" /></button>
              <button onClick={() => setShowNotifications(true)} className="relative w-9 h-9 rounded-full bg-white/10 flex items-center justify-center text-white border border-white/10 active:scale-95 transition-all shadow-lg">
                 <Bell className="w-4 h-4" />
-                {totalUnreadCount > 0 && (
+                {notificationUnreadCount > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-orange-600 flex items-center justify-center text-[9px] font-black text-white border-2 border-[#121212] shadow-xl animate-in zoom-in duration-300">
-                    {totalUnreadCount > 9 ? '9+' : totalUnreadCount}
+                    {notificationUnreadCount > 9 ? '9+' : notificationUnreadCount}
                   </span>
                 )}
              </button>
           </div>
         </div>
 
-        {/* ─── LIVE STATUS / PROGRESS BADGE (MATCHED PRO) ─── */}
+        {/* â”€â”€â”€ LIVE STATUS / PROGRESS BADGE (MATCHED PRO) â”€â”€â”€ */}
         <AnimatePresence>
           {currentTab === 'feed' && (
             <motion.div 
@@ -884,7 +1327,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               {activeOrder ? (
                 <div className="grid grid-cols-2 gap-3 w-full">
                   {/* LEFT: DISTANCE (Vibrant Orange Card) */}
-                  <div className="bg-[#ff8100] rounded-2xl p-3.5 shadow-xl shadow-orange-500/20 border border-orange-400/50 flex items-center justify-between overflow-hidden relative">
+                  <div className="bg-primary rounded-2xl p-3.5 shadow-xl shadow-orange-500/20 border border-orange-400/50 flex items-center justify-between overflow-hidden relative">
                     <div className="flex flex-col z-10">
                       <span className="text-[9px] text-white/70 font-black uppercase tracking-[0.15em] mb-1">Distance</span>
                       <div className="flex items-end gap-1">
@@ -895,7 +1338,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                       </div>
                     </div>
                     <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center z-10 shadow-lg">
-                      <Navigation2 className="w-4 h-4 text-[#ff8100] rotate-45" />
+                      <Navigation2 className="w-4 h-4 text-primary rotate-45" />
                     </div>
                   </div>
 
@@ -916,16 +1359,30 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                   </div>
                 </div>
               ) : (
-                <div className="bg-white/5 rounded-2xl p-4 flex items-center border border-white/5 shadow-sm backdrop-blur-md">
+                <div className="bg-white/5 rounded-2xl p-4 flex items-center justify-between border border-white/5 shadow-sm backdrop-blur-md">
                   <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center">
+                    <div className="w-10 h-10 bg-green-500/10 rounded-full flex items-center justify-center shrink-0">
                       <div className={`w-2 h-2 rounded-full ${isOnline ? 'bg-green-500 animate-pulse' : 'bg-gray-500'}`} />
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <h3 className="text-white font-black text-[11px] uppercase tracking-widest leading-none mb-1">{isOnline ? 'System Online' : 'System Offline'}</h3>
                       <p className="text-gray-400 text-[10px] font-bold uppercase tracking-tight">{isOnline ? 'Waiting for order requests' : 'Go online to receive orders'}</p>
                     </div>
                   </div>
+                  {emergencyNumbers.teamLeader && (
+                    <div className="flex flex-col items-center justify-center ml-3 shrink-0">
+                      <button 
+                        onClick={() => window.location.href = `tel:${emergencyNumbers.teamLeader.replace(/\D/g, '')}`}
+                        className="w-10 h-10 rounded-full bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 active:scale-95 transition-all shadow-lg"
+                        title="Call Team Leader"
+                      >
+                        <Phone className="w-4 h-4" />
+                      </button>
+                      <span className="text-[8px] font-bold text-blue-300/80 uppercase mt-1 tracking-wider text-center">
+                        Team Leader
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -945,8 +1402,30 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       </div>
       )}
 
-      {/* ─── 2. MAIN CONTENT ─── */}
-      <div className={`flex-1 relative overflow-y-auto ${currentTab === 'history' ? 'pt-0' : 'pt-[120px]'} no-scrollbar`}>
+      <PhotoUploadModal 
+        isOpen={showPhotoModal}
+        onClose={() => setShowPhotoModal(false)}
+        onUpload={async (base64Data, address) => {
+          try {
+            await deliveryAPI.updateOnlineStatus(true, base64Data, address);
+            toggleOnline(); // update local store
+            setShowPhotoModal(false);
+            
+            // Sync location immediately
+            navigator.geolocation.getCurrentPosition((pos) => {
+               deliveryAPI.updateLocation(pos.coords.latitude, pos.coords.longitude, true).catch(() => {});
+            }, () => {}, { enableHighAccuracy: true });
+            
+            toast.success("Shift started successfully!");
+          } catch (error) {
+            console.error("Failed to start shift:", error);
+            toast.error("Failed to start shift. Please try again.");
+          }
+        }}
+      />
+
+      {/* â”€â”€â”€ 2. MAIN CONTENT â”€â”€â”€ */}
+      <div className={`flex-1 relative overflow-y-auto ${currentTab === 'history' || currentTab === 'profile' || currentTab === 'pocket' ? 'pt-0' : 'pt-[120px]'} no-scrollbar`}>
          {currentTab === 'feed' ? (
            <div className="absolute inset-0 top-[-120px]">
              {isOnline ? (
@@ -957,11 +1436,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                onPathReceived={setSimPath}
                onPolylineReceived={(poly) => {
                  setActivePolyline(poly);
-                 // If we have an order, push the INITIAL polyline to Firebase immediately for the customer
-                 const orderId = activeOrder?.orderId || activeOrder?._id;
-                 if (orderId && poly) {
-                   writeOrderTracking(orderId, { polyline: poly, status: tripStatus, eta: eta }).catch(() => {});
-                 }
+                 pushRoutePolylineToCustomer(poly);
                }}
                zoom={zoom}
              />
@@ -1099,7 +1574,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
       </div>
 
       {/* OVERLAYS (Persistent if active) - Outside flex container to avoid clipping and z-index issues */}
-      {(currentTab === 'feed' || activeOrder) && (
+      {(currentTab === 'feed' || activeOrder || incomingOrder || showVerification || isModalMinimized) && (
         <AnimatePresence>
           {!isModalMinimized && (
             <motion.div
@@ -1113,31 +1588,50 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
               <div className="w-full pointer-events-auto relative">
                 {incomingOrder && (
                   <NewOrderModal 
-                    order={incomingOrder} 
-                    onAccept={async (o) => {
+                    key={getOrderMongoId(incomingOrder) || getOrderAcceptId(incomingOrder)}
+                    order={incomingOrder}
+                    queuedOrders={incomingOrders}
+                    onSelectOrder={selectIncomingOrder}
+                    onAccept={async (orderFromModal) => {
+                      const acceptTarget = normalizeIncomingOrder(orderFromModal || incomingOrder);
+                      const lockedId = lockedIncomingOrderIdRef.current;
+
+                      if (
+                        lockedId &&
+                        acceptTarget &&
+                        !isSameOrder({ orderMongoId: lockedId, _id: lockedId }, acceptTarget)
+                      ) {
+                        console.error(
+                          `[GhostAssignFix] BLOCKED: locked ${lockedId} but accept target is ${getOrderMongoId(acceptTarget) || getOrderAcceptId(acceptTarget)}`,
+                        );
+                        toast.error('Order changed while accepting. Please try again.', { duration: 4000 });
+                        return;
+                      }
+
+                      if (
+                        incomingOrder &&
+                        acceptTarget &&
+                        !isSameOrder(incomingOrder, acceptTarget)
+                      ) {
+                        console.error('[GhostAssignFix] BLOCKED: modal order does not match visible popup.');
+                        toast.error('Order mismatch detected. Please try again.', { duration: 4000 });
+                        return;
+                      }
+
                       try {
-                        await acceptOrder(o);
-                        // Only dismiss the modal on successful accept
-                        setIncomingOrder(null);
-                        clearNewOrder();
+                        await acceptOrder(acceptTarget);
+                        clearAllIncomingOrders();
                       } catch (err) {
-                        // acceptOrder already shows a toast for the specific error:
-                        // - "Order already accepted by another partner" (403)
-                        // - Network/timeout errors
-                        // Keep the modal visible only if it's not a "taken" error
                         const msg = String(err?.response?.data?.message || err?.message || '');
                         const isTaken = msg.toLowerCase().includes('already accepted') || 
                                         msg.toLowerCase().includes('another partner') ||
                                         (err?.response?.status === 403);
                         if (isTaken) {
-                          // Dismiss modal — the order is no longer available
-                          setIncomingOrder(null);
-                          clearNewOrder();
+                          removeClaimedOrderFromQueue(acceptTarget, { notify: false });
                         }
-                        // For other errors (network, etc.), keep showing the modal so they can retry
                       }
                     }}
-                    onReject={() => { setIncomingOrder(null); clearNewOrder(); }}
+                    onReject={dismissCurrentIncomingOrder}
                     onMinimize={() => setIsModalMinimized(true)}
                   />
                 )}
@@ -1149,7 +1643,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                     distanceToTarget={distanceToTarget}
                     eta={eta}
                     onReachedPickup={reachPickup} 
-                    onPickedUp={(billImageUrl) => pickUpOrder(billImageUrl)} 
+                    onPickedUp={(billImageUrl, otp) => pickUpOrder(billImageUrl, otp)} 
                     onMinimize={() => setIsModalMinimized(true)}
                   />
                 )}
@@ -1163,48 +1657,82 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                              <ChevronDown className="w-6 h-6 text-gray-400 stroke-[3]" />
                           </button>
                         </div>
-                        <div className="flex justify-between w-full items-center mb-10 px-2 text-left">
-                          <div className="flex items-center gap-4">
-                            <div className="w-16 h-16 rounded-2xl overflow-hidden border border-gray-100 shadow-sm">
-                               <img 
-                                 src={activeOrder?.user?.logo || activeOrder?.user?.profileImage || 'https://cdn-icons-png.flaticon.com/512/1275/1275302.png'} 
-                                 className="w-full h-full object-cover" 
-                                 alt="User"
-                               />
-                            </div>
-                            <div>
-                               <h3 className="text-gray-950 text-2xl font-bold uppercase">Handover Drop</h3>
-                               <p className={`text-[10px] font-bold uppercase tracking-[0.2em] mt-1.5 ${isWithinRange ? 'text-green-600' : 'text-orange-500'}`}>
-                                 {isWithinRange ? 'Ready - Swipe to Arrive √' : `${(distanceToTarget / 1000).toFixed(1)} km • ${eta || '--'} min Arrival`}
-                               </p>
-                            </div>
-                          </div>
-                          {(activeOrder?.userPhone || activeOrder?.deliveryAddress?.phone || activeOrder?.user?.phone) && (
-                            <button
-                              onClick={() => {
-                                const num = activeOrder?.userPhone || activeOrder?.deliveryAddress?.phone || activeOrder?.user?.phone;
-                                if (num) window.location.href = `tel:${num}`;
-                              }}
-                              className="w-12 h-12 rounded-full bg-green-50 flex items-center justify-center text-green-600 border border-green-100 active:scale-95 transition-all shadow-sm shrink-0"
-                            >
-                              <Phone className="w-5 h-5 fill-current" />
-                            </button>
-                          )}
-                        </div>
+                        <div className="w-full flex flex-col mb-8 text-left px-2">
+                           <div className="flex items-center gap-2 mb-2 font-bold text-[10px] uppercase tracking-widest text-blue-600">
+                              <MapPin className="w-4 h-4" />
+                              <span>Handover Drop</span>
+                           </div>
+                           <div className="flex justify-between items-start gap-4">
+                              <div>
+                                 <p className="text-gray-950 font-bold text-base sm:text-xl leading-tight">
+                                    {activeOrder?.user?.name || activeOrder?.deliveryAddress?.name || "Customer"}
+                                 </p>
+                                 <p className="text-gray-500 text-sm font-medium leading-relaxed mt-1 line-clamp-2">
+                                    {activeOrder?.deliveryAddress?.address || activeOrder?.deliveryAddress?.street || "Customer Location"}
+                                 </p>
+                              </div>
+                              <div className="flex gap-2 shrink-0 mt-1">
+                                {(activeOrder?.userPhone || activeOrder?.deliveryAddress?.phone || activeOrder?.user?.phone) && (
+                                  <button
+                                    onClick={() => {
+                                      const num = activeOrder?.userPhone || activeOrder?.deliveryAddress?.phone || activeOrder?.user?.phone;
+                                      if (num) window.location.href = `tel:${num}`;
+                                    }}
+                                    className="w-10 h-10 rounded-full bg-blue-50 flex items-center justify-center text-blue-600 border border-blue-100 active:scale-95 transition-all shadow-sm"
+                                  >
+                                    <Phone className="w-4 h-4 fill-current" />
+                                  </button>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => openCustomerDropInMaps(activeOrder)}
+                                  className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white shadow-lg active:scale-95 transition-all"
+                                  title="Navigate to customer"
+                                >
+                                  <Navigation className="w-5 h-5" />
+                                </button>
+                              </div>
+                           </div>
 
-                        {/* Customer Instructions Panel */}
-                        {activeOrder?.note && (
-                          <div className="w-full bg-orange-50 border border-orange-100 rounded-3xl p-5 mb-8 flex gap-4 items-start shadow-sm mx-2">
-                             <div className="w-10 h-10 bg-white rounded-2xl flex items-center justify-center text-orange-500 shadow-sm shrink-0 border border-orange-50">
-                                <Package className="w-5 h-5" />
+                           {activeOrder?.items && activeOrder.items.length > 0 && (
+                             <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+                                <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-1.5">Order Items</p>
+                                <p className="text-sm font-bold text-gray-800 line-clamp-2 leading-snug">
+                                  {activeOrder.items.map(item => `${item.quantity}x ${item.menuItem?.name || item.name || 'Item'}`).join(', ')}
+                                </p>
                              </div>
-                             <div className="flex-1">
-                                <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.2em] mb-1.5 opacity-80">Drop Message</p>
-                                <p className="text-sm font-bold text-gray-950 leading-relaxed capitalize">"{activeOrder.note}"</p>
+                           )}
+
+                           <div className="grid grid-cols-2 gap-2.5 sm:gap-4 mt-4">
+                             <div className="p-3 sm:p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-2.5 sm:gap-3">
+                               <Clock className="w-5 h-5 text-orange-500" />
+                               <div className="flex flex-col">
+                                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Time</span>
+                                  <span className={`text-sm font-bold ${isWithinRange ? 'text-green-600' : 'text-gray-900'}`}>{isWithinRange ? 'Ready' : `${eta || '--'} MINS`}</span>
+                               </div>
                              </div>
-                          </div>
-                        )}
-                        <ActionSlider label="Slide to Arrive" successLabel="Arrived ✓" disabled={!isWithinRange} onConfirm={reachDrop} color="bg-blue-600" />
+                             <div className="p-3 sm:p-4 bg-gray-50 rounded-2xl border border-gray-100 flex items-center gap-2.5 sm:gap-3">
+                               <MapPin className="w-5 h-5 text-gray-400" />
+                               <div className="flex flex-col">
+                                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest">Distance</span>
+                                  <span className={`text-sm font-bold ${isWithinRange ? 'text-green-600' : 'text-gray-900'}`}>{isWithinRange ? '0 KM' : `${(distanceToTarget / 1000).toFixed(1)} KM`}</span>
+                               </div>
+                             </div>
+                           </div>
+
+                           {activeOrder?.note && (
+                             <div className="w-full bg-orange-50 border border-orange-100 rounded-2xl p-4 mt-4 flex gap-3 items-start shadow-sm">
+                                <div className="w-8 h-8 bg-white rounded-xl flex items-center justify-center text-orange-500 shadow-sm shrink-0 border border-orange-50">
+                                   <Package className="w-4 h-4" />
+                                </div>
+                                <div className="flex-1">
+                                   <p className="text-[10px] font-black text-orange-600 uppercase tracking-[0.2em] mb-1 opacity-80">Drop Message</p>
+                                   <p className="text-sm font-bold text-gray-950 leading-relaxed capitalize">"{activeOrder.note}"</p>
+                                </div>
+                             </div>
+                           )}
+                        </div>
+                        <ActionSlider label="Slide to Arrive" successLabel="Arrived âœ“" disabled={!isWithinRange} onConfirm={reachDrop} color="bg-blue-600" />
                       </div>
                     ) : (
                       <button 
@@ -1218,6 +1746,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                         <CheckCircle2 className="w-6 h-6" /> VERIFY & COMPLETE
                       </button>
                     )}
+
+
                   </div>
                 )}
                 {showVerification && tripStatus !== 'COMPLETED' && (
@@ -1238,7 +1768,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         </AnimatePresence>
       )}
 
-      {/* ─── MODALS RESTORED FROM OLD UI ─── */}
+      {/* â”€â”€â”€ MODALS RESTORED FROM OLD UI â”€â”€â”€ */}
       <BottomPopup isOpen={showEmergencyPopup} title="Emergency Help" onClose={() => setShowEmergencyPopup(false)}>
          <div className="grid gap-4 py-2">
            {emergencyOptions.map((opt, i) => (
@@ -1266,17 +1796,16 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         title="Notifications" 
         onClose={() => {
            setShowNotifications(false);
+           // Optional: refresh count if needed
         }}
       >
          <div className="flex flex-col gap-3 -mt-2 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
-            {mergedNotifications && mergedNotifications.length > 0 ? (
+            {broadcastItems && broadcastItems.length > 0 ? (
                <>
                   <div className="flex justify-end mb-1">
                      <button 
                         onClick={() => {
                            dismissAllBroadcast();
-                           saveDeliveryNotifications([]);
-                           setLocalNotifications([]);
                            toast.success("All notifications cleared");
                         }}
                         className="text-[10px] font-black uppercase tracking-widest text-red-500 bg-red-50 px-3 py-1.5 rounded-full"
@@ -1285,16 +1814,13 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
                      </button>
                   </div>
                   <div className="grid gap-2.5">
-                     {mergedNotifications.map((item) => (
+                     {broadcastItems.map((item) => (
                         <div 
                            key={item.id} 
                            onClick={() => {
-                              if (item.source === "broadcast") {
-                                 markBroadcastAsRead(item.id);
-                              } else {
-                                 markDeliveryNotificationAsRead(item.id);
-                              }
+                              markBroadcastAsRead(item.id);
                               if (item.link) {
+                                 // Handle link if present
                                  const path = item.link.startsWith('/') ? item.link : `/${item.link}`;
                                  navigate(path);
                                  setShowNotifications(false);
@@ -1344,8 +1870,8 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
             >
                View Notification History
             </button>
-          </div>
-       </BottomPopup>
+         </div>
+      </BottomPopup>
 
       {/* Floating Minimize/Restore Toggle - Above navbar */}
       {isModalMinimized && (activeOrder || incomingOrder || showVerification) && (
@@ -1359,8 +1885,16 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
              className="w-full bg-gray-900/90 text-white rounded-2xl py-4 flex items-center justify-between px-6 shadow-2xl backdrop-blur-md border border-white/10"
            >
               <div className="flex flex-col items-start gap-0.5">
-                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Order Action Pending</span>
-                 <span className="text-xs font-bold uppercase tracking-wider">Tap to open delivery panel</span>
+                 <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                   {incomingOrders.length > 1
+                     ? `${incomingOrders.length} orders waiting`
+                     : 'Order Action Pending'}
+                 </span>
+                 <span className="text-xs font-bold uppercase tracking-wider">
+                   {incomingOrders.length > 1
+                     ? 'Tap to choose and accept'
+                     : 'Tap to open delivery panel'}
+                 </span>
               </div>
               <div className="bg-orange-500 p-2 rounded-xl text-white">
                  <Plus className="w-5 h-5" />
@@ -1369,7 +1903,7 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
         </motion.div>
       )}
 
-      {/* ─── 3. BOTTOM NAV (Fixed - Compact Pro) ─── */}
+      {/* â”€â”€â”€ 3. BOTTOM NAV (Fixed - Compact Pro) â”€â”€â”€ */}
       <div className="bg-white border-t border-gray-100 px-8 py-3 pb-6 flex justify-between items-center z-[200] shadow-[0_-5px_20px_rgba(0,0,0,0.05)]">
          <button onClick={() => navigate('/food/delivery/feed')} className={`flex flex-col items-center gap-1 transition-all ${currentTab === 'feed' ? 'text-gray-950 scale-110' : 'text-gray-400 opacity-70'}`}>
             <LayoutGrid className="w-6 h-6" /><span className="text-[11px] font-medium font-sans">Feed</span>

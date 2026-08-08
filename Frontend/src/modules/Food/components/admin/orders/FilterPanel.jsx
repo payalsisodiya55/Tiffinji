@@ -1,4 +1,3 @@
-import { useState, useEffect } from "react"
 import { X } from "lucide-react"
 
 export default function FilterPanel({ 
@@ -15,77 +14,6 @@ export default function FilterPanel({
   showAmountRange = true,
   showDateRange = true
 }) {
-  const [validationError, setValidationError] = useState("")
-
-  useEffect(() => {
-    setValidationError("")
-  }, [isOpen])
-
-  useEffect(() => {
-    const fromDateVal = filters.fromDate ? new Date(filters.fromDate) : null
-    const toDateVal = filters.toDate ? new Date(filters.toDate) : null
-
-    if (fromDateVal && toDateVal && fromDateVal > toDateVal) {
-      setValidationError("The start date must be before the end date.")
-    } else {
-      setValidationError(prev => {
-        if (prev === "The start date must be before the end date.") {
-          return ""
-        }
-        return prev
-      })
-    }
-  }, [filters.fromDate, filters.toDate])
-
-  const getTodayDateString = () => {
-    const today = new Date()
-    const yyyy = today.getFullYear()
-    const mm = String(today.getMonth() + 1).padStart(2, '0')
-    const dd = String(today.getDate()).padStart(2, '0')
-    return `${yyyy}-${mm}-${dd}`
-  }
-
-  const todayStr = getTodayDateString()
-
-  const handleApply = () => {
-    setValidationError("")
-
-    const minVal = filters.minAmount ? parseFloat(filters.minAmount) : null
-    const maxVal = filters.maxAmount ? parseFloat(filters.maxAmount) : null
-
-    if (minVal !== null && (isNaN(minVal) || minVal < 0)) {
-      setValidationError("Min Amount cannot be negative")
-      return
-    }
-
-    if (maxVal !== null && (isNaN(maxVal) || maxVal < 0)) {
-      setValidationError("Max Amount cannot be negative")
-      return
-    }
-
-    if (minVal !== null && maxVal !== null && minVal > maxVal) {
-      setValidationError("Min Amount cannot be greater than Max Amount")
-      return
-    }
-
-    const fromDateVal = filters.fromDate ? new Date(filters.fromDate) : null
-    const toDateVal = filters.toDate ? new Date(filters.toDate) : null
-    const today = new Date()
-    today.setHours(23, 59, 59, 999)
-
-    if (fromDateVal && fromDateVal > today) {
-      setValidationError("From Date cannot be a future date")
-      return
-    }
-
-    if (fromDateVal && toDateVal && fromDateVal > toDateVal) {
-      setValidationError("The start date must be before the end date.")
-      return
-    }
-
-    onApply()
-  }
-
   if (!isOpen) return null
 
   return (
@@ -185,25 +113,8 @@ export default function FilterPanel({
                 </label>
                 <input
                   type="number"
-                  min="0"
                   value={filters.minAmount || ""}
-                  onKeyDown={(e) => {
-                    if (e.key === "-" || e.key === "+" || e.key === "e" || e.key === "E") {
-                      e.preventDefault()
-                    }
-                  }}
-                  onPaste={(e) => {
-                    const pasteData = e.clipboardData.getData("text")
-                    if (pasteData.includes("-") || pasteData.includes("+") || pasteData.includes("e") || pasteData.includes("E")) {
-                      e.preventDefault()
-                    }
-                  }}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    if (val.includes("-") || (val !== "" && parseFloat(val) < 0)) return
-                    setFilters(prev => ({ ...prev, minAmount: val }))
-                    setValidationError("")
-                  }}
+                  onChange={(e) => setFilters(prev => ({ ...prev, minAmount: e.target.value }))}
                   placeholder="0"
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
@@ -214,25 +125,8 @@ export default function FilterPanel({
                 </label>
                 <input
                   type="number"
-                  min="0"
                   value={filters.maxAmount || ""}
-                  onKeyDown={(e) => {
-                    if (e.key === "-" || e.key === "+" || e.key === "e" || e.key === "E") {
-                      e.preventDefault()
-                    }
-                  }}
-                  onPaste={(e) => {
-                    const pasteData = e.clipboardData.getData("text")
-                    if (pasteData.includes("-") || pasteData.includes("+") || pasteData.includes("e") || pasteData.includes("E")) {
-                      e.preventDefault()
-                    }
-                  }}
-                  onChange={(e) => {
-                    const val = e.target.value
-                    if (val.includes("-") || (val !== "" && parseFloat(val) < 0)) return
-                    setFilters(prev => ({ ...prev, maxAmount: val }))
-                    setValidationError("")
-                  }}
+                  onChange={(e) => setFilters(prev => ({ ...prev, maxAmount: e.target.value }))}
                   placeholder="10000"
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
@@ -249,12 +143,8 @@ export default function FilterPanel({
                 </label>
                 <input
                   type="date"
-                  max={todayStr}
                   value={filters.fromDate || ""}
-                  onChange={(e) => {
-                    setFilters(prev => ({ ...prev, fromDate: e.target.value }))
-                    setValidationError("")
-                  }}
+                  onChange={(e) => setFilters(prev => ({ ...prev, fromDate: e.target.value }))}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -265,10 +155,7 @@ export default function FilterPanel({
                 <input
                   type="date"
                   value={filters.toDate || ""}
-                  onChange={(e) => {
-                    setFilters(prev => ({ ...prev, toDate: e.target.value }))
-                    setValidationError("")
-                  }}
+                  onChange={(e) => setFilters(prev => ({ ...prev, toDate: e.target.value }))}
                   className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500"
                 />
               </div>
@@ -295,27 +182,19 @@ export default function FilterPanel({
           )}
         </div>
 
-        <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="text-sm font-semibold text-red-600 flex-1">
-            {validationError && <span>{validationError}</span>}
-          </div>
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => {
-                setValidationError("")
-                onReset()
-              }}
-              className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all"
-            >
-              Reset
-            </button>
-            <button
-              onClick={handleApply}
-              className="px-4 py-2 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all shadow-md"
-            >
-              Apply Filters
-            </button>
-          </div>
+        <div className="sticky bottom-0 bg-slate-50 border-t border-slate-200 px-6 py-4 flex items-center justify-end gap-3">
+          <button
+            onClick={onReset}
+            className="px-4 py-2 text-sm font-medium rounded-lg border border-slate-300 bg-white text-slate-700 hover:bg-slate-50 transition-all"
+          >
+            Reset
+          </button>
+          <button
+            onClick={onApply}
+            className="px-4 py-2 text-sm font-medium rounded-lg bg-emerald-500 text-white hover:bg-emerald-600 transition-all shadow-md"
+          >
+            Apply Filters
+          </button>
         </div>
       </div>
     </div>

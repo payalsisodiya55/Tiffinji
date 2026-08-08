@@ -1,9 +1,17 @@
 import { useState, useEffect, useRef } from "react"
+import { toast } from "sonner"
+import { useLocationFromContext } from '../context/locationContext';
 import { locationAPI, userAPI } from "@food/api"
+import { getGoogleMapsApiKey } from "@food/utils/googleMapsApiKey"
 
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const GPS_OFF_TOAST_ID = "gps-off"
+const showGpsOffToast = () => {
+  toast.error("Please turn on GPS", { id: GPS_OFF_TOAST_ID })
+}
+
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 // BigDataCloud reverse-geocode is expensive/noisy if many components mount `useLocation()`.
 // This module-level guard dedupes concurrent calls + rate-limits starts across the whole app.
@@ -31,8 +39,6 @@ let globalReverseGeocodeLastSuccess = null
 // Default behavior: only resolve an address once on initial app load,
 // then rely on localStorage/DB. Live watching is enabled only via explicit user action.
 const AUTO_START_LIVE_WATCH = false
-
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY
 
 const reverseGeocodeDirect = async (latitude, longitude) => {
   const now = Date.now()
@@ -83,36 +89,37 @@ const reverseGeocodeDirect = async (latitude, longitude) => {
       let formattedAddress = ""
 
       // 1. Try Google Maps Reverse Geocoding (Primary - highest precision)
-      if (GOOGLE_MAPS_API_KEY) {
+      const mapsKey = await getGoogleMapsApiKey()
+      if (mapsKey) {
         try {
           const controller = new AbortController()
           const timeout = setTimeout(() => controller.abort(), 4000)
           const response = await fetch(
-            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`,
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${mapsKey}`,
             { signal: controller.signal }
           )
           clearTimeout(timeout)
           const data = await response.json()
-          
+
           if (data.status === "OK" && data.results && data.results.length > 0) {
             googleData = data.results[0]
             formattedAddress = googleData.formatted_address
-            
+
             // Extract components
             const components = googleData.address_components
-            
+
             // Area extraction (sublocality_level_1 or sublocality)
             const subLocality1 = components.find(c => c.types.includes("sublocality_level_1"))?.long_name
             const subLocality = components.find(c => c.types.includes("sublocality"))?.long_name
             const neighborhood = components.find(c => c.types.includes("neighborhood"))?.long_name
             area = subLocality1 || subLocality || neighborhood || ""
-            
+
             // City extraction (locality)
             city = components.find(c => c.types.includes("locality"))?.long_name || ""
-            
+
             // State extraction (administrative_area_level_1)
             state = components.find(c => c.types.includes("administrative_area_level_1"))?.long_name || ""
-            
+
             // Country extraction
             country = components.find(c => c.types.includes("country"))?.long_name || "India"
           }
@@ -139,20 +146,20 @@ const reverseGeocodeDirect = async (latitude, longitude) => {
           const nomTimeout = setTimeout(() => nomController.abort(), 3000)
           const nomRes = await fetch(
             `https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${latitude}&lon=${longitude}&addressdetails=1`,
-            { 
+            {
               signal: nomController.signal,
-              headers: { 'Accept-Language': 'en', 'User-Agent': 'Foodelo-App' }
+              headers: { 'Accept-Language': 'en', 'User-Agent': 'Tiffinji-App' }
             }
           )
           clearTimeout(nomTimeout)
           nominatimData = await nomRes.json()
-        } catch (e) {}
+        } catch (e) { }
 
         const bdcFormatted = bdcData.formattedAddress || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`
         formattedAddress = nominatimData?.display_name || bdcFormatted
         city = bdcData.city || bdcData.locality || "Indore"
         state = bdcData.principalSubdivision || ""
-        
+
         if (nominatimData?.address) {
           const a = nominatimData.address
           area = a.suburb || a.neighbourhood || a.road || ""
@@ -187,8 +194,21 @@ const reverseGeocodeDirect = async (latitude, longitude) => {
   return run
 }
 
-export function useLocation() {
-  const [location, setLocation] = useState(null)
+export function useLocationEngine() {
+  const [location, setLocation] = useState(() => {
+    try {
+      if (typeof window !== "undefined") {
+        const stored = localStorage.getItem("userLocation")
+        if (stored) {
+          const parsed = JSON.parse(stored)
+          if (parsed && typeof parsed === "object" && typeof parsed.latitude === "number" && typeof parsed.longitude === "number") {
+            return parsed
+          }
+        }
+      }
+    } catch (e) { }
+    return null
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
   const [permissionGranted, setPermissionGranted] = useState(false)
@@ -324,8 +344,28 @@ export function useLocation() {
   // Google Places API removed - using OLA Maps only
 
   /* Removed Google Geocoding/Places (maps.googleapis.com). Uses BigDataCloud reverse-geocode only. */
-  const reverseGeocodeWithGoogleMaps = async (latitude, longitude, _options = {}) =>
-    reverseGeocodeDirect(latitude, longitude)
+  const reverseGeocodeWithGoogleMaps = async (latitude, longitude, _options = {}) => {
+    try {
+      const res = await locationAPI.reverseGeocode(latitude, longitude);
+      const loc = res?.data?.data?.location;
+      if (loc?.formattedAddress && loc?.source !== 'coords_only') {
+        const value = {
+          city: loc.city || '',
+          state: loc.state || '',
+          country: loc.country || 'India',
+          area: loc.area || '',
+          mainTitle: loc.area || loc.city,
+          address: loc.address || loc.formattedAddress,
+          formattedAddress: loc.formattedAddress,
+        };
+        globalReverseGeocodeLastSuccess = value;
+        return value;
+      }
+    } catch (err) {
+      debugWarn('Backend reverse geocode failed, using direct fallback:', err?.message);
+    }
+    return reverseGeocodeDirect(latitude, longitude);
+  }
 
 
   /* ===================== OLA MAPS REVERSE GEOCODE (DEPRECATED - KEPT FOR FALLBACK) ===================== */
@@ -453,8 +493,8 @@ export function useLocation() {
         result?.address ||
         ""
 
-      // PRIORITY 1: Extract area from formatted_address FIRST (most reliable for Indian addresses)
-      // Indian address format: "Area, City, State" e.g., "New Palasia, Indore, Madhya Pradesh"
+      // PRIORITY 1: Extract area from formatted_address FIRST (most reliable for tiffinji addresses)
+      // tiffinji address format: "Area, City, State" e.g., "New Palasia, Indore, Madhya Pradesh"
       // ALWAYS try formatted_address FIRST - it's the most reliable source and preserves full names like "New Palasia"
       let area = ""
       if (formattedAddress) {
@@ -860,7 +900,7 @@ export function useLocation() {
               })
 
               // Validate coordinates are in India range BEFORE attempting geocoding
-              // India: Latitude 6.5� to 37.1� N, Longitude 68.7� to 97.4� E
+              // India: Latitude 6.5ï¿½ to 37.1ï¿½ N, Longitude 68.7ï¿½ to 97.4ï¿½ E
               const isInIndiaRange = latitude >= 6.5 && latitude <= 37.1 && longitude >= 68.7 && longitude <= 97.4 && longitude > 0
 
               // Reverse geocode (BigDataCloud via reverseGeocodeWithGoogleMaps wrapper)
@@ -1056,6 +1096,14 @@ export function useLocation() {
               return
             }
 
+            // POSITION_UNAVAILABLE (code 2) usually means device GPS / location services are off
+            if (
+              err.code === 2 ||
+              /unavailable|disabled|turn on|enable.*(gps|location)/i.test(err.message || "")
+            ) {
+              showGpsOffToast()
+            }
+
             // Don't log timeout errors as errors - they're expected in some cases
             if (err.code === 3) {
               debugWarn("?? Geolocation timeout (code 3) - using fallback location")
@@ -1126,8 +1174,8 @@ export function useLocation() {
     // Otherwise, allow cached location for faster response
     return getPositionWithRetry({
       enableHighAccuracy: true,  // Use GPS for exact location (highest accuracy)
-      timeout: 15000,            // 15 seconds timeout (gives GPS more time to get accurate fix)
-      maximumAge: forceFresh ? 0 : 60000  // If forceFresh, get fresh location. Otherwise allow 1 minute cache
+      timeout: 15000,            // 15 seconds timeout (gives GPS more time to lock before fallback)
+      maximumAge: forceFresh ? 0 : 300000 // 5 minutes cache (huge speedup if already fetched recently)
     })
   }
 
@@ -1160,7 +1208,7 @@ export function useLocation() {
             retryCount = 0
 
             // Validate coordinates are in India range BEFORE attempting geocoding
-            // India: Latitude 6.5� to 37.1� N, Longitude 68.7� to 97.4� E
+            // India: Latitude 6.5ï¿½ to 37.1ï¿½ N, Longitude 68.7ï¿½ to 97.4ï¿½ E
             const isInIndiaRange = latitude >= 6.5 && latitude <= 37.1 && longitude >= 68.7 && longitude <= 97.4 && longitude > 0
 
             // "Geocode once" mode:
@@ -1428,15 +1476,13 @@ export function useLocation() {
   useEffect(() => {
     // Load stored location first for IMMEDIATE display (no loading state)
     const stored = localStorage.getItem("userLocation")
-    let shouldForceRefresh = false
     let hasInitialLocation = false
 
     if (stored) {
       try {
         const parsedLocation = JSON.parse(stored)
 
-        // Show cached location immediately.
-        // Requirement: only geocode again on explicit manual change.
+        // Show cached location immediately while fresh GPS fetch runs in background.
         const lat = Number(parsedLocation?.latitude)
         const lng = Number(parsedLocation?.longitude)
         const hasLatLng = Number.isFinite(lat) && Number.isFinite(lng)
@@ -1446,20 +1492,16 @@ export function useLocation() {
           setPermissionGranted(true)
           setLoading(false) // Set loading to false immediately
           hasInitialLocation = true
-          shouldForceRefresh = false
-          debugLog("?? Loaded stored location instantly (no auto-refresh):", parsedLocation)
+          debugLog("?? Loaded stored location instantly:", parsedLocation)
         } else {
-          // If we don't have usable coordinates, we must fetch once on first open.
-          debugLog("?? Stored location missing coordinates; will fetch once")
-          shouldForceRefresh = true
+          debugLog("?? Stored location missing coordinates; waiting for GPS fetch")
         }
       } catch (err) {
         debugError("Failed to parse stored location:", err)
-        shouldForceRefresh = true
       }
     }
 
-    // If no cached location, try DB
+    // If no cached location, try DB (fresh GPS still runs on open)
     if (!hasInitialLocation) {
       fetchLocationFromDB()
         .then((dbLoc) => {
@@ -1470,14 +1512,11 @@ export function useLocation() {
             hasInitialLocation = true
             debugLog("?? Loaded location from DB:", dbLoc)
           } else {
-            // No location found - set loading to false and show fallback
             setLoading(false)
-            shouldForceRefresh = true
           }
         })
         .catch(() => {
           setLoading(false)
-          shouldForceRefresh = true
         })
     }
 
@@ -1509,102 +1548,92 @@ export function useLocation() {
     // The background fetch will set the location, or we'll use the cached/DB location
     // Only set fallback if we have no location after all attempts
 
-    // Request fresh location in BACKGROUND (non-blocking)
-    // CRITICAL FIX: Only auto-request if permission is ALREADY granted
-    // This prevents "Requests geolocation permission on page load" warning
+    // On every app open: fetch current GPS location in BACKGROUND (Zomato/Swiggy-like),
+    // even if a previous location is already cached. Keep cache visible until fetch completes.
     const checkPermissionAndStart = async () => {
       try {
-        let permissionGranted = false;
+        if (!navigator.geolocation) {
+          debugWarn("?? Geolocation not supported - prompting user to enable GPS")
+          showGpsOffToast()
+          setLoading(false)
+          return
+        }
 
-        if (navigator.permissions && navigator.permissions.query) {
+        let permissionState = null
+        if (navigator.permissions?.query) {
           try {
-            const result = await navigator.permissions.query({ name: 'geolocation' });
-            if (result.state === 'granted') {
-              permissionGranted = true;
-            } else {
-              debugLog(`?? Geolocation permission is '${result.state}' - Waiting for user action (avoiding prompt on load)`);
-            }
+            const result = await navigator.permissions.query({ name: "geolocation" })
+            permissionState = result.state
+            debugLog(`?? Geolocation permission is '${permissionState}'`)
           } catch (permErr) {
-            debugWarn("?? Permission query failed:", permErr);
+            debugWarn("?? Permission query failed:", permErr)
           }
-        } else {
-          // Fallback for browsers without permissions API - assume not granted to be safe
-          debugLog("?? Permissions API not available - Skipping auto-start");
         }
 
-        // If permission NOT granted, and we don't have a specific user request (this is page load),
-        // we should SKIP automatic fetching/watching to allow the user to choose when to enable it.
-        // UNLESS we already have a valid initial location from localStorage/DB, in which case we might want to refresh?
-        // Actually, even then, we shouldn't prompt.
-        if (!permissionGranted) {
-          // If we have an initial location, we are fine (it's displayed).
-          // If we don't, we show "Select Location".
-          // In either case, we avoid the PROMPT.
-          // Ensure loading is false so UI doesn't hang
-          setLoading(false);
-          return;
-        }
+        // Always attempt a fresh GPS fetch on open (ignore saved/cache gates).
+        debugLog("?? App open: fetching fresh current location...")
+        sessionStorage.setItem("appSession_locationFetched", "true")
 
-        debugLog("?? Permission granted! Fetching/Watching location...", shouldForceRefresh ? "(FORCE REFRESH)" : "");
-
-        // Only fetch once on initial app open if we have no stored coordinates yet.
-        // Do not keep re-geocoding just because the address text is placeholder.
-        const shouldFetch = shouldForceRefresh || !hasInitialLocation
-
-        if (shouldFetch) {
-          debugLog("?? Fetching location - shouldForceRefresh:", shouldForceRefresh, "hasInitialLocation:", hasInitialLocation)
-          getLocation(true, shouldForceRefresh) // forceFresh = true if cached location is incomplete
-            .then((location) => {
-              if (location &&
-                location.formattedAddress !== "Select location" &&
-                location.city !== "Current Location") {
-                debugLog("? Fresh location fetched:", location)
-                debugLog("? Location details:", {
-                  formattedAddress: location?.formattedAddress,
-                  address: location?.address,
-                  city: location?.city,
-                  state: location?.state,
-                  area: location?.area
-                })
-                // CRITICAL: Update state with fresh location so PageNavbar displays it
-                setLocation(location)
-                setPermissionGranted(true)
-                if (AUTO_START_LIVE_WATCH) startWatchingLocation()
-              } else {
-                // Placeholder result means reverse-geocode failed or was unavailable.
-                // Requirement: no more automatic retries; user can trigger manual refresh.
-                debugWarn("?? Location fetch returned placeholder; not retrying automatically")
-              }
-            })
-            .catch((err) => {
-              debugWarn("?? Background location fetch failed (using cached):", err.message)
-              // Don't auto-start live watching; keep cached/localStorage behavior.
+        getLocation(true, true)
+          .then((location) => {
+            if (
+              location &&
+              location.formattedAddress !== "Select location" &&
+              location.city !== "Current Location"
+            ) {
+              debugLog("? Fresh location fetched:", location)
+              setLocation(location)
+              setPermissionGranted(true)
+              try {
+                localStorage.setItem("deliveryAddressMode", "current")
+                window.dispatchEvent(new CustomEvent("deliveryAddressModeUpdated"))
+              } catch { }
               if (AUTO_START_LIVE_WATCH) startWatchingLocation()
-            })
-        } else {
-          // We have a valid location; no need to start live watching.
-          if (AUTO_START_LIVE_WATCH) startWatchingLocation()
-        }
+            } else {
+              debugWarn("?? Location fetch returned placeholder; not retrying automatically")
+            }
+          })
+          .catch((err) => {
+            debugWarn("?? Background location fetch failed (using cached):", err?.message)
+            if (
+              err?.code === 2 ||
+              /unavailable|disabled|turn on|enable.*(gps|location)/i.test(err?.message || "")
+            ) {
+              showGpsOffToast()
+            }
+            if (AUTO_START_LIVE_WATCH) startWatchingLocation()
+          })
       } catch (err) {
         debugError("Error in checkPermissionAndStart:", err);
         setLoading(false);
       }
     };
 
-    // Always check permission state on startup.
-    // This does NOT trigger browser prompt by itself; it only auto-fetches when permission is already granted.
+    // Always fetch current GPS location on app open (Zomato/Swiggy-like).
     checkPermissionAndStart();
+
+    // Listen for manual location updates from other components (like AddressSelectorPage)
+    const handleLocationUpdateEvent = (e) => {
+      if (e.detail?.location) {
+        debugLog("?? Received userLocationUpdated event, updating useLocation state:", e.detail.location);
+        setLocation(e.detail.location);
+        setPermissionGranted(true);
+        setLoading(false);
+      }
+    };
+    window.addEventListener("userLocationUpdated", handleLocationUpdateEvent);
 
     // Cleanup timeout and watcher
     return () => {
       clearTimeout(loadingTimeout)
       debugLog("?? Cleaning up location watcher")
       stopWatchingLocation()
+      window.removeEventListener("userLocationUpdated", handleLocationUpdateEvent)
     }
   }, [])
 
-  const requestLocation = async () => {
-    debugLog("?????? User requested location update - clearing cache and fetching fresh")
+  const requestLocation = async (updateDB = true, forceFresh = true) => {
+    debugLog("?????? User requested location update")
     setLoading(true)
     setError(null)
 
@@ -1612,16 +1641,16 @@ export function useLocation() {
       try {
         localStorage.setItem("deliveryAddressMode", "current")
         window.dispatchEvent(new CustomEvent("deliveryAddressModeUpdated"))
-      } catch {}
+      } catch { }
 
-      // Clear cached location to force fresh fetch
-      localStorage.removeItem("userLocation")
-      debugLog("??? Cleared cached location from localStorage")
+      if (forceFresh) {
+        // Clear cached location to force fresh fetch
+        localStorage.removeItem("userLocation")
+        debugLog("??? Cleared cached location from localStorage")
+      }
 
       // Show loading, so pass showLoading = true
-      // forceFresh = true, updateDB = true, showLoading = true
-      // This ensures we get fresh GPS coordinates and reverse geocode
-      const location = await getLocation(true, true, true)
+      const location = await getLocation(updateDB, forceFresh, true)
 
       debugLog("??? Fresh location requested successfully:", location)
       debugLog("??? Complete Location details:", {
@@ -1677,3 +1706,8 @@ export function useLocation() {
   }
 }
 
+
+/** Consumer hook — reads centralized LocationProvider state. */
+export function useLocation() {
+  return useLocationFromContext();
+}

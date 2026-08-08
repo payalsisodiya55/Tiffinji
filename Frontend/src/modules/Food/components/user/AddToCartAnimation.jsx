@@ -1,8 +1,9 @@
 import { motion, AnimatePresence } from 'framer-motion';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, Link } from 'react-router-dom';
 import { useCart } from "@food/context/CartContext";
 import { useEffect, useRef, useState } from 'react';
 import { gsap } from 'gsap';
+import { Trash2, ChevronRight } from 'lucide-react';
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -28,7 +29,7 @@ export default function AddToCartAnimation({
   linkTo = '/food/user/cart',
   dynamicBottom = null,
 }) {
-  const { items, itemCount, total, lastAddEvent, lastRemoveEvent } = useCart();
+  const { cart, items, itemCount, total, lastAddEvent, lastRemoveEvent, clearCart } = useCart();
   const location = useLocation();
   const navigate = useNavigate();
   const linkRef = useRef(null);
@@ -37,6 +38,11 @@ export default function AddToCartAnimation({
   const removedThumbnailRef = useRef(null);
   const flyingThumbnailRef = useRef(null);
   const prevItemsRef = useRef(items);
+
+  // Get restaurant info from first cart item
+  const restaurantName = cart[0]?.restaurant || "Restaurant";
+  const restaurantImage = cart[0]?.image || "https://images.unsplash.com/photo-1512058564366-18510be2db19?w=200&h=200&fit=crop";
+  const restaurantSlug = restaurantName.toLowerCase().replace(/\s+/g, "-");
 
   // Hide pill on cart pages, order pages, and account page (if enabled)
   const iscartPage = location.pathname === '/cart' ||
@@ -338,7 +344,7 @@ export default function AddToCartAnimation({
       // Step 1: Scale up with glow
       tl.to(linkRef.current, {
         scale: 1.08,
-        boxShadow: '0 10px 25px rgba(213, 31, 16, 0.4)',
+        boxShadow: '0 10px 25px rgba(126, 56, 102, 0.4)',
         duration: 0.15,
         ease: 'power2.out',
         transformOrigin: 'center center',
@@ -347,7 +353,7 @@ export default function AddToCartAnimation({
         // Step 2: Bounce back
         .to(linkRef.current, {
           scale: 1.0,
-          boxShadow: '0 4px 12px rgba(213, 31, 16, 0.3)',
+          boxShadow: '0 4px 12px rgba(126, 56, 102, 0.3)',
           duration: 0.2,
           ease: 'power2.inOut',
         })
@@ -442,89 +448,79 @@ export default function AddToCartAnimation({
             style={{
               position: 'fixed',
               bottom: dynamicBottom ? undefined : `${bottomOffset || 20}px`,
-              pointerEvents: 'auto',
+              pointerEvents: 'none',
             }}
-            className={`left-0 right-0 z-[9999] flex justify-center px-4 pb-4 md:pb-6 transition-all duration-300 ease-in-out bg-transparent ${dynamicBottom || ''}`}
+            className={`left-0 right-0 z-[9999] flex justify-center px-4 pb-4 md:pb-6 transition-all duration-300 ease-in-out bg-transparent pointer-events-none ${dynamicBottom || ''}`}
           >
-            <button
-              ref={linkRef}
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                debugLog('View cart clicked, navigating to:', linkTo);
-                navigate(linkTo);
-              }}
-              className={`bg-gradient-to-r from-[#9C120A] via-[#D51F10] to-[#9C120A] text-white rounded-full shadow-xl shadow-[#D51F10]/30 px-3 py-2 flex items-center gap-2 hover:from-[#9C120A] hover:via-[#D51F10] hover:to-[#9C120A] transition-all duration-300 pointer-events-auto border border-[#D51F10]/30 backdrop-blur-sm cursor-pointer ${pillClassName}`}
-            >
-              {/* Left: Product thumbnails */}
-              <div className="flex items-center -space-x-4">
-                {thumbnailItems.map((item, idx) => (
-                  <motion.div
-                    key={item?.product?.id || item?.id || `thumb-${idx}`}
-                    initial={{ scale: 0, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{
-                      delay: idx * 0.1,
-                      type: 'spring',
-                      stiffness: 500,
-                      damping: 25,
-                    }}
-                    className="w-7 h-7 rounded-full border-2 border-white/90 overflow-hidden bg-white flex-shrink-0 shadow-md"
+            {/* The main container - New Design (StickyCartCard style) */}
+            <div className="bg-white rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.12)] p-2.5 md:p-3 flex items-center gap-2.5 md:gap-3 border border-gray-100 pointer-events-auto mx-auto w-full max-w-[95vw] md:max-w-sm">
+              
+              {/* Item Images Stack */}
+              <div className="flex -space-x-3 md:-space-x-4 flex-shrink-0 ml-1">
+                {cart.slice(0, 3).map((item, i) => (
+                  <div 
+                    key={item.id || i} 
+                    className="w-11 h-11 md:w-12 md:h-12 rounded-full overflow-hidden border-2 border-white shadow-sm bg-white"
+                    style={{ zIndex: 10 - i }}
                   >
-                    {item?.product?.imageUrl ? (
-                      <img
-                        src={item.product.imageUrl}
-                        alt={item?.product?.name || 'Item'}
-                        className="w-full h-full object-cover"
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-neutral-200 text-neutral-400 text-xs font-semibold">
-                        {item?.product?.name?.charAt(0)?.toUpperCase() || '?'}
-                      </div>
-                    )}
-                  </motion.div>
+                    <img
+                      src={item.image || item.imageUrl || restaurantImage}
+                      alt={item.name || "Item"}
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
                 ))}
+                {cart.length > 3 && (
+                  <div 
+                    className="w-11 h-11 md:w-12 md:h-12 rounded-full bg-gray-50 border-2 border-white flex items-center justify-center text-[11px] font-bold text-gray-500 shadow-sm"
+                    style={{ zIndex: 10 - 3 }}
+                  >
+                    +{cart.length - 3}
+                  </div>
+                )}
               </div>
 
-              {/* Middle: Text */}
-              <motion.div
-                className="flex flex-col"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1, duration: 0.3 }}
-              >
-                <span className="text-xs font-bold leading-tight drop-shadow-sm">View cart</span>
-                <span className="text-[10px] opacity-95 leading-tight font-medium">
-                  {itemCount} {itemCount === 1 ? 'item' : 'items'}
-                </span>
-              </motion.div>
-
-              {/* Right: Arrow icon */}
-              <motion.div
-                className="ml-auto bg-white/25 rounded-full p-1 backdrop-blur-sm"
-                initial={{ opacity: 0, x: 10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.15, duration: 0.3 }}
-                whileHover={{ scale: 1.1, rotate: -5 }}
-              >
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="text-white"
+              {/* Restaurant Info */}
+              <div className="flex-1 min-w-0 flex flex-col justify-center py-1">
+                <h3 className="font-bold text-gray-900 text-sm md:text-[15px] line-clamp-1 leading-tight mb-1">
+                  {restaurantName}
+                </h3>
+                <button 
+                  onClick={(e) => { e.preventDefault(); e.stopPropagation(); navigate(`/food/user/restaurants/${restaurantSlug}`); }}
+                  className="bg-[#fff0e6] text-[#ff7a29] rounded-full px-2.5 py-0.5 text-[10px] md:text-[11px] font-bold inline-flex items-center gap-0.5 w-fit hover:bg-orange-100 transition-colors"
                 >
-                  <path
-                    d="M6 12L10 8L6 4"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-                </svg>
-              </motion.div>
-            </button>
+                  Menu <ChevronRight className="w-3 h-3" />
+                </button>
+              </div>
+
+              {/* Checkout Button (Green) */}
+              <motion.button
+                ref={linkRef}
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  navigate(linkTo);
+                }}
+                className="bg-[#1da05c] hover:bg-[#188c50] text-white rounded-2xl px-3.5 py-1.5 md:py-2 flex flex-col items-center justify-center shadow-sm transition-colors flex-shrink-0 min-w-[100px] md:min-w-[110px]"
+              >
+                <span className="text-[10px] md:text-[11px] font-medium text-white/90 leading-tight mb-0.5">
+                  {itemCount} {itemCount === 1 ? 'item' : 'items'} | ₹{total}
+                </span>
+                <span className="text-[14px] md:text-[15px] font-bold leading-tight">Checkout</span>
+              </motion.button>
+
+              {/* Delete/Clear Cart Button (Pink) */}
+              <button
+                onClick={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  clearCart();
+                }}
+                className="bg-[#ffe8ea] hover:bg-[#ffd1d6] text-[#ff4b5c] rounded-2xl p-2.5 md:p-3 flex items-center justify-center transition-colors flex-shrink-0 mr-1"
+              >
+                <Trash2 className="w-[18px] h-[18px] md:w-5 md:h-5" />
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>

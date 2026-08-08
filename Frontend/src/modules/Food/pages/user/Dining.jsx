@@ -8,16 +8,14 @@ import { Badge } from "@food/components/ui/badge"
 import { Card, CardContent } from "@food/components/ui/card"
 import AnimatedPage from "@food/components/user/AnimatedPage"
 import { useSearchOverlay, useLocationSelector } from "@food/components/user/UserLayout"
-import { useLocation as useLocationHook } from "@food/hooks/useLocation"
-import { useZone } from "@food/hooks/useZone"
+import { useAppLocation } from "@food/hooks/useAppLocation"
 import { useProfile } from "@food/context/ProfileContext"
-import { diningAPI, restaurantAPI } from "@food/api"
+import { diningAPI } from "@food/api"
 import PageNavbar from "@food/components/user/PageNavbar"
 import OptimizedImage from "@food/components/OptimizedImage"
-import { getRestaurantAvailabilityStatus } from "@food/utils/restaurantAvailability"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 const slugifyValue = (value) =>
   String(value || "")
@@ -57,9 +55,9 @@ const getDistanceKm = (userLocation, restaurant) => {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos(toRadians(userLat)) *
-      Math.cos(toRadians(restaurantCoords.latitude)) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2)
+    Math.cos(toRadians(restaurantCoords.latitude)) *
+    Math.sin(dLng / 2) *
+    Math.sin(dLng / 2)
 
   return earthRadiusKm * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
 }
@@ -102,7 +100,7 @@ function DiningRestaurantSkeleton({ index }) {
         <div className={`relative h-48 overflow-hidden bg-[radial-gradient(circle_at_top_left,rgba(126,56,102,0.12),transparent_28%),linear-gradient(135deg,#fcf6fa_0%,#f9edf5_100%)] sm:h-56 md:h-60 lg:h-64 xl:h-72 ${shimmerClassName}`}>
           <div className="absolute left-4 top-4 h-8 w-28 rounded-lg bg-black/10" />
           <div className="absolute right-4 top-4 h-9 w-9 rounded-lg bg-white/60" />
-          <div className="absolute bottom-0 left-0 right-0 h-[40%] bg-gradient-to-r from-[#7e3866] to-transparent/20">
+          <div className="absolute bottom-0 left-0 right-0 h-[40%] bg-gradient-to-r from-primary to-transparent/20">
             <div className="flex h-full flex-col justify-end pl-4 pb-4 sm:pl-5 sm:pb-5">
               <div className="h-2.5 w-24 rounded-full bg-white/35" />
               <div className="mt-2 h-px w-24 bg-white/25" />
@@ -141,8 +139,7 @@ export default function Dining() {
   const [selectedCuisine, setSelectedCuisine] = useState(null)
   const filterSectionRefs = useRef({})
   const rightContentRef = useRef(null)
-  const { location } = useLocationHook()
-  const { zoneId } = useZone(location)
+  const { location, zoneId } = useAppLocation()
   const { openSearch, closeSearch, setSearchValue } = useSearchOverlay()
   const { addFavorite, removeFavorite, isFavorite } = useProfile()
 
@@ -189,10 +186,11 @@ export default function Dining() {
         const city = cityRaw && cityRaw.toLowerCase() !== "current location" ? cityRaw : ""
 
         const restaurantParams = {}
-        if (city) restaurantParams.city = city
         if (Number.isFinite(lat) && Number.isFinite(lng)) {
           restaurantParams.lat = lat
           restaurantParams.lng = lng
+        } else if (city) {
+          restaurantParams.city = city
         }
 
         const [bannerResponse, cats, rests] = await Promise.all([
@@ -203,39 +201,23 @@ export default function Dining() {
 
         const heroBanners = Array.isArray(bannerResponse?.data?.data?.banners)
           ? bannerResponse.data.data.banners
-              .map((banner, index) => {
-                const imageUrl = String(banner?.imageUrl || "").trim()
-                if (!imageUrl) return null
+            .map((banner, index) => {
+              const imageUrl = String(banner?.imageUrl || "").trim()
+              if (!imageUrl) return null
 
-                return {
-                  id: String(banner?._id || banner?.id || `dining-banner-${index}`),
-                  imageUrl,
-                  tagline: String(banner?.title || banner?.tagline || "").trim(),
-                  promoCode: String(banner?.ctaText || banner?.promoCode || "").trim(),
-                }
-              })
-              .filter(Boolean)
-          : []
-
-        const rawRests = rests?.data?.success ? (rests.data.data || []) : []
-        const enrichedRests = await Promise.all(
-          rawRests.map(async (rest) => {
-            const restId = rest._id || rest.id
-            if (!restId) return rest
-            try {
-              const outletResponse = await restaurantAPI.getOutletTimingsByRestaurantId(restId, { noCache: true })
-              const outletTimings = outletResponse?.data?.data?.outletTimings || outletResponse?.data?.outletTimings || null
-              if (outletTimings) {
-                return { ...rest, outletTimings }
+              return {
+                id: String(banner?._id || banner?.id || `dining-banner-${index}`),
+                imageUrl,
+                tagline: String(banner?.title || banner?.tagline || "").trim(),
+                promoCode: String(banner?.ctaText || banner?.promoCode || "").trim(),
               }
-            } catch (_) {}
-            return rest
-          })
-        )
+            })
+            .filter(Boolean)
+          : []
 
         setDiningHeroBanners(heroBanners)
         setCategories(cats?.data?.success ? (cats.data.data || []) : [])
-        setRestaurantList(enrichedRests)
+        setRestaurantList(rests?.data?.success ? (rests.data.data || []) : [])
       } catch (error) {
         debugError("Failed to fetch dining data", error)
         setDiningHeroBanners([])
@@ -320,12 +302,11 @@ export default function Dining() {
             } else if (restaurant?.categories && Array.isArray(restaurant.categories)) {
               types = restaurant.categories.map(c => typeof c === 'string' ? c : c.slug || c.name)
             }
-            
+
             const uniqueTypes = Array.from(new Set(types.map(t => slugifyValue(t)).filter(Boolean)))
             return uniqueTypes[0] || "family-dining"
           })(),
           isEnabled: restaurant?.diningSettings?.isEnabled === true,
-          isOpen: getRestaurantAvailabilityStatus(restaurant)?.isOpen !== false,
         }
       })
   }, [restaurantList, location])
@@ -538,7 +519,7 @@ export default function Dining() {
           }
         }
       `}</style>
-      
+
       {/* Premium Sticky Header - High Z-Index & Optimized Blur */}
       <div className="sticky top-0 z-[100] w-full bg-white dark:bg-[#0a0a0a] supports-[backdrop-filter]:bg-white/90 backdrop-blur-xl shadow-sm md:hidden border-b border-gray-100 dark:border-gray-800 transition-all duration-300">
         {/* Navbar Section */}
@@ -557,7 +538,7 @@ export default function Dining() {
         >
           {/* Enhanced Search Bar (Matching Home Style) */}
           <div className="relative bg-gray-50 dark:bg-[#1a1a1a] rounded-xl border border-gray-200 dark:border-gray-800 p-2 flex items-center shadow-inner group">
-            <Search className="h-4 w-4 text-[#7e3866] ml-2 shrink-0" strokeWidth={2.5} />
+            <Search className="h-4 w-4 text-primary ml-2 shrink-0" strokeWidth={2.5} />
             <div className="flex-1 px-3">
               <Input
                 value={heroSearch}
@@ -574,7 +555,12 @@ export default function Dining() {
                 placeholder="Search restaurant, dish or cuisine..."
               />
             </div>
-            {/* Removed microphone icon */}
+            <div className="flex items-center gap-3 pr-2">
+              <div className="h-4 w-[1px] bg-gray-200 dark:bg-gray-700" />
+              <button className="flex items-center justify-center p-1 hover:bg-gray-100 dark:hover:bg-gray-800 rounded-full transition-colors">
+                <Mic className="h-4 w-4 text-primary" strokeWidth={2.5} />
+              </button>
+            </div>
           </div>
         </section>
       </div>
@@ -640,9 +626,8 @@ export default function Dining() {
                         setCurrentBannerIndex(index)
                         resetBannerAutoSlide()
                       }}
-                      className={`h-2 rounded-full transition-all duration-300 ${
-                        currentBannerIndex === index ? "w-5 bg-white" : "w-2 bg-white/55"
-                      }`}
+                      className={`h-2 rounded-full transition-all duration-300 ${currentBannerIndex === index ? "w-5 bg-white" : "w-2 bg-white/55"
+                        }`}
                     />
                   ))}
                 </div>
@@ -692,49 +677,49 @@ export default function Dining() {
                 <DiningCategorySkeleton key={key} index={index} />
               ))
               : filteredCategories.map((category, index) => (
-              <Link
-                key={category._id || category.id}
-                to={`/user/dining/${category.slug}`}
-              >
-                <motion.div
-                  className="relative h-[114px] sm:h-[148px] md:h-[160px] overflow-hidden rounded-[22px] border border-[#ece5dc] bg-[#fdfaf8] cursor-pointer group"
-                  initial={{ opacity: 0, y: 20 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true, margin: "-50px" }}
-                  transition={{ duration: 0.4, delay: index * 0.05 }}
-                  whileHover={{ y: -2, boxShadow: "0 8px 20px -12px rgba(63, 38, 18, 0.2)" }}
+                <Link
+                  key={category._id || category.id}
+                  to={`/user/dining/${category.slug}`}
                 >
-                  <div className="h-full flex flex-col p-2.5 sm:p-3.5">
-                    <p className="font-['Poppins',_'Nunito_Sans',sans-serif] text-[12px] sm:text-[14px] md:text-[15px] font-bold leading-tight tracking-tight text-[#2d2722] mb-1">
-                      {category.name}
-                    </p>
+                  <motion.div
+                    className="relative h-[114px] sm:h-[148px] md:h-[160px] overflow-hidden rounded-[22px] border border-[#ece5dc] bg-[#fdfaf8] cursor-pointer group"
+                    initial={{ opacity: 0, y: 20 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{ duration: 0.4, delay: index * 0.05 }}
+                    whileHover={{ y: -2, boxShadow: "0 8px 20px -12px rgba(63, 38, 18, 0.2)" }}
+                  >
+                    <div className="h-full flex flex-col p-2.5 sm:p-3.5">
+                      <p className="font-['Poppins',_'Nunito_Sans',sans-serif] text-[12px] sm:text-[14px] md:text-[15px] font-bold leading-tight tracking-tight text-[#2d2722] mb-1">
+                        {category.name}
+                      </p>
 
-                    <div className="flex-1 relative overflow-hidden rounded-xl bg-white/40">
-                      {category.imageUrl ? (
-                        <OptimizedImage
-                          src={category.imageUrl}
-                          alt={category.name}
-                          className="w-full h-full transition-transform duration-500 group-hover:scale-[1.05]"
-                          objectFit="contain"
-                          sizes="(max-width: 640px) 31vw, (max-width: 768px) 180px, 220px"
-                          placeholder="blur"
-                          priority={index < 6}
-                        />
-                      ) : (
-                        <div className={`relative h-full w-full bg-[radial-gradient(circle_at_20%_20%,rgba(235,89,14,0.15),transparent_35%),linear-gradient(180deg,#fff7ee_0%,#fff1e1_100%)] ${shimmerClassName}`}>
-                          <div className="absolute inset-x-0 bottom-0 h-[60%] rounded-t-[50%] bg-white/30" />
-                        </div>
-                      )}
+                      <div className="flex-1 relative overflow-hidden rounded-xl bg-white/40">
+                        {category.imageUrl ? (
+                          <OptimizedImage
+                            src={category.imageUrl}
+                            alt={category.name}
+                            className="w-full h-full transition-transform duration-500 group-hover:scale-[1.05]"
+                            objectFit="contain"
+                            sizes="(max-width: 640px) 31vw, (max-width: 768px) 180px, 220px"
+                            placeholder="blur"
+                            priority={index < 6}
+                          />
+                        ) : (
+                          <div className={`relative h-full w-full bg-[radial-gradient(circle_at_20%_20%,rgba(235,89,14,0.15),transparent_35%),linear-gradient(180deg,#fff7ee_0%,#fff1e1_100%)] ${shimmerClassName}`}>
+                            <div className="absolute inset-x-0 bottom-0 h-[60%] rounded-t-[50%] bg-white/30" />
+                          </div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              </Link>
+                  </motion.div>
+                </Link>
               ))}
           </div>
         </div>
 
         {/* Popular Restaurants Around You Section */}
-          <div className="mb-4 mt-2 sm:mt-4">
+        <div className="mb-4 mt-2 sm:mt-4">
           <div className="mb-6">
             <div className="flex items-center justify-between mb-4 px-1">
               <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white tracking-tight">
@@ -795,7 +780,7 @@ export default function Dining() {
                       variant="outline"
                       onClick={() => toggleFilter(filter.id)}
                       className={`h-7 sm:h-8 px-2 sm:px-3 rounded-full flex items-center gap-1.5 whitespace-nowrap flex-shrink-0 transition-all font-medium ${isActive
-                        ? 'bg-[#7e3866] text-white border border-[#7e3866] hover:bg-[#55254b]'
+                        ? 'bg-primary text-white border border-primary hover:bg-secondary'
                         : 'bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800 text-gray-600 dark:text-gray-300'
                         }`}
                     >
@@ -820,470 +805,454 @@ export default function Dining() {
               No popular dining restaurants were found within 10 km for the current location.
             </div>
           ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6 lg:gap-8">
-            {/* First 2 Restaurants */}
-            {filteredRestaurants.slice(0, 2).map((restaurant, index) => {
-              const restaurantSlug = restaurant.slug || encodeURIComponent(restaurant.name)
-              const diningDetailPath = `/food/user/dining/${restaurant.diningType}/${restaurantSlug}`
-              const favorite = isFavorite(restaurantSlug)
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5 md:gap-6 lg:gap-8">
+              {/* First 2 Restaurants */}
+              {filteredRestaurants.slice(0, 2).map((restaurant, index) => {
+                const restaurantSlug = restaurant.slug || encodeURIComponent(restaurant.name)
+                const diningDetailPath = `/food/user/dining/${restaurant.diningType}/${restaurantSlug}`
+                const favorite = isFavorite(restaurantSlug)
 
-              const handleToggleFavorite = (e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                if (favorite) {
-                  removeFavorite(restaurantSlug)
-                } else {
-                  addFavorite({
-                    slug: restaurantSlug,
-                    name: restaurant.name,
-                    cuisine: restaurant.cuisine,
-                    rating: restaurant.rating,
-                    deliveryTime: restaurant.deliveryTime,
-                    distance: restaurant.distance,
-                    image: restaurant.image
-                  })
+                const handleToggleFavorite = (e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (favorite) {
+                    removeFavorite(restaurantSlug)
+                  } else {
+                    addFavorite({
+                      slug: restaurantSlug,
+                      name: restaurant.name,
+                      cuisine: restaurant.cuisine,
+                      rating: restaurant.rating,
+                      deliveryTime: restaurant.deliveryTime,
+                      distance: restaurant.distance,
+                      image: restaurant.image
+                    })
+                  }
                 }
-              }
 
-              return (
-                <motion.div
-                  key={restaurant._id || restaurant.id}
-                  className="h-full"
-                  initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                  viewport={{ once: true, margin: "-50px" }}
-                  transition={{
-                    duration: 0.5,
-                    delay: index * 0.1,
-                    type: "spring",
-                    stiffness: 100
-                  }}
-                  style={{ perspective: 1000 }}
-                >
+                return (
                   <motion.div
-                    className="h-full rounded-[22px]"
-                    whileHover="hover"
-                    initial="rest"
-                    variants={{
-                      rest: {
-                        y: 0,
-                        scale: 1,
-                        borderRadius: 22,
-                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-                      },
-                      hover: {
-                        y: -12,
-                        scale: 1.02,
-                        borderRadius: 22,
-                        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(34, 197, 94, 0.1)",
-                        transition: {
-                          type: "spring",
-                          stiffness: 300,
-                          damping: 20,
-                          mass: 0.5
-                        }
-                      }
+                    key={restaurant._id || restaurant.id}
+                    className="h-full"
+                    initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{
+                      duration: 0.5,
+                      delay: index * 0.1,
+                      type: "spring",
+                      stiffness: 100
                     }}
+                    style={{ perspective: 1000 }}
                   >
-                    <Link
-                      to={diningDetailPath}
-                      state={{ restaurant }}
-                      className="h-full flex rounded-[22px]"
+                    <motion.div
+                      className="h-full rounded-[22px]"
+                      whileHover="hover"
+                      initial="rest"
+                      variants={{
+                        rest: {
+                          y: 0,
+                          scale: 1,
+                          borderRadius: 22,
+                          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                        },
+                        hover: {
+                          y: -12,
+                          scale: 1.02,
+                          borderRadius: 22,
+                          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(34, 197, 94, 0.1)",
+                          transition: {
+                            type: "spring",
+                            stiffness: 300,
+                            damping: 20,
+                            mass: 0.5
+                          }
+                        }
+                      }}
                     >
-                      <Card 
-                        className={`overflow-hidden gap-0 space-y-0 cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-500 py-0 rounded-[22px] h-full flex flex-col w-full relative ${!restaurant.isEnabled || !restaurant.isOpen ? "grayscale opacity-75" : ""}`}
-                        style={{ filter: (!restaurant.isEnabled || !restaurant.isOpen) ? 'grayscale(100%)' : 'none', opacity: (!restaurant.isEnabled || !restaurant.isOpen) ? 0.75 : 1 }}
+                      <Link
+                        to={diningDetailPath}
+                        state={{ restaurant }}
+                        className="h-full flex rounded-[22px]"
                       >
-                        {/* Image Section */}
-                        <div className="relative h-44 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full flex-shrink-0">
-                          <motion.div
-                            className="absolute inset-0"
-                            variants={{
-                              rest: { scale: 1 },
-                              hover: { scale: 1.15 }
-                            }}
-                            transition={{ duration: 0.6, ease: "easeOut" }}
-                          >
-                            {restaurant.image ? (
-                              <OptimizedImage
-                                src={restaurant.image}
-                                alt={restaurant.name}
-                                className="w-full h-full"
-                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                                objectFit="cover"
-                                placeholder="blur"
-                                priority={index < 3}
-                              />
-                            ) : (
-                              <div className={`relative h-full w-full bg-[radial-gradient(circle_at_top_left,rgba(235,89,14,0.24),transparent_30%),linear-gradient(135deg,#fff5e8_0%,#fffaf4_55%,#ffe5d0_100%)] ${shimmerClassName}`} />
-                            )}
-                          </motion.div>
+                        <Card className="overflow-hidden gap-0 space-y-0 cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-500 py-0 rounded-[22px] h-full flex flex-col w-full relative">
+                          {/* Image Section */}
+                          <div className="relative h-44 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full flex-shrink-0">
+                            <motion.div
+                              className="absolute inset-0"
+                              variants={{
+                                rest: { scale: 1 },
+                                hover: { scale: 1.15 }
+                              }}
+                              transition={{ duration: 0.6, ease: "easeOut" }}
+                            >
+                              {restaurant.image ? (
+                                <OptimizedImage
+                                  src={restaurant.image}
+                                  alt={restaurant.name}
+                                  className="w-full h-full"
+                                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                  objectFit="cover"
+                                  placeholder="blur"
+                                  priority={index < 3}
+                                />
+                              ) : (
+                                <div className={`relative h-full w-full bg-[radial-gradient(circle_at_top_left,rgba(235,89,14,0.24),transparent_30%),linear-gradient(135deg,#fff5e8_0%,#fffaf4_55%,#ffe5d0_100%)] ${shimmerClassName}`} />
+                              )}
+                            </motion.div>
 
-                          {/* Gradient Overlay on Hover */}
-                          <motion.div
-                            className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0"
-                            variants={{
-                              rest: { opacity: 0 },
-                              hover: { opacity: 1 }
-                            }}
-                            transition={{ duration: 0.4 }}
-                          />
+                            {/* Gradient Overlay on Hover */}
+                            <motion.div
+                              className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0"
+                              variants={{
+                                rest: { opacity: 0 },
+                                hover: { opacity: 1 }
+                              }}
+                              transition={{ duration: 0.4 }}
+                            />
 
-                          {/* Shine Effect */}
-                          <motion.div
-                            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full"
-                            variants={{
-                              rest: { x: "-100%" },
-                              hover: {
-                                x: "200%",
-                                transition: {
-                                  duration: 0.8,
-                                  ease: "easeInOut",
-                                  delay: 0.2
+                            {/* Shine Effect */}
+                            <motion.div
+                              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full"
+                              variants={{
+                                rest: { x: "-100%" },
+                                hover: {
+                                  x: "200%",
+                                  transition: {
+                                    duration: 0.8,
+                                    ease: "easeInOut",
+                                    delay: 0.2
+                                  }
                                 }
-                              }
-                            }}
-                          />
+                              }}
+                            />
 
-                          {/* Featured Dish Badge - Top Left */}
-                          <motion.div
-                            className="absolute top-3 left-3 flex items-center z-10"
-                            variants={{
-                              rest: { scale: 1, y: 0 },
-                              hover: { scale: 1.05, y: -2 }
-                            }}
-                            transition={{ duration: 0.3 }}
-                          >
-                            <div className="bg-gray-800/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium shadow-lg">
-                              {restaurant.featuredDish} • ₹{restaurant.featuredPrice}
+                            {/* Featured Dish Badge - Top Left */}
+                            <motion.div
+                              className="absolute top-3 left-3 flex items-center z-10"
+                              variants={{
+                                rest: { scale: 1, y: 0 },
+                                hover: { scale: 1.05, y: -2 }
+                              }}
+                              transition={{ duration: 0.3 }}
+                            >
+                              <div className="bg-gray-800/90 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium shadow-lg">
+                                {restaurant.featuredDish} • ₹{restaurant.featuredPrice}
+                              </div>
+                            </motion.div>
+
+                            {/* Bookmark Icon - Top Right */}
+                            <motion.div
+                              variants={{
+                                rest: { scale: 1, rotate: 0 },
+                                hover: { scale: 1.1, rotate: 5 }
+                              }}
+                              transition={{ duration: 0.3 }}
+                              className="absolute top-3 right-3 z-10"
+                            >
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-9 w-9 bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-sm rounded-lg hover:bg-white dark:hover:bg-[#2a2a2a] transition-colors"
+                                onClick={handleToggleFavorite}
+                              >
+                                <Bookmark className={`h-5 w-5 ${favorite ? "fill-gray-800 dark:fill-gray-200 text-gray-800 dark:text-gray-200" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
+                              </Button>
+                            </motion.div>
+
+                            {/* Blue Section - Bottom 40% */}
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-primary to-transparent" style={{ height: '40%' }}>
+                              <div className="h-full flex flex-col justify-end">
+                                <div className="pl-4 sm:pl-5 pb-4 sm:pb-5">
+                                  <p className="text-white text-xs sm:text-sm font-medium uppercase tracking-wide mb-1">
+                                    PRE-BOOK TABLE
+                                  </p>
+                                  <div className="h-px bg-white/30 mb-2 w-24"></div>
+                                  <p className="text-white text-base sm:text-lg font-bold">
+                                    {restaurant.offer}
+                                  </p>
+                                </div>
+                              </div>
                             </div>
-                          </motion.div>
+                          </div>
 
-                          {/* Bookmark Icon - Top Right */}
+                          {/* Content Section */}
                           <motion.div
+                            className="flex-1"
                             variants={{
-                              rest: { scale: 1, rotate: 0 },
-                              hover: { scale: 1.1, rotate: 5 }
+                              rest: { y: 0 },
+                              hover: { y: -4 }
                             }}
-                            transition={{ duration: 0.3 }}
-                            className="absolute top-3 right-3 z-10"
+                            transition={{ duration: 0.4, ease: "easeOut" }}
                           >
+                            <CardContent className="p-2.5 sm:p-4 pt-1.5 sm:pt-2 border-t-0">
+                              {/* Restaurant Name & Rating */}
+                              <div className="flex items-start justify-between gap-2 mb-2">
+                                <div className="flex-1 min-w-0">
+                                  <motion.h3
+                                    className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white line-clamp-1"
+                                    variants={{
+                                      rest: {},
+                                      hover: { color: "#7e3866" }
+                                    }}
+                                    transition={{ duration: 0.3 }}
+                                  >
+                                    {restaurant.name}
+                                  </motion.h3>
+                                </div>
+                                <motion.div
+                                  className="flex-shrink-0 bg-green-600 text-white px-2 py-1 rounded-lg flex items-center gap-1"
+                                  variants={{
+                                    rest: { scale: 1, rotate: 0 },
+                                    hover: { scale: 1.1, rotate: 5 }
+                                  }}
+                                  transition={{ duration: 0.3, type: "spring", stiffness: 400 }}
+                                >
+                                  <span className="text-sm font-bold">{restaurant.rating}</span>
+                                  <Star className="h-3 w-3 fill-white text-white" />
+                                </motion.div>
+                              </div>
+
+                              {/* Delivery Time & Distance */}
+                              <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 mb-2">
+                                <Clock className="h-4 w-4" strokeWidth={1.5} />
+                                <span className="font-medium">{restaurant.deliveryTime}</span>
+                                <span className="mx-1">|</span>
+                                <span className="font-medium">{restaurant.distance}</span>
+                              </div>
+
+                              {/* Dining Status Badge */}
+                              <div className="flex items-center gap-2 mt-1">
+                                <Badge
+                                  variant="outline"
+                                  className={`px-2 py-0 h-5 text-[10px] uppercase font-bold tracking-wider ${restaurant.isEnabled
+                                      ? "bg-green-50 text-green-700 border-green-200"
+                                      : "bg-plum-50 text-plum-700 border-plum-100"
+                                    }`}
+                                >
+                                  {restaurant.isEnabled ? "ON" : "OFF"}
+                                </Badge>
+                                <span className="text-[13px] font-bold text-slate-700">Pre-book table</span>
+                              </div>
+
+                            </CardContent>
+                          </motion.div>
+                        </Card>
+                      </Link>
+                    </motion.div>
+                  </motion.div>
+                )
+              })}
+
+              {/* Remaining Restaurants */}
+              {filteredRestaurants.slice(2).map((restaurant, index) => {
+                const restaurantSlug = restaurant.slug || encodeURIComponent(restaurant.name)
+                const diningDetailPath = `/food/user/dining/${restaurant.diningType}/${restaurantSlug}`
+                const favorite = isFavorite(restaurantSlug)
+
+                const handleToggleFavorite = (e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  if (favorite) {
+                    removeFavorite(restaurantSlug)
+                  } else {
+                    addFavorite({
+                      slug: restaurantSlug,
+                      name: restaurant.name,
+                      cuisine: restaurant.cuisine,
+                      rating: restaurant.rating,
+                      deliveryTime: restaurant.deliveryTime,
+                      distance: restaurant.distance,
+                      image: restaurant.image
+                    })
+                  }
+                }
+
+                return (
+                  <motion.div
+                    key={restaurant._id || restaurant.id}
+                    className="h-full"
+                    initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                    whileInView={{ opacity: 1, y: 0, scale: 1 }}
+                    viewport={{ once: true, margin: "-50px" }}
+                    transition={{
+                      duration: 0.5,
+                      delay: (index + 2) * 0.1,
+                      type: "spring",
+                      stiffness: 100
+                    }}
+                    style={{ perspective: 1000 }}
+                  >
+                    <motion.div
+                      className="h-full rounded-[22px]"
+                      whileHover="hover"
+                      initial="rest"
+                      variants={{
+                        rest: {
+                          y: 0,
+                          scale: 1,
+                          borderRadius: 22,
+                          boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
+                        },
+                        hover: {
+                          y: -12,
+                          scale: 1.02,
+                          borderRadius: 22,
+                          boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(34, 197, 94, 0.1)",
+                          transition: {
+                            type: "spring",
+                            stiffness: 300,
+                            damping: 20,
+                            mass: 0.5
+                          }
+                        }
+                      }}
+                    >
+                      <Link
+                        to={diningDetailPath}
+                        state={{ restaurant }}
+                        className="h-full flex rounded-[22px]"
+                      >
+                        <Card className="overflow-hidden gap-0 space-y-0 cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-500 py-0 rounded-[22px] h-full flex flex-col w-full relative">
+                          {/* Image Section */}
+                          <div className="relative h-44 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full flex-shrink-0">
+                            <motion.div
+                              className="absolute inset-0"
+                              variants={{
+                                rest: { scale: 1 },
+                                hover: { scale: 1.15 }
+                              }}
+                              transition={{ duration: 0.6, ease: "easeOut" }}
+                            >
+                              {restaurant.image ? (
+                                <OptimizedImage
+                                  src={restaurant.image}
+                                  alt={restaurant.name}
+                                  className="w-full h-full"
+                                  sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
+                                  objectFit="cover"
+                                  placeholder="blur"
+                                />
+                              ) : (
+                                <div className={`relative h-full w-full bg-[radial-gradient(circle_at_top_left,rgba(235,89,14,0.24),transparent_30%),linear-gradient(135deg,#fff5e8_0%,#fffaf4_55%,#ffe5d0_100%)] ${shimmerClassName}`} />
+                              )}
+                            </motion.div>
+
+                            {/* Gradient Overlay on Hover */}
+                            <motion.div
+                              className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0"
+                              variants={{
+                                rest: { opacity: 0 },
+                                hover: { opacity: 1 }
+                              }}
+                              transition={{ duration: 0.4 }}
+                            />
+
+                            {/* Shine Effect */}
+                            <motion.div
+                              className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full"
+                              variants={{
+                                rest: { x: "-100%" },
+                                hover: {
+                                  x: "200%",
+                                  transition: {
+                                    duration: 0.8,
+                                    ease: "easeInOut",
+                                    delay: 0.2
+                                  }
+                                }
+                              }}
+                            />
+
+                            {/* Featured Dish Badge - Top Left */}
+                            <div className="absolute top-3 left-3">
+                              <div className="bg-gray-800/80 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium">
+                                {restaurant.featuredDish} • ₹{restaurant.featuredPrice}
+                              </div>
+                            </div>
+
+                            {/* Bookmark Icon - Top Right */}
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-9 w-9 bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-sm rounded-lg hover:bg-white dark:hover:bg-[#2a2a2a] transition-colors"
+                              className="absolute top-3 right-3 h-9 w-9 bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-sm rounded-lg hover:bg-white dark:hover:bg-[#2a2a2a] transition-colors"
                               onClick={handleToggleFavorite}
                             >
                               <Bookmark className={`h-5 w-5 ${favorite ? "fill-gray-800 dark:fill-gray-200 text-gray-800 dark:text-gray-200" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
                             </Button>
-                          </motion.div>
 
-                          {/* Blue Section - Bottom 40% */}
-                          <div className="absolute bottom-0 left-0 right-0 z-10" style={{ height: '40%', backgroundImage: 'linear-gradient(to right, rgba(213, 31, 16, 0.95) 0%, rgba(213, 31, 16, 0.75) 55%, rgba(213, 31, 16, 0) 100%)' }}>
-                            <div className="h-full flex flex-col justify-end">
-                              <div className="pl-4 sm:pl-5 pb-4 sm:pb-5">
-                                <p className="text-white text-xs sm:text-sm font-medium uppercase tracking-wide mb-1">
-                                  PRE-BOOK TABLE
-                                </p>
-                                <div className="h-px bg-white/30 mb-2 w-24"></div>
-                                <p className="text-white text-base sm:text-lg font-bold">
-                                  {restaurant.offer}
-                                </p>
+                            {/* Blue Section - Bottom 40% */}
+                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-r from-primary to-transparent" style={{ height: '40%' }}>
+                              <div className="h-full flex flex-col justify-end">
+                                <div className="pl-4 sm:pl-5 pb-4 sm:pb-5">
+                                  <p className="text-white text-xs sm:text-sm font-medium uppercase tracking-wide mb-1">
+                                    PRE-BOOK TABLE
+                                  </p>
+                                  <div className="h-px bg-white/30 mb-2 w-24"></div>
+                                  <p className="text-white text-base sm:text-lg font-bold">
+                                    {restaurant.offer}
+                                  </p>
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
 
-                        {/* Content Section */}
-                        <motion.div
-                          className="flex-1"
-                          variants={{
-                            rest: { y: 0 },
-                            hover: { y: -4 }
-                          }}
-                          transition={{ duration: 0.4, ease: "easeOut" }}
-                        >
-                          <CardContent className="p-2.5 sm:p-4 pt-1.5 sm:pt-2 border-t-0">
-                            {/* Restaurant Name & Rating */}
-                            <div className="flex items-start justify-between gap-2 mb-2">
-                              <div className="flex-1 min-w-0">
-                                <motion.h3
-                                  className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white line-clamp-1"
-                                  variants={{
-                                    rest: {},
-                                    hover: { color: "#7e3866" }
-                                  }}
-                                  transition={{ duration: 0.3 }}
-                                >
+                          {/* Content Section */}
+                          <motion.div
+                            className="flex-1"
+                            variants={{
+                              rest: { y: 0 },
+                              hover: { y: -4 }
+                            }}
+                            transition={{ duration: 0.4, ease: "easeOut" }}
+                          >
+                            <CardContent className="p-2.5 sm:p-4 pt-1.5 sm:pt-2 border-t-0">
+                              {/* Restaurant Name & Rating Badge */}
+                              <div className="flex items-start justify-between gap-3 mb-2">
+                                <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white line-clamp-1">
                                   {restaurant.name}
-                                </motion.h3>
+                                </h3>
+                                <div className="flex-shrink-0 bg-[#267e3e] text-white px-2 py-1 rounded-lg flex items-center gap-1 shadow-sm">
+                                  <span className="text-sm font-bold leading-none">{restaurant.rating || "0"}</span>
+                                  <Star className="h-3 w-3 fill-white text-white" />
+                                </div>
                               </div>
-                              <motion.div
-                                className="flex-shrink-0 bg-green-600 text-white px-2 py-1 rounded-lg flex items-center gap-1"
-                                variants={{
-                                  rest: { scale: 1, rotate: 0 },
-                                  hover: { scale: 1.1, rotate: 5 }
-                                }}
-                                transition={{ duration: 0.3, type: "spring", stiffness: 400 }}
-                              >
-                                <span className="text-sm font-bold">{restaurant.rating}</span>
-                                <Star className="h-3 w-3 fill-white text-white" />
-                              </motion.div>
-                            </div>
 
-                            {/* Delivery Time & Distance */}
-                            <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 mb-2">
-                              <Clock className="h-4 w-4" strokeWidth={1.5} />
-                              <span className="font-medium">{restaurant.deliveryTime}</span>
-                              <span className="mx-1">|</span>
-                              <span className="font-medium">{restaurant.distance}</span>
-                            </div>
+                              {/* Meta Info Row (Time | Distance) */}
+                              <div className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400 mb-2.5">
+                                <div className="flex items-center gap-1">
+                                  <Clock className="h-4 w-4 text-gray-400" strokeWidth={2} />
+                                  <span>{restaurant.deliveryTime}</span>
+                                </div>
+                                <span className="mx-0.5 text-gray-300">|</span>
+                                <div className="flex items-center gap-1">
+                                  <MapPin className="h-3.5 w-3.5 text-gray-400" strokeWidth={2} />
+                                  <span>{restaurant.distance || "Distance unavailable"}</span>
+                                </div>
+                              </div>
 
-                            {/* Dining Status Badge */}
-                            <div className="flex items-center gap-2 mt-1">
-                                <Badge 
-                                    variant="outline" 
-                                    className={`px-2 py-0 h-5 text-[10px] uppercase font-bold tracking-wider ${
-                                        !restaurant.isEnabled
-                                            ? "bg-plum-50 text-plum-700 border-plum-100"
-                                            : !restaurant.isOpen
-                                                ? "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
-                                                : "bg-green-50 text-green-700 border-green-200"
+                              {/* Pre-book Table Promo (If applicable) */}
+                              <div className="flex items-center gap-2">
+                                <Badge
+                                  variant="outline"
+                                  className={`px-2 py-0 h-5 text-[10px] uppercase font-bold tracking-wider ${restaurant.isEnabled
+                                      ? "bg-green-50 text-green-700 border-green-200"
+                                      : "bg-plum-50 text-plum-700 border-plum-100"
                                     }`}
                                 >
-                                    {!restaurant.isEnabled ? "OFF" : !restaurant.isOpen ? "CLOSED" : "ON"}
+                                  {restaurant.isEnabled ? "ON" : "OFF"}
                                 </Badge>
-                                <span className="text-[13px] font-bold text-slate-700 dark:text-slate-300">
-                                    {!restaurant.isEnabled ? "Dining paused" : !restaurant.isOpen ? "Closed" : "Pre-book table"}
-                                </span>
-                            </div>
-
-                          </CardContent>
-                        </motion.div>
-                      </Card>
-                    </Link>
-                  </motion.div>
-                </motion.div>
-              )
-            })}
-
-            {/* Remaining Restaurants */}
-            {filteredRestaurants.slice(2).map((restaurant, index) => {
-              const restaurantSlug = restaurant.slug || encodeURIComponent(restaurant.name)
-              const diningDetailPath = `/food/user/dining/${restaurant.diningType}/${restaurantSlug}`
-              const favorite = isFavorite(restaurantSlug)
-
-              const handleToggleFavorite = (e) => {
-                e.preventDefault()
-                e.stopPropagation()
-                if (favorite) {
-                  removeFavorite(restaurantSlug)
-                } else {
-                  addFavorite({
-                    slug: restaurantSlug,
-                    name: restaurant.name,
-                    cuisine: restaurant.cuisine,
-                    rating: restaurant.rating,
-                    deliveryTime: restaurant.deliveryTime,
-                    distance: restaurant.distance,
-                    image: restaurant.image
-                  })
-                }
-              }
-
-              return (
-                <motion.div
-                  key={restaurant._id || restaurant.id}
-                  className="h-full"
-                  initial={{ opacity: 0, y: 30, scale: 0.95 }}
-                  whileInView={{ opacity: 1, y: 0, scale: 1 }}
-                  viewport={{ once: true, margin: "-50px" }}
-                  transition={{
-                    duration: 0.5,
-                    delay: (index + 2) * 0.1,
-                    type: "spring",
-                    stiffness: 100
-                  }}
-                  style={{ perspective: 1000 }}
-                >
-                  <motion.div
-                    className="h-full rounded-[22px]"
-                    whileHover="hover"
-                    initial="rest"
-                    variants={{
-                      rest: {
-                        y: 0,
-                        scale: 1,
-                        borderRadius: 22,
-                        boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)",
-                      },
-                      hover: {
-                        y: -12,
-                        scale: 1.02,
-                        borderRadius: 22,
-                        boxShadow: "0 20px 25px -5px rgba(0, 0, 0, 0.15), 0 10px 10px -5px rgba(0, 0, 0, 0.1), 0 0 0 1px rgba(34, 197, 94, 0.1)",
-                        transition: {
-                          type: "spring",
-                          stiffness: 300,
-                          damping: 20,
-                          mass: 0.5
-                        }
-                      }
-                    }}
-                  >
-                    <Link
-                      to={diningDetailPath}
-                      state={{ restaurant }}
-                      className="h-full flex rounded-[22px]"
-                    >
-                      <Card 
-                        className={`overflow-hidden gap-0 space-y-0 cursor-pointer border-0 dark:border-gray-800 group bg-white dark:bg-[#1a1a1a] transition-all duration-500 py-0 rounded-[22px] h-full flex flex-col w-full relative ${!restaurant.isEnabled || !restaurant.isOpen ? "grayscale opacity-75" : ""}`}
-                        style={{ filter: (!restaurant.isEnabled || !restaurant.isOpen) ? 'grayscale(100%)' : 'none', opacity: (!restaurant.isEnabled || !restaurant.isOpen) ? 0.75 : 1 }}
-                      >
-                        {/* Image Section */}
-                        <div className="relative h-44 sm:h-56 md:h-60 lg:h-64 xl:h-72 w-full flex-shrink-0">
-                          <motion.div
-                            className="absolute inset-0"
-                            variants={{
-                              rest: { scale: 1 },
-                              hover: { scale: 1.15 }
-                            }}
-                            transition={{ duration: 0.6, ease: "easeOut" }}
-                          >
-                            {restaurant.image ? (
-                              <OptimizedImage
-                                src={restaurant.image}
-                                alt={restaurant.name}
-                                className="w-full h-full"
-                                sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-                                objectFit="cover"
-                                placeholder="blur"
-                              />
-                            ) : (
-                              <div className={`relative h-full w-full bg-[radial-gradient(circle_at_top_left,rgba(235,89,14,0.24),transparent_30%),linear-gradient(135deg,#fff5e8_0%,#fffaf4_55%,#ffe5d0_100%)] ${shimmerClassName}`} />
-                            )}
+                                <span className="text-sm font-bold text-gray-600 dark:text-gray-400">Pre-book table</span>
+                              </div>
+                            </CardContent>
                           </motion.div>
-
-                          {/* Gradient Overlay on Hover */}
-                          <motion.div
-                            className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-0"
-                            variants={{
-                              rest: { opacity: 0 },
-                              hover: { opacity: 1 }
-                            }}
-                            transition={{ duration: 0.4 }}
-                          />
-
-                          {/* Shine Effect */}
-                          <motion.div
-                            className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full"
-                            variants={{
-                              rest: { x: "-100%" },
-                              hover: {
-                                x: "200%",
-                                transition: {
-                                  duration: 0.8,
-                                  ease: "easeInOut",
-                                  delay: 0.2
-                                }
-                              }
-                            }}
-                          />
-
-                          {/* Featured Dish Badge - Top Left */}
-                          <div className="absolute top-3 left-3">
-                            <div className="bg-gray-800/80 backdrop-blur-sm text-white px-3 py-1.5 rounded-lg text-xs sm:text-sm font-medium">
-                              {restaurant.featuredDish} • ₹{restaurant.featuredPrice}
-                            </div>
-                          </div>
-
-                          {/* Bookmark Icon - Top Right */}
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="absolute top-3 right-3 h-9 w-9 bg-white/90 dark:bg-[#1a1a1a]/90 backdrop-blur-sm rounded-lg hover:bg-white dark:hover:bg-[#2a2a2a] transition-colors"
-                            onClick={handleToggleFavorite}
-                          >
-                            <Bookmark className={`h-5 w-5 ${favorite ? "fill-gray-800 dark:fill-gray-200 text-gray-800 dark:text-gray-200" : "text-gray-600 dark:text-gray-400"}`} strokeWidth={2} />
-                          </Button>
-
-                          {/* Blue Section - Bottom 40% */}
-                          <div className="absolute bottom-0 left-0 right-0 z-10" style={{ height: '40%', backgroundImage: 'linear-gradient(to right, rgba(213, 31, 16, 0.95) 0%, rgba(213, 31, 16, 0.75) 55%, rgba(213, 31, 16, 0) 100%)' }}>
-                            <div className="h-full flex flex-col justify-end">
-                              <div className="pl-4 sm:pl-5 pb-4 sm:pb-5">
-                                <p className="text-white text-xs sm:text-sm font-medium uppercase tracking-wide mb-1">
-                                  PRE-BOOK TABLE
-                                </p>
-                                <div className="h-px bg-white/30 mb-2 w-24"></div>
-                                <p className="text-white text-base sm:text-lg font-bold">
-                                  {restaurant.offer}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Content Section */}
-                        <motion.div
-                          className="flex-1"
-                          variants={{
-                            rest: { y: 0 },
-                            hover: { y: -4 }
-                          }}
-                          transition={{ duration: 0.4, ease: "easeOut" }}
-                        >
-                          <CardContent className="p-2.5 sm:p-4 pt-1.5 sm:pt-2 border-t-0">
-                            {/* Restaurant Name & Rating Badge */}
-                            <div className="flex items-start justify-between gap-3 mb-2">
-                              <h3 className="text-lg sm:text-xl font-bold text-gray-900 dark:text-white line-clamp-1">
-                                {restaurant.name}
-                              </h3>
-                              <div className="flex-shrink-0 bg-[#267e3e] text-white px-2 py-1 rounded-lg flex items-center gap-1 shadow-sm">
-                                <span className="text-sm font-bold leading-none">{restaurant.rating || "0"}</span>
-                                <Star className="h-3 w-3 fill-white text-white" />
-                              </div>
-                            </div>
-
-                            {/* Meta Info Row (Time | Distance) */}
-                            <div className="flex items-center gap-1.5 text-sm font-medium text-gray-500 dark:text-gray-400 mb-2.5">
-                              <div className="flex items-center gap-1">
-                                <Clock className="h-4 w-4 text-gray-400" strokeWidth={2} />
-                                <span>{restaurant.deliveryTime}</span>
-                              </div>
-                              <span className="mx-0.5 text-gray-300">|</span>
-                              <div className="flex items-center gap-1">
-                                <MapPin className="h-3.5 w-3.5 text-gray-400" strokeWidth={2} />
-                                <span>{restaurant.distance || "Distance unavailable"}</span>
-                              </div>
-                            </div>
-
-                            {/* Pre-book Table Promo (If applicable) */}
-                            <div className="flex items-center gap-2">
-                                <Badge 
-                                    variant="outline" 
-                                    className={`px-2 py-0 h-5 text-[10px] uppercase font-bold tracking-wider ${
-                                        !restaurant.isEnabled
-                                            ? "bg-plum-50 text-plum-700 border-plum-100"
-                                            : !restaurant.isOpen
-                                                ? "bg-gray-100 text-gray-700 border-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:border-gray-700"
-                                                : "bg-green-50 text-green-700 border-green-200"
-                                    }`}
-                                >
-                                    {!restaurant.isEnabled ? "OFF" : !restaurant.isOpen ? "CLOSED" : "ON"}
-                                </Badge>
-                                <span className="text-sm font-bold text-gray-600 dark:text-gray-400">
-                                    {!restaurant.isEnabled ? "Dining paused" : !restaurant.isOpen ? "Closed" : "Pre-book table"}
-                                </span>
-                            </div>
-                          </CardContent>
-                        </motion.div>
-                      </Card>
-                    </Link>
+                        </Card>
+                      </Link>
+                    </motion.div>
                   </motion.div>
-                </motion.div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
           )}
         </div>
       </div>
@@ -1308,7 +1277,7 @@ export default function Dining() {
                   setSortBy(null)
                   setSelectedCuisine(null)
                 }}
-                className="text-[#7e3866] font-medium text-sm md:text-base"
+                className="text-primary font-medium text-sm md:text-base"
               >
                 Clear all
               </button>
@@ -1332,11 +1301,11 @@ export default function Dining() {
                     <button
                       key={tab.id}
                       onClick={() => setActiveFilterTab(tab.id)}
-                      className={`flex flex-col items-center gap-1 py-4 px-2 text-center relative transition-colors ${isActive ? 'bg-white dark:bg-[#1a1a1a] text-[#7e3866]' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
+                      className={`flex flex-col items-center gap-1 py-4 px-2 text-center relative transition-colors ${isActive ? 'bg-white dark:bg-[#1a1a1a] text-primary' : 'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
                         }`}
                     >
                       {isActive && (
-                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-[#7e3866] rounded-r" />
+                        <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r" />
                       )}
                       <Icon className="h-5 w-5 md:h-6 md:w-6" strokeWidth={1.5} />
                       <span className="text-xs md:text-sm font-medium leading-tight">{tab.label}</span>
@@ -1361,11 +1330,11 @@ export default function Dining() {
                           key={option.id || 'relevance'}
                           onClick={() => setSortBy(option.id)}
                           className={`px-4 md:px-5 py-3 md:py-4 rounded-xl border text-left transition-colors ${sortBy === option.id
-                            ? 'border-[#7e3866] bg-[#F9F9FB] dark:bg-[#7e3866]/20'
-                            : 'border-gray-200 dark:border-gray-700 hover:border-[#7e3866]'
+                            ? 'border-primary bg-[#F9F9FB] dark:bg-primary/20'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-primary'
                             }`}
                         >
-                          <span className={`text-sm md:text-base font-medium ${sortBy === option.id ? 'text-[#7e3866]' : 'text-gray-700 dark:text-gray-300'}`}>
+                          <span className={`text-sm md:text-base font-medium ${sortBy === option.id ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>
                             {option.label}
                           </span>
                         </button>
@@ -1382,22 +1351,22 @@ export default function Dining() {
                       <button
                         onClick={() => toggleFilter('delivery-under-30')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('delivery-under-30')
-                          ? 'border-[#7e3866] bg-[#F9F9FB] dark:bg-[#7e3866]/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-[#7e3866]'
+                          ? 'border-primary bg-[#F9F9FB] dark:bg-primary/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-primary'
                           }`}
                       >
-                        <Timer className={`h-6 w-6 ${activeFilters.has('delivery-under-30') ? 'text-[#7e3866]' : 'text-gray-600 dark:text-gray-400'}`} strokeWidth={1.5} />
-                        <span className={`text-sm font-medium ${activeFilters.has('delivery-under-30') ? 'text-[#7e3866]' : 'text-gray-700 dark:text-gray-300'}`}>Under 30 mins</span>
+                        <Timer className={`h-6 w-6 ${activeFilters.has('delivery-under-30') ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}`} strokeWidth={1.5} />
+                        <span className={`text-sm font-medium ${activeFilters.has('delivery-under-30') ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>Under 30 mins</span>
                       </button>
                       <button
                         onClick={() => toggleFilter('delivery-under-45')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('delivery-under-45')
-                          ? 'border-[#7e3866] bg-[#F9F9FB] dark:bg-[#7e3866]/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-[#7e3866]'
+                          ? 'border-primary bg-[#F9F9FB] dark:bg-primary/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-primary'
                           }`}
                       >
-                        <Timer className={`h-6 w-6 ${activeFilters.has('delivery-under-45') ? 'text-[#7e3866]' : 'text-gray-600 dark:text-gray-400'}`} strokeWidth={1.5} />
-                        <span className={`text-sm font-medium ${activeFilters.has('delivery-under-45') ? 'text-[#7e3866]' : 'text-gray-700 dark:text-gray-300'}`}>Under 45 mins</span>
+                        <Timer className={`h-6 w-6 ${activeFilters.has('delivery-under-45') ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}`} strokeWidth={1.5} />
+                        <span className={`text-sm font-medium ${activeFilters.has('delivery-under-45') ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>Under 45 mins</span>
                       </button>
                     </div>
                   </div>
@@ -1411,32 +1380,32 @@ export default function Dining() {
                       <button
                         onClick={() => toggleFilter('rating-35-plus')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('rating-35-plus')
-                          ? 'border-[#7e3866] bg-[#F9F9FB] dark:bg-[#7e3866]/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-[#7e3866]'
+                          ? 'border-primary bg-[#F9F9FB] dark:bg-primary/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-primary'
                           }`}
                       >
-                        <Star className={`h-6 w-6 ${activeFilters.has('rating-35-plus') ? 'text-[#7e3866] fill-[#7e3866]' : 'text-gray-400 dark:text-gray-500'}`} />
-                        <span className={`text-sm font-medium ${activeFilters.has('rating-35-plus') ? 'text-[#7e3866]' : 'text-gray-700 dark:text-gray-300'}`}>Rated 3.5+</span>
+                        <Star className={`h-6 w-6 ${activeFilters.has('rating-35-plus') ? 'text-primary fill-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                        <span className={`text-sm font-medium ${activeFilters.has('rating-35-plus') ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>Rated 3.5+</span>
                       </button>
                       <button
                         onClick={() => toggleFilter('rating-4-plus')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('rating-4-plus')
-                          ? 'border-[#7e3866] bg-[#F9F9FB] dark:bg-[#7e3866]/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-[#7e3866]'
+                          ? 'border-primary bg-[#F9F9FB] dark:bg-primary/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-primary'
                           }`}
                       >
-                        <Star className={`h-6 w-6 ${activeFilters.has('rating-4-plus') ? 'text-[#7e3866] fill-[#7e3866]' : 'text-gray-400 dark:text-gray-500'}`} />
-                        <span className={`text-sm font-medium ${activeFilters.has('rating-4-plus') ? 'text-[#7e3866]' : 'text-gray-700 dark:text-gray-300'}`}>Rated 4.0+</span>
+                        <Star className={`h-6 w-6 ${activeFilters.has('rating-4-plus') ? 'text-primary fill-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                        <span className={`text-sm font-medium ${activeFilters.has('rating-4-plus') ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>Rated 4.0+</span>
                       </button>
                       <button
                         onClick={() => toggleFilter('rating-45-plus')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('rating-45-plus')
-                          ? 'border-[#7e3866] bg-[#F9F9FB] dark:bg-[#7e3866]/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-[#7e3866]'
+                          ? 'border-primary bg-[#F9F9FB] dark:bg-primary/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-primary'
                           }`}
                       >
-                        <Star className={`h-6 w-6 ${activeFilters.has('rating-45-plus') ? 'text-[#7e3866] fill-[#7e3866]' : 'text-gray-400 dark:text-gray-500'}`} />
-                        <span className={`text-sm font-medium ${activeFilters.has('rating-45-plus') ? 'text-[#7e3866]' : 'text-gray-700 dark:text-gray-300'}`}>Rated 4.5+</span>
+                        <Star className={`h-6 w-6 ${activeFilters.has('rating-45-plus') ? 'text-primary fill-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+                        <span className={`text-sm font-medium ${activeFilters.has('rating-45-plus') ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>Rated 4.5+</span>
                       </button>
                     </div>
                   </div>
@@ -1450,22 +1419,22 @@ export default function Dining() {
                       <button
                         onClick={() => toggleFilter('distance-under-1km')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('distance-under-1km')
-                          ? 'border-[#7e3866] bg-[#F9F9FB] dark:bg-[#7e3866]/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-[#7e3866]'
+                          ? 'border-primary bg-[#F9F9FB] dark:bg-primary/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-primary'
                           }`}
                       >
-                        <MapPin className={`h-6 w-6 ${activeFilters.has('distance-under-1km') ? 'text-[#7e3866]' : 'text-gray-600 dark:text-gray-400'}`} strokeWidth={1.5} />
-                        <span className={`text-sm font-medium ${activeFilters.has('distance-under-1km') ? 'text-[#7e3866]' : 'text-gray-700 dark:text-gray-300'}`}>Under 1 km</span>
+                        <MapPin className={`h-6 w-6 ${activeFilters.has('distance-under-1km') ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}`} strokeWidth={1.5} />
+                        <span className={`text-sm font-medium ${activeFilters.has('distance-under-1km') ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>Under 1 km</span>
                       </button>
                       <button
                         onClick={() => toggleFilter('distance-under-2km')}
                         className={`flex flex-col items-center gap-2 p-4 rounded-xl border transition-colors ${activeFilters.has('distance-under-2km')
-                          ? 'border-[#7e3866] bg-[#F9F9FB] dark:bg-[#7e3866]/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-[#7e3866]'
+                          ? 'border-primary bg-[#F9F9FB] dark:bg-primary/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-primary'
                           }`}
                       >
-                        <MapPin className={`h-6 w-6 ${activeFilters.has('distance-under-2km') ? 'text-[#7e3866]' : 'text-gray-600 dark:text-gray-400'}`} strokeWidth={1.5} />
-                        <span className={`text-sm font-medium ${activeFilters.has('distance-under-2km') ? 'text-[#7e3866]' : 'text-gray-700 dark:text-gray-300'}`}>Under 2 km</span>
+                        <MapPin className={`h-6 w-6 ${activeFilters.has('distance-under-2km') ? 'text-primary' : 'text-gray-600 dark:text-gray-400'}`} strokeWidth={1.5} />
+                        <span className={`text-sm font-medium ${activeFilters.has('distance-under-2km') ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>Under 2 km</span>
                       </button>
                     </div>
                   </div>
@@ -1479,20 +1448,20 @@ export default function Dining() {
                       <button
                         onClick={() => toggleFilter('price-under-200')}
                         className={`px-4 py-3 rounded-xl border text-left transition-colors ${activeFilters.has('price-under-200')
-                          ? 'border-[#7e3866] bg-[#7e3866]/10 dark:bg-[#7e3866]/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-[#7e3866]'
+                          ? 'border-primary bg-primary/10 dark:bg-primary/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-primary'
                           }`}
                       >
-                        <span className={`text-sm font-medium ${activeFilters.has('price-under-200') ? 'text-[#7e3866]' : 'text-gray-700 dark:text-gray-300'}`}>Under ₹200</span>
+                        <span className={`text-sm font-medium ${activeFilters.has('price-under-200') ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>Under ₹200</span>
                       </button>
                       <button
                         onClick={() => toggleFilter('price-under-500')}
                         className={`px-4 py-3 rounded-xl border text-left transition-colors ${activeFilters.has('price-under-500')
-                          ? 'border-[#7e3866] bg-[#7e3866]/10 dark:bg-[#7e3866]/20'
-                          : 'border-gray-200 dark:border-gray-700 hover:border-[#7e3866]'
+                          ? 'border-primary bg-primary/10 dark:bg-primary/20'
+                          : 'border-gray-200 dark:border-gray-700 hover:border-primary'
                           }`}
                       >
-                        <span className={`text-sm font-medium ${activeFilters.has('price-under-500') ? 'text-[#7e3866]' : 'text-gray-700 dark:text-gray-300'}`}>Under ₹500</span>
+                        <span className={`text-sm font-medium ${activeFilters.has('price-under-500') ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>Under ₹500</span>
                       </button>
                     </div>
                   </div>
@@ -1503,16 +1472,16 @@ export default function Dining() {
                   <div className="space-y-4 mb-8">
                     <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-4">Cuisine</h3>
                     <div className="grid grid-cols-2 gap-3">
-                      {['Continental', 'Italian', 'Asian', 'Indian', 'Chinese', 'American', 'Seafood', 'Cafe'].map((cuisine) => (
+                      {['Continental', 'Italian', 'Asian', 'tiffinji', 'Chinese', 'American', 'Seafood', 'Cafe'].map((cuisine) => (
                         <button
                           key={cuisine}
                           onClick={() => setSelectedCuisine(selectedCuisine === cuisine ? null : cuisine)}
                           className={`px-4 py-3 rounded-xl border text-center transition-colors ${selectedCuisine === cuisine
-                            ? 'border-[#7e3866] bg-[#F9F9FB] dark:bg-[#7e3866]/20'
-                            : 'border-gray-200 dark:border-gray-700 hover:border-[#7e3866]'
+                            ? 'border-primary bg-[#F9F9FB] dark:bg-primary/20'
+                            : 'border-gray-200 dark:border-gray-700 hover:border-primary'
                             }`}
                         >
-                          <span className={`text-sm font-medium ${selectedCuisine === cuisine ? 'text-[#7e3866]' : 'text-gray-700 dark:text-gray-300'}`}>
+                          <span className={`text-sm font-medium ${selectedCuisine === cuisine ? 'text-primary' : 'text-gray-700 dark:text-gray-300'}`}>
                             {cuisine}
                           </span>
                         </button>
@@ -1534,7 +1503,7 @@ export default function Dining() {
               <button
                 onClick={() => setIsFilterOpen(false)}
                 className={`flex-1 py-3 md:py-4 font-semibold rounded-xl transition-colors text-sm md:text-base ${activeFilters.size > 0 || sortBy || selectedCuisine
-                  ? 'bg-[#7e3866] text-white hover:bg-[#55254b]'
+                  ? 'bg-primary text-white hover:bg-secondary'
                   : 'bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
                   }`}
               >

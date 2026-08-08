@@ -6,6 +6,9 @@ import { toast } from "sonner"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@food/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@food/components/ui/popover"
 import { getFoodDisplayPrice, getFoodVariants } from "@food/utils/foodVariants"
+import { API_BASE_URL } from "@food/api/config"
+
+const BACKEND_ORIGIN = API_BASE_URL.replace(/\/api\/?$/, "")
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
 const debugError = (...args) => {}
@@ -48,6 +51,8 @@ export default function FoodsList() {
   const [categoryOptions, setCategoryOptions] = useState([])
   const [categorySearch, setCategorySearch] = useState("")
   const [categoryPopoverOpen, setCategoryPopoverOpen] = useState(false)
+  const [restaurantFilterOpen, setRestaurantFilterOpen] = useState(false)
+  const [restaurantSearch, setRestaurantSearch] = useState("")
   const [selectedImageFile, setSelectedImageFile] = useState(null)
   const [imagePreviewUrl, setImagePreviewUrl] = useState("")
   const [currentPage, setCurrentPage] = useState(1)
@@ -71,8 +76,19 @@ export default function FoodsList() {
 
   const toArray = (value) => (Array.isArray(value) ? value : [])
   const withImageVersion = (url) => {
-    if (!url || typeof url !== "string") return "https://via.placeholder.com/40"
-    return `${url}${url.includes("?") ? "&" : "?"}v=${imageVersion}`
+    if (!url || typeof url !== "string") {
+      console.log(`[ImageLoader] URL is empty. Original DB value:`, url);
+      return "https://placehold.co/400x400?text=No+Image"
+    }
+    let finalUrl = url
+    if (finalUrl.startsWith("/cloudimages") || finalUrl.startsWith("/uploads")) {
+      finalUrl = `${BACKEND_ORIGIN}${finalUrl}`
+    } else if (finalUrl.startsWith("cloudimages") || finalUrl.startsWith("uploads")) {
+      finalUrl = `${BACKEND_ORIGIN}/${finalUrl}`
+    }
+    const versionedUrl = `${finalUrl}${finalUrl.includes("?") ? "&" : "?"}v=${imageVersion}`
+    console.log(`[ImageLoader] Generated URL for "${url}":`, versionedUrl);
+    return versionedUrl
   }
 
   const fetchAllFoods = useCallback(async () => {
@@ -80,8 +96,8 @@ export default function FoodsList() {
       setLoading(true)
 
       const [activeRestaurantsResponse, inactiveRestaurantsResponse] = await Promise.all([
-        adminAPI.getRestaurants({ limit: 1000 }),
-        adminAPI.getRestaurants({ limit: 1000, status: "inactive" }),
+        adminAPI.getRestaurants({ limit: 50000 }),
+        adminAPI.getRestaurants({ limit: 50000, status: "inactive" }),
       ])
 
       const activeRestaurants = activeRestaurantsResponse?.data?.data?.restaurants ||
@@ -115,7 +131,7 @@ export default function FoodsList() {
         return
       }
 
-      const foodsRes = await adminAPI.getFoods({ limit: 1000 })
+      const foodsRes = await adminAPI.getFoods({ limit: 50000 })
       const list = foodsRes?.data?.data?.foods || []
       const approvedOnly = Array.isArray(list)
         ? list.filter((f) => String(f?.approvalStatus || "").toLowerCase() === "approved")
@@ -126,7 +142,7 @@ export default function FoodsList() {
               id: String(f.id || f._id || ""),
               _id: f._id || f.id,
               name: f.name || "Unnamed Item",
-              image: f.image || "https://via.placeholder.com/40",
+              image: f.image || "https://placehold.co/400x400?text=No+Image",
               status: f.isAvailable !== false && String(f.approvalStatus || "").toLowerCase() !== "rejected",
               restaurantId: String(f.restaurantId || ""),
               restaurantName: f.restaurantName || "Unknown Restaurant",
@@ -502,18 +518,67 @@ export default function FoodsList() {
               />
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
             </div>
-            <select
-              value={selectedRestaurant}
-              onChange={(e) => setSelectedRestaurant(e.target.value)}
-              className="px-4 py-2.5 min-w-[220px] text-sm rounded-lg border border-slate-300 bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
-            >
-              <option value="all">All Restaurants</option>
-              {restaurantOptions.map((restaurant) => (
-                <option key={restaurant.id} value={restaurant.id}>
-                  {restaurant.name}
-                </option>
-              ))}
-            </select>
+            <Popover open={restaurantFilterOpen} onOpenChange={setRestaurantFilterOpen}>
+              <PopoverTrigger asChild>
+                <button
+                  type="button"
+                  className="px-4 py-2.5 min-w-[280px] sm:min-w-[320px] text-sm rounded-lg border border-slate-300 bg-white text-left flex items-center justify-between focus:outline-none focus:ring-2 focus:ring-slate-400 focus:border-slate-400"
+                >
+                  <span className={selectedRestaurant ? "text-slate-900 line-clamp-1" : "text-slate-400"}>
+                    {selectedRestaurant === "all" ? "All Restaurants" : restaurantOptions.find(r => r.id === selectedRestaurant)?.name || "Select Restaurant"}
+                  </span>
+                  <ChevronDown className="w-4 h-4 text-slate-500 shrink-0 ml-2" />
+                </button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-2" align="end">
+                <input
+                  type="text"
+                  value={restaurantSearch}
+                  onChange={(e) => setRestaurantSearch(e.target.value)}
+                  className="w-full px-3 py-2 border border-slate-200 rounded-md text-sm bg-white mb-2"
+                  placeholder="Search restaurant..."
+                  autoFocus
+                />
+                <div className="max-h-56 overflow-y-auto">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedRestaurant("all")
+                      setRestaurantFilterOpen(false)
+                    }}
+                    className={`w-full text-left px-3 py-2 rounded-md text-sm hover:bg-slate-100 ${
+                      selectedRestaurant === "all" ? "bg-slate-100 font-medium" : ""
+                    }`}
+                  >
+                    All Restaurants
+                  </button>
+                  {restaurantOptions
+                    .filter((r) => {
+                      const q = String(restaurantSearch || "").trim().toLowerCase()
+                      if (!q) return true
+                      return String(r.name || "").toLowerCase().includes(q)
+                    })
+                    .map((r) => (
+                      <button
+                        key={r.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedRestaurant(r.id)
+                          setRestaurantFilterOpen(false)
+                        }}
+                        className={`w-full text-left px-3 py-2 rounded-md text-sm hover:bg-slate-100 line-clamp-2 ${
+                          selectedRestaurant === r.id ? "bg-slate-100 font-medium" : ""
+                        }`}
+                      >
+                        {r.name}
+                      </button>
+                    ))}
+                  {restaurantOptions.filter(r => String(r.name || "").toLowerCase().includes(String(restaurantSearch || "").trim().toLowerCase())).length === 0 && (
+                    <div className="px-3 py-2 text-sm text-slate-500">No restaurants found</div>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
           </div>
         </div>
       </div>
@@ -534,6 +599,9 @@ export default function FoodsList() {
                   Title
                 </th>
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
+                  Price
+                </th>
+                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
                   Restaurant
                 </th>
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-700 uppercase tracking-wider">
@@ -547,7 +615,7 @@ export default function FoodsList() {
             <tbody className="bg-white divide-y divide-slate-100">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-20 text-center">
+                  <td colSpan={7} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-2" />
                       <p className="text-sm text-slate-500">Loading foods...</p>
@@ -556,7 +624,7 @@ export default function FoodsList() {
                 </tr>
               ) : filteredFoods.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-6 py-20 text-center">
+                  <td colSpan={7} className="px-6 py-20 text-center">
                     <div className="flex flex-col items-center justify-center">
                       <p className="text-lg font-semibold text-slate-700 mb-1">No Data Found</p>
                       <p className="text-sm text-slate-500">No food items match your search or restaurant filter</p>
@@ -581,7 +649,8 @@ export default function FoodsList() {
                           key={`${food.id}-${imageVersion}`}
                           loading="lazy"
                           onError={(e) => {
-                            e.target.src = "https://via.placeholder.com/40"
+                            console.error(`[ImageLoader] ERROR LOADING IMAGE in browser! URL: ${e.target.src}`);
+                            e.target.src = "https://placehold.co/400x400?text=Error"
                           }}
                         />
                       </div>
@@ -589,6 +658,13 @@ export default function FoodsList() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex flex-col">
                         <span className="text-sm font-medium text-slate-900">{food.name}</span>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <div className="flex flex-col">
+                        <span className="text-sm font-medium text-slate-900">
+                          {food.variants?.length ? `From \u20B9${food.price}` : `\u20B9${food.price}`}
+                        </span>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -703,7 +779,7 @@ export default function FoodsList() {
                           alt={selectedFood.name}
                           className="w-20 h-20 rounded-xl object-cover border border-slate-200"
                   onError={(e) => {
-                    e.target.src = "https://via.placeholder.com/64"
+                    e.target.src = "https://placehold.co/400x400?text=Error"
                   }}
                 />
                 <div>

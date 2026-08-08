@@ -6,9 +6,9 @@ import {
   Navigation, CheckCircle2, Camera, Loader2, Image as ImageIcon
 } from 'lucide-react';
 import { ActionSlider } from '@/modules/DeliveryV2/components/ui/ActionSlider';
-import { uploadAPI } from '@food/api';
 import { toast } from 'sonner';
-import { openCamera } from "@food/utils/imageUploadUtils";
+
+import { parseLatLng } from '@/modules/DeliveryV2/hooks/proximity.utils';
 
 /**
  * PickupActionModal - Unified White/Green Theme with Slider Actions.
@@ -25,57 +25,41 @@ export const PickupActionModal = ({
   onMinimize
 }) => {
   const [showItems, setShowItems] = useState(false);
-  const [isUploadingBill, setIsUploadingBill] = useState(false);
-  const [billImageUploaded, setBillImageUploaded] = useState(false);
-  const [billImageUrl, setBillImageUrl] = useState(null);
-  const cameraInputRef = useRef(null);
+  const [pickupOtp, setPickupOtp] = useState('');
+  const [otpRequested, setOtpRequested] = useState(false);
+  const [isRequestingOtp, setIsRequestingOtp] = useState(false);
 
   if (!order) return null;
 
-  const handleBillImageSelect = async (file) => {
-    if (!file) return;
+  const isAtPickup = status === 'REACHED_PICKUP';
+  const restaurantName = order.restaurantName || order.restaurant_name || order.restaurantId?.restaurantName || order.restaurant?.restaurantName || 'Restaurant';
+  const restaurantAddress = order.restaurantAddress || order.restaurant_address || order.restaurantLocation?.address || order.restaurantId?.address || 'Address not available';
+  const restaurantPhone = order.restaurantPhone || order.restaurant_phone || order.restaurantId?.phone || '';
+  const restaurantCoords =
+    parseLatLng(order.restaurantLocation) ||
+    parseLatLng(order.restaurantId?.location) ||
+    parseLatLng(order.restaurant_location);
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error('Image size should be less than 5MB');
+  const openRestaurantInMaps = () => {
+    if (restaurantCoords) {
+      const { lat, lng } = restaurantCoords;
+      window.open(
+        `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`,
+        '_blank',
+      );
       return;
     }
-
-    setIsUploadingBill(true);
-    try {
-      const res = await uploadAPI.uploadMedia(file, { folder: 'appzeto/delivery/bills' });
-      if (res?.data?.success && res?.data?.data) {
-        setBillImageUrl(res.data.data.url || res.data.data.secure_url);
-        setBillImageUploaded(true);
-        // toast.success('Bill image uploaded!');
-      } else {
-        throw new Error('Upload failed');
-      }
-    } catch (err) {
-      toast.error('Failed to upload bill image');
-      setBillImageUploaded(false);
-      setBillImageUrl(null);
-    } finally {
-      setIsUploadingBill(false);
-    }
+    window.open(
+      `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurantAddress)}`,
+      '_blank',
+    );
   };
 
-  const handleTakeCameraPhoto = () => {
-    openCamera({
-      onSelectFile: (file) => handleBillImageSelect(file),
-      fileNamePrefix: `bill-${order.orderId || order._id}`
-    })
-  }
-
-  const handlePickFromGallery = () => {
-    cameraInputRef.current?.click()
-  }
-
-  const isAtPickup = status === 'REACHED_PICKUP';
-  const restaurantName = order.restaurantName || order.restaurant_name || order.restaurantId?.restaurantName || order.restaurantId?.name || order.restaurant?.restaurantName || order.restaurant?.name || 'Restaurant';
-  const restaurantAddress = order.restaurantAddress || order.restaurant_address || order.restaurantLocation?.address || order.restaurantId?.addressLine1 || order.restaurantId?.location?.address || order.restaurantId?.address || 'Address not available';
-  const restaurantPhone = order.restaurantPhone || order.restaurant_phone || order.restaurantId?.phone || order.restaurant?.phone || '';
+  const distanceLabel = Number.isFinite(distanceToTarget)
+    ? `${(distanceToTarget / 1000).toFixed(1)} km • ${eta || '--'} min to Store`
+    : 'Locating your position...';
   const items = order.items || [];
-  const restaurantLogo = order.restaurantImage || order.restaurant?.logo || order.restaurant?.profileImage || order.restaurantId?.profileImage || 'https://cdn-icons-png.flaticon.com/512/3170/3170733.png';
+  const restaurantLogo = order.restaurantImage || order.restaurant?.logo || order.restaurant?.profileImage || order.restaurantId?.profileImage || order.restaurantId?.logo || 'https://cdn-icons-png.flaticon.com/512/3170/3170733.png';
 
   return (
     <div className="fixed inset-0 z-110 p-0 sm:p-4 flex items-end justify-center">
@@ -106,12 +90,15 @@ export const PickupActionModal = ({
             </div>
             <div>
               <h3 className="text-gray-950 text-lg sm:text-xl font-bold">{restaurantName}</h3>
+              <p className="text-blue-600 text-[11px] font-black uppercase tracking-widest mt-0.5">
+                ORDER #{order.order_id || order.orderId || order._id}
+              </p>
               <p className="text-gray-500 text-[10px] font-bold uppercase tracking-widest flex items-center gap-1 mt-1.5">
                 {isAtPickup ? (
                   <span className="text-green-600">Reached Location √</span>
                 ) : (
                   <span className="text-orange-500">
-                    {(distanceToTarget / 1000).toFixed(1)} km • {eta || '--'} min to Store
+                    {distanceLabel}
                   </span>
                 )}
               </p>
@@ -128,7 +115,7 @@ export const PickupActionModal = ({
               </button>
             )}
             <button 
-              onClick={() => window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurantAddress)}`, '_blank')}
+              onClick={openRestaurantInMaps}
               className="w-10 h-10 rounded-full bg-gray-900 flex items-center justify-center text-white shadow-lg"
             >
               <Navigation className="w-5 h-5" />
@@ -156,61 +143,60 @@ export const PickupActionModal = ({
             </div>
           ) : (
             <div className="space-y-4">
-              <div className="flex justify-center items-center gap-3 w-full">
-                 {!billImageUploaded && !isUploadingBill && (
-                   <>
-                      <button
-                        onClick={handleTakeCameraPhoto}
-                        className="flex-1 flex items-center justify-center gap-2 py-3 sm:py-4 rounded-2xl bg-gray-900 text-white font-bold text-[11px] sm:text-xs uppercase tracking-widest shadow-lg active:scale-95 transition-all"
-                      >
-                        <Camera className="w-5 h-5" />
-                        <span>Camera</span>
-                      </button>
-                      <button
-                        onClick={handlePickFromGallery}
-                        className="flex-1 flex items-center justify-center gap-2 py-3 sm:py-4 rounded-2xl bg-orange-50 text-orange-600 border border-orange-100 font-bold text-[11px] sm:text-xs uppercase tracking-widest active:scale-95 transition-all"
-                      >
-                        <ImageIcon className="w-5 h-5" />
-                        <span>Gallery</span>
-                      </button>
-                   </>
-                 )}
-
-                 {isUploadingBill && (
-                    <div className="w-full flex items-center justify-center gap-2 py-3 sm:py-4 rounded-2xl bg-gray-50 text-gray-400 font-bold text-[11px] sm:text-xs uppercase tracking-widest">
-                       <Loader2 className="w-4 h-4 animate-spin" />
-                       <span>Uploading...</span>
-                    </div>
-                 )}
-
-                 {billImageUploaded && (
-                    <div className="w-full flex items-center justify-center gap-2 py-3 sm:py-4 rounded-2xl bg-green-100 text-green-700 font-bold text-[11px] sm:text-xs uppercase tracking-widest">
-                       <CheckCircle2 className="w-4 h-4" />
-                       <span>Bill Uploaded</span>
-                    </div>
-                 )}
-
-                 <input
-                   ref={cameraInputRef}
-                   type="file"
-                   accept="image/*"
-                   onChange={(e) => handleBillImageSelect(e.target.files[0])}
-                   className="hidden"
-                 />
-              </div>
-
               <div>
-                <p className={`text-center text-[10px] font-bold uppercase tracking-widest mb-3 ${billImageUploaded ? 'text-green-600' : 'text-gray-400'}`}>
-                  {billImageUploaded ? "Check the restaurant logo - Swipe to pick up" : "Capture bill to unlock swipe"}
+                <p className="text-center text-[10px] font-bold uppercase tracking-widest mb-3 text-green-600">
+                  {otpRequested ? "Enter OTP & Swipe to pick up" : "Request OTP from restaurant"}
                 </p>
-                <ActionSlider 
-                  key="action-pickup"
-                  label="Slide to Pick Up" 
-                  successLabel="Picked Up!"
-                  disabled={!billImageUploaded}
-                  onConfirm={() => onPickedUp(billImageUrl)}
-                  color="bg-orange-500"
-                />
+
+                {/* Step 1: Request OTP button — sends OTP to restaurant via socket */}
+                <button
+                  onClick={async () => {
+                    const orderId = order.order_id || order.orderId || order._id || order.orderMongoId;
+                    if (!orderId) { toast.error('Order ID missing'); return; }
+                    setIsRequestingOtp(true);
+                    try {
+                      const { deliveryAPI } = await import('@food/api');
+                      await deliveryAPI.requestPickupOtp(orderId);
+                      setOtpRequested(true);
+                      toast.success('OTP sent to restaurant! Ask them for the code.');
+                    } catch (err) {
+                      toast.error(err?.response?.data?.error || 'Failed to send OTP to restaurant');
+                    } finally {
+                      setIsRequestingOtp(false);
+                    }
+                  }}
+                  disabled={isRequestingOtp}
+                  className={`w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-white font-black text-sm uppercase tracking-widest shadow-lg active:scale-95 transition-all disabled:opacity-60 mb-3 ${otpRequested ? 'bg-orange-400' : 'bg-orange-500'}`}
+                >
+                  {isRequestingOtp ? (
+                    <><Loader2 className="w-4 h-4 animate-spin" /><span>Sending...</span></>
+                  ) : (
+                    <span>{otpRequested ? '🔔 Resend OTP' : '🔔 Request OTP'} (Order #{order.order_id || order.orderId || order._id})</span>
+                  )}
+                </button>
+
+                {/* Step 2: OTP input + Slider — visible only after OTP requested */}
+                {otpRequested && (
+                  <>
+                    <div className="mb-4 px-2">
+                      <input
+                        type="number"
+                        placeholder="Enter 4-digit Pickup OTP"
+                        value={pickupOtp}
+                        onChange={e => setPickupOtp(e.target.value.slice(0, 4))}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-center text-lg font-black tracking-[0.25em] outline-none focus:border-orange-500 focus:ring-2 focus:ring-orange-500/20 transition-all"
+                      />
+                    </div>
+                    <ActionSlider
+                      key="action-pickup"
+                      label="Slide to Pick Up"
+                      successLabel="Picked Up!"
+                      disabled={pickupOtp.length !== 4}
+                      onConfirm={() => onPickedUp(null, pickupOtp)}
+                      color="bg-orange-500"
+                    />
+                  </>
+                )}
               </div>
             </div>
           )}
@@ -248,6 +234,8 @@ export const PickupActionModal = ({
               ))}
             </div>
           )}
+
+
         </div>
       </motion.div>
     </div>

@@ -3,24 +3,28 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createRequire } from 'module';
-
-const require = createRequire(import.meta.url);
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 export default defineConfig({
-    plugins: [
-        react(),
-        tailwindcss(),
-    ],
-    resolve: {
-        alias: {
-            '@': path.resolve(__dirname, './src'),
-            '@food/api': path.resolve(__dirname, './src/services/api'),
-            '@food': path.resolve(__dirname, './src/modules/Food'),
-            '@delivery': path.resolve(__dirname, './src/modules/DeliveryV2'),
-        },
+  plugins: [react(), tailwindcss()],
+  resolve: {
+    alias: {
+      '@food/api': path.resolve(__dirname, './src/services/api'),
+      '@food': path.resolve(__dirname, './src/modules/Food'),
+      '@delivery': path.resolve(__dirname, './src/modules/DeliveryV2'),
+      '@': path.resolve(__dirname, './src'),
     },
-});                                                                                                                                                                                                                                                                                                                                                                                                                                 
+  },
+  server: {
+    port: 5178,
+    host: true,
+    proxy: {
+      '/uploads': {
+        target: 'http://localhost:5001',
+        changeOrigin: true,
+      },
+    },
+  },
+});

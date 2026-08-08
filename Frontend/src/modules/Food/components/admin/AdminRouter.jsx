@@ -6,6 +6,7 @@ import Loader from "@food/components/Loader";
 
 const AdminHome = lazy(() => import("@food/pages/admin/AdminHome"));
 const PointOfSale = lazy(() => import("@food/pages/admin/PointOfSale"));
+const StatusMonitor = lazy(() => import("@food/pages/admin/StatusMonitor"));
 const AdminProfile = lazy(() => import("@food/pages/admin/AdminProfile"));
 const AdminSettings = lazy(() => import("@food/pages/admin/AdminSettings"));
 const NewRefundRequests = lazy(() => import("@food/pages/admin/refunds/NewRefundRequests"));
@@ -17,6 +18,7 @@ const FeeSettings = lazy(() => import("@food/pages/admin/fee-settings/FeeSetting
 const ReferralSettings = lazy(() => import("@food/pages/admin/referral-settings/ReferralSettings"));
 // Restaurant Management
 const ZoneSetup = lazy(() => import("@food/pages/admin/restaurant/ZoneSetup"));
+const ZoneRanking = lazy(() => import("@food/pages/admin/restaurant/ZoneRanking"));
 const AddZone = lazy(() => import("@food/pages/admin/restaurant/AddZone"));
 const ViewZone = lazy(() => import("@food/pages/admin/restaurant/ViewZone"));
 const AllZonesMap = lazy(() => import("@food/pages/admin/restaurant/AllZonesMap"));
@@ -25,10 +27,12 @@ const RestaurantsList = lazy(() => import("@food/pages/admin/restaurant/Restaura
 const AddRestaurant = lazy(() => import("@food/pages/admin/restaurant/AddRestaurant"));
 const JoiningRequest = lazy(() => import("@food/pages/admin/restaurant/JoiningRequest"));
 const RestaurantCommission = lazy(() => import("@food/pages/admin/restaurant/RestaurantCommission"));
+const RestaurantDiscount = lazy(() => import("@food/pages/admin/restaurant/RestaurantDiscount"));
 const RestaurantComplaints = lazy(() => import("@food/pages/admin/restaurant/RestaurantComplaints"));
 const RestaurantReviews = lazy(() => import("@food/pages/admin/restaurant/RestaurantReviews"));
 const RestaurantsBulkImport = lazy(() => import("@food/pages/admin/restaurant/RestaurantsBulkImport"));
 const RestaurantsBulkExport = lazy(() => import("@food/pages/admin/restaurant/RestaurantsBulkExport"));
+const MenuBulkUpload = lazy(() => import("@food/pages/admin/restaurant/MenuBulkUpload"));
 // Food Management
 const FoodsList = lazy(() => import("@food/pages/admin/foods/FoodsList"));
 const AddonsList = lazy(() => import("@food/pages/admin/addons/AddonsList"));
@@ -73,6 +77,7 @@ const DeliveryEarnings = lazy(() => import("@food/pages/admin/delivery-partners/
 // Disbursement Management
 // Report Management
 const TransactionReport = lazy(() => import("@food/pages/admin/reports/TransactionReport"));
+const AdminEarningReport = lazy(() => import("@food/pages/admin/reports/AdminEarningReport"));
 const ExpenseReport = lazy(() => import("@food/pages/admin/reports/ExpenseReport"));
 const DisbursementReportRestaurants = lazy(() => import("@food/pages/admin/reports/DisbursementReportRestaurants"));
 const DisbursementReportDeliverymen = lazy(() => import("@food/pages/admin/reports/DisbursementReportDeliverymen"));
@@ -89,6 +94,8 @@ const WithdrawMethod = lazy(() => import("@food/pages/admin/transactions/Withdra
 const EmployeeRole = lazy(() => import("@food/pages/admin/employees/EmployeeRole"));
 const AddEmployee = lazy(() => import("@food/pages/admin/employees/AddEmployee"));
 const EmployeeList = lazy(() => import("@food/pages/admin/employees/EmployeeList"));
+// Sub Admins
+const SubAdminsList = lazy(() => import("@food/pages/admin/subAdmins/SubAdminsList"));
 // Business Settings
 const BusinessSetup = lazy(() => import("@food/pages/admin/settings/BusinessSetup"));
 const EmailTemplate = lazy(() => import("@food/pages/admin/settings/EmailTemplate"));
@@ -102,6 +109,7 @@ const RefundPolicy = lazy(() => import("@food/pages/admin/settings/RefundPolicy"
 const ShippingPolicy = lazy(() => import("@food/pages/admin/settings/ShippingPolicy"));
 const CancellationPolicy = lazy(() => import("@food/pages/admin/settings/CancellationPolicy"));
 const ReactRegistration = lazy(() => import("@food/pages/admin/settings/ReactRegistration"));
+const ToggleManagement = lazy(() => import("@food/pages/admin/settings/ToggleManagement"));
 // System Settings
 const ThirdParty = lazy(() => import("@food/pages/admin/system/ThirdParty"));
 const FirebaseNotification = lazy(() => import("@food/pages/admin/system/FirebaseNotification"));
@@ -119,18 +127,15 @@ const ReactSite = lazy(() => import("@food/pages/admin/system/ReactSite"));
 const CleanDatabase = lazy(() => import("@food/pages/admin/system/CleanDatabase"));
 const AddonActivation = lazy(() => import("@food/pages/admin/system/AddonActivation"));
 const LandingPageManagement = lazy(() => import("@food/pages/admin/system/LandingPageManagement"));
+const AppIntroAds = lazy(() => import("@food/pages/admin/advertisement/AppIntroAds"));
 const DiningManagement = lazy(() => import("@food/pages/admin/system/DiningManagement"));
 const DiningList = lazy(() => import("@food/pages/admin/system/DiningList"));
 const DiningRequests = lazy(() => import("@food/pages/admin/system/DiningRequests"));
+const EnvManagements = lazy(() => import("@food/pages/admin/system/EnvManagements"));
 const EditRestaurant = lazy(() => import("@food/pages/admin/restaurant/EditRestaurant"));
 const AdminLogin = lazy(() => import("@food/pages/admin/auth/AdminLogin"));
 const AdminSignup = lazy(() => import("@food/pages/admin/auth/AdminSignup"));
 const AdminForgotPassword = lazy(() => import("@food/pages/admin/auth/AdminForgotPassword"));
-
-// Franchise Management
-const FranchiseLeads = lazy(() => import("@food/pages/admin/franchise/FranchiseLeads"));
-const FranchiseLeadDetail = lazy(() => import("@food/pages/admin/franchise/FranchiseLeadDetail"));
-const FranchiseSettings = lazy(() => import("@food/pages/admin/franchise/FranchiseSettings"));
 
 export default function AdminRouter() {
   return (
@@ -157,6 +162,7 @@ export default function AdminRouter() {
           <Route path="food/*">
             <Route index element={<AdminHome />} />
             <Route path="point-of-sale" element={<PointOfSale />} />
+            <Route path="status-monitor" element={<StatusMonitor />} />
             <Route path="profile" element={<AdminProfile />} />
             <Route path="settings" element={<AdminSettings />} />
             
@@ -179,6 +185,7 @@ export default function AdminRouter() {
 
             {/* RESTAURANT MANAGEMENT */}
             <Route path="zone-setup" element={<ZoneSetup />} />
+            <Route path="zone-ranking" element={<ZoneRanking />} />
             <Route path="zone-setup/map" element={<AllZonesMap />} />
             <Route path="zone-setup/delivery-boy-view" element={<DeliveryBoyViewMap />} />
             <Route path="zone-setup/add" element={<AddZone />} />
@@ -190,10 +197,12 @@ export default function AdminRouter() {
             <Route path="restaurants/edit/:id" element={<EditRestaurant />} />
             <Route path="restaurants/joining-request" element={<JoiningRequest />} />
             <Route path="restaurants/commission" element={<RestaurantCommission />} />
+            <Route path="restaurants/discount" element={<RestaurantDiscount />} />
             <Route path="restaurants/complaints" element={<RestaurantComplaints />} />
             <Route path="restaurants/reviews" element={<RestaurantReviews />} />
             <Route path="restaurants/bulk-import" element={<RestaurantsBulkImport />} />
             <Route path="restaurants/bulk-export" element={<RestaurantsBulkExport />} />
+            <Route path="restaurants/menu-bulk-upload" element={<MenuBulkUpload />} />
 
             {/* FOOD & CATEGORY MANAGEMENT */}
             <Route path="categories" element={<Category />} />
@@ -244,6 +253,7 @@ export default function AdminRouter() {
 
             {/* REPORTS & SETTINGS */}
             <Route path="transaction-report" element={<TransactionReport />} />
+            <Route path="admin-earning-report" element={<AdminEarningReport />} />
             <Route path="expense-report" element={<ExpenseReport />} />
             <Route path="disbursement-report/restaurants" element={<DisbursementReportRestaurants />} />
             <Route path="disbursement-report/deliverymen" element={<DisbursementReportDeliverymen />} />
@@ -260,9 +270,12 @@ export default function AdminRouter() {
             <Route path="employee-role" element={<EmployeeRole />} />
             <Route path="employees" element={<EmployeeList />} />
             <Route path="employees/add" element={<AddEmployee />} />
+            <Route path="sub-admins" element={<SubAdminsList />} />
 
             {/* SYSTEM & BUSINESS SETTINGS */}
             <Route path="business-setup" element={<BusinessSetup />} />
+            <Route path="env-managements" element={<EnvManagements />} />
+            <Route path="toggle-management" element={<ToggleManagement />} />
             <Route path="email-template" element={<EmailTemplate />} />
             <Route path="theme-settings" element={<ThemeSettings />} />
             <Route path="gallery" element={<Gallery />} />
@@ -293,14 +306,10 @@ export default function AdminRouter() {
             <Route path="clean-database" element={<CleanDatabase />} />
             <Route path="addon-activation" element={<AddonActivation />} />
             <Route path="hero-banner-management" element={<LandingPageManagement />} />
+            <Route path="app-intro-ads" element={<AppIntroAds />} />
             <Route path="dining-management" element={<DiningManagement />} />
             <Route path="dining-list" element={<DiningList />} />
             <Route path="dining-requests" element={<DiningRequests />} />
-            
-            {/* FRANCHISE MANAGEMENT */}
-            <Route path="franchise" element={<FranchiseLeads />} />
-            <Route path="franchise/:id" element={<FranchiseLeadDetail />} />
-            <Route path="franchise/settings" element={<FranchiseSettings />} />
           </Route>
 
           {/* TAXI ADMIN - Placeholder for future implementation */}

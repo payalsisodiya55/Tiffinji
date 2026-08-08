@@ -55,6 +55,58 @@ function clearModuleAuth(module) {
 }
 
 /**
+ * Global Error Formatter
+ * Converts raw technical errors (like 401, 500, AxiosError) into user-friendly messages.
+ */
+function formatApiError(err) {
+  if (err?.response) {
+    const status = err.response.status;
+    const responseData = err.response.data;
+    const backendMessage =
+      responseData && typeof responseData === "object" && !Array.isArray(responseData)
+        ? responseData.message
+        : null;
+
+    // Default to the message provided by backend when it is a structured JSON payload.
+    let friendlyMessage = backendMessage || err.message;
+
+    // Check if the backend message is generic or raw technical.
+    const isGeneric =
+      !backendMessage ||
+      friendlyMessage.includes("AxiosError") ||
+      friendlyMessage.includes("Request failed with status code") ||
+      friendlyMessage.includes("Unexpected token") ||
+      friendlyMessage.includes("<html");
+
+    // Only override if the backend didn't provide a specific, useful message.
+    if (isGeneric) {
+      if (status === 400) friendlyMessage = "Invalid request. Please check your inputs.";
+      else if (status === 401) friendlyMessage = "Unauthorized. Please login again.";
+      else if (status === 403) friendlyMessage = "Access denied. You don't have permission.";
+      else if (status === 404) friendlyMessage = "Requested data not found.";
+      else if (status === 429) friendlyMessage = "Too many requests. Please wait a moment.";
+      else if (status === 502) friendlyMessage = "Server is temporarily unavailable. Please try again in a moment.";
+      else if (status >= 500) friendlyMessage = "Server error. Please try again later.";
+      else friendlyMessage = "An unexpected error occurred.";
+    }
+
+    // Normalize response data so downstream UI code can always read .message safely.
+    if (!responseData || typeof responseData !== "object" || Array.isArray(responseData)) {
+      err.response.data = { message: friendlyMessage, raw: responseData };
+    } else {
+      err.response.data.message = friendlyMessage;
+    }
+
+    err.message = friendlyMessage;
+  } else if (err?.request) {
+    err.message = "Network error. Please check your internet connection.";
+  } else {
+    err.message = "An unexpected error occurred.";
+  }
+  return err;
+}
+
+/**
  * Factory to create role-specific API clients.
  * Benefit: Isolation of tokens, refresh logic, and error handling.
  */
@@ -99,6 +151,21 @@ function createModuleClient(moduleName) {
       if (token) {
         config.headers.Authorization = `Bearer ${token}`;
       }
+
+      // Automatically inject Zone ID and Coordinates for user/public endpoints
+      if (moduleName === "user" || moduleName === "public") {
+        const zoneId = localStorage.getItem("userZoneId");
+        const lat = localStorage.getItem("userLat");
+        const lng = localStorage.getItem("userLng");
+        if (zoneId) {
+          config.headers["X-Zone-Id"] = zoneId;
+        }
+        if (lat && lng) {
+          config.headers["X-User-Lat"] = lat;
+          config.headers["X-User-Lng"] = lng;
+        }
+      }
+
       return config;
     },
     (err) => Promise.reject(err)
@@ -118,18 +185,18 @@ function createModuleClient(moduleName) {
         if (typeof window !== "undefined") {
           window.dispatchEvent(new CustomEvent("accessDenied", { detail: { module: moduleName } }));
         }
-        return Promise.reject(err);
+        return Promise.reject(formatApiError(err));
       }
 
       // 401 handling (Unauthorized / Expired)
       if (err?.response?.status !== 401 || !original || original._retry) {
-        return Promise.reject(err);
+        return Promise.reject(formatApiError(err));
       }
 
       const refreshToken = getRefreshToken(moduleName);
       if (!refreshToken) {
         onRefreshFailed();
-        return Promise.reject(err);
+        return Promise.reject(formatApiError(err));
       }
 
       if (isRefreshing) {
@@ -139,7 +206,7 @@ function createModuleClient(moduleName) {
               original.headers.Authorization = `Bearer ${newToken}`;
               resolve(client(original));
             } else {
-              reject(err);
+              reject(formatApiError(err));
             }
           });
         });
@@ -164,13 +231,13 @@ function createModuleClient(moduleName) {
         }
       } catch (_) {
         onRefreshFailed();
-        return Promise.reject(err);
+        return Promise.reject(formatApiError(err));
       } finally {
         isRefreshing = false;
       }
 
       onRefreshFailed();
-      return Promise.reject(err);
+      return Promise.reject(formatApiError(err));
     }
   );
 
@@ -209,12 +276,43 @@ function getModuleFromUrl(url = "") {
 
 apiClient.interceptors.request.use(
   (config) => {
+    // FormData handling
+    if (config.data instanceof FormData) {
+      if (config.headers && config.headers["Content-Type"]) {
+        delete config.headers["Content-Type"];
+      }
+    }
+
     const module = config.contextModule || getModuleFromUrl(config.url);
     const token = getAccessToken(module);
     if (token) config.headers.Authorization = `Bearer ${token}`;
+
+    // Automatically inject Zone ID and Coordinates for user/public endpoints
+    if (module === "user" || module === "public" || module === "delivery") {
+      const zoneId = localStorage.getItem("userZoneId");
+      const lat = localStorage.getItem("userLat");
+      const lng = localStorage.getItem("userLng");
+      if (zoneId) {
+        config.headers["X-Zone-Id"] = zoneId;
+      }
+      if (lat && lng) {
+        config.headers["X-User-Lat"] = lat;
+        config.headers["X-User-Lng"] = lng;
+      }
+    }
+
     return config;
   },
   (err) => Promise.reject(err)
 );
 
+// Response Interceptor for Legacy Client
+apiClient.interceptors.response.use(
+  (response) => response,
+  (err) => {
+    return Promise.reject(formatApiError(err));
+  }
+);
+
 export default apiClient;
+

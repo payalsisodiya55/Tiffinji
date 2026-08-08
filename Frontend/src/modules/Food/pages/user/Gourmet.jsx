@@ -10,7 +10,8 @@ import { API_BASE_URL } from "@food/api/config"
 import OptimizedImage from "@food/components/OptimizedImage"
 import { RestaurantGridSkeleton } from "@food/components/ui/loading-skeletons"
 import { useDelayedLoading } from "@food/hooks/useDelayedLoading"
-import { useLocation } from "@food/hooks/useLocation"
+import { useAppLocation } from "@food/hooks/useAppLocation"
+
 
 // Import banner
 import gourmetBanner from "@food/assets/gourmet_new_banner.png"
@@ -26,7 +27,7 @@ export default function Gourmet() {
   const [gourmetRestaurants, setGourmetRestaurants] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const { location } = useLocation()
+  const { location, effectiveLocation, zoneId } = useAppLocation()
   const showGourmetSkeleton = useDelayedLoading(loading)
 
   const backendOrigin = (API_BASE_URL || "").replace(/\/api\/v1\/?$/, "")
@@ -46,7 +47,9 @@ export default function Gourmet() {
       try {
         setLoading(true)
         setError(null)
-        const response = await api.get('/food/hero-banners/gourmet/public')
+        const response = await api.get('/food/hero-banners/gourmet/public', {
+          params: zoneId ? { zoneId } : {}
+        })
         const data = response?.data?.data
         const list = data?.restaurants ?? (Array.isArray(data) ? data : [])
         setGourmetRestaurants(list)
@@ -62,7 +65,7 @@ export default function Gourmet() {
     }
 
     fetchGourmetRestaurants()
-  }, [])
+  }, [zoneId])
 
   const toggleFavorite = (id) => {
     setFavorites(prev => {
@@ -101,7 +104,7 @@ export default function Gourmet() {
         {/* Banner Text Overlay */}
         <div className="absolute bottom-8 left-6 md:left-10 z-10 space-y-2">
           <div className="flex items-center gap-2">
-            <span className="w-8 h-[2px] bg-[#D51F10]" />
+            <span className="w-8 h-[2px] bg-primary" />
             <span className="text-[10px] font-black tracking-[0.3em] text-white/80 uppercase">Experience Excellence</span>
           </div>
           <h1 className="text-3xl md:text-5xl font-black text-white drop-shadow-2xl">Gourmet Dining</h1>
@@ -149,7 +152,10 @@ export default function Gourmet() {
                   const restaurantId = restaurant._id || restaurant.restaurantId || restaurant.id
                   const isFavorite = favorites.has(restaurantId)
 
-                  // Calculate distance if coordinates are available
+                  // Calculate distance matching Home page & DB location logic
+                  const userLat = effectiveLocation?.latitude || location?.latitude || effectiveLocation?.lat || location?.lat
+                  const userLng = effectiveLocation?.longitude || location?.longitude || effectiveLocation?.lng || location?.lng
+
                   const calculateDistance = (lat1, lng1, lat2, lng2) => {
                     const R = 6371; // Earth's radius in kilometers
                     const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -161,21 +167,28 @@ export default function Gourmet() {
                         Math.sin(dLng / 2) *
                         Math.sin(dLng / 2);
                     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                    return R * c; // Distance in kilometers
+                    return (R * c) * 1.35; // Distance in kilometers with routing multiplier
                   };
 
-                  let distanceStr = '1.2 km'
-                  const restaurantLat = restaurant.location?.latitude || restaurant.location?.coordinates?.[1]
-                  const restaurantLng = restaurant.location?.longitude || restaurant.location?.coordinates?.[0]
+                  let distanceStr = restaurant.distanceText || restaurant.distance || null
+                  const restaurantLat = restaurant.location?.latitude || (Array.isArray(restaurant.location?.coordinates) ? restaurant.location.coordinates[1] : null)
+                  const restaurantLng = restaurant.location?.longitude || (Array.isArray(restaurant.location?.coordinates) ? restaurant.location.coordinates[0] : null)
                   
-                  if (location?.latitude && location?.longitude && restaurantLat && restaurantLng) {
-                    const d = calculateDistance(location.latitude, location.longitude, restaurantLat, restaurantLng)
-                    distanceStr = `${d.toFixed(1)} km`
-                  } else if (restaurant.distance) {
-                    distanceStr = restaurant.distance
+                  if (!distanceStr && userLat && userLng && restaurantLat && restaurantLng && !isNaN(userLat) && !isNaN(userLng) && !isNaN(restaurantLat) && !isNaN(restaurantLng)) {
+                    const d = calculateDistance(userLat, userLng, restaurantLat, restaurantLng)
+                    if (d >= 1) {
+                      distanceStr = `${d.toFixed(1)} km`
+                    } else {
+                      const distanceInMeters = Math.round(d * 1000)
+                      distanceStr = `${distanceInMeters} m`
+                    }
+                  }
+                  if (!distanceStr) {
+                    distanceStr = '1.2 km'
                   }
 
-                  // Get restaurant cover image with priority: coverImages > menuImages > profileImage
+                  const deliveryTimeStr = restaurant.deliveryTime || restaurant.estimatedDeliveryTime || (restaurant.estimatedDeliveryTimeMinutes ? `${restaurant.estimatedDeliveryTimeMinutes} mins` : '25-30 mins')
+
                   const coverImages = restaurant.coverImages && restaurant.coverImages.length > 0
                     ? restaurant.coverImages.map(img => img.url || img).filter(Boolean)
                     : []
@@ -185,17 +198,16 @@ export default function Gourmet() {
                     : []
 
                   const rawRestaurantImage =
-                    coverImages.length > 0
+                    restaurant.profileImage?.url || restaurant.profileImage || restaurant.image ||
+                    (coverImages.length > 0
                       ? coverImages[0]
-                      : (menuImages.length > 0
-                        ? menuImages[0]
-                        : (restaurant.profileImage?.url || restaurant.profileImage || restaurant.image || ""))
+                      : (menuImages.length > 0 ? menuImages[0] : ""))
 
                   const restaurantImage = resolveImageUrl(rawRestaurantImage)
 
                   return (
                     <Link key={restaurantId} to={`/user/restaurants/${restaurantSlug}`}>
-                      <Card className="overflow-hidden cursor-pointer border-0 group bg-white dark:bg-[#1a1a1a] shadow-xl shadow-gray-200/20 dark:shadow-none hover:shadow-2xl hover:shadow-[#D51F10]/5 transition-all duration-500 py-0 rounded-[32px] mb-4 group active:scale-[0.98]">
+                      <Card className="overflow-hidden cursor-pointer border-0 group bg-white dark:bg-[#1a1a1a] shadow-xl shadow-gray-200/20 dark:shadow-none hover:shadow-2xl hover:shadow-primary/5 transition-all duration-500 py-0 rounded-[32px] mb-4 group active:scale-[0.98]">
                         {/* Image Section */}
                         <div className="relative h-48 sm:h-56 md:h-60 w-full overflow-hidden rounded-t-[32px]">
                           {restaurantImage ? (
@@ -231,7 +243,7 @@ export default function Gourmet() {
                           {/* Rating Badge Overlay */}
                           <div className="absolute bottom-4 right-4 flex items-center gap-1.5 bg-white px-3 py-1.5 rounded-2xl shadow-2xl">
                              <span className="text-sm font-black text-gray-900">{restaurant.rating?.toFixed(1) || '4.0'}</span>
-                             <Star className="h-3.5 w-3.5 fill-[#D51F10] text-[#D51F10]" />
+                             <Star className="h-3.5 w-3.5 fill-primary text-primary" />
                           </div>
                         </div>
 
@@ -239,28 +251,28 @@ export default function Gourmet() {
                         <CardContent className="p-5">
                           {/* Restaurant Name */}
                           <div className="flex items-center justify-between gap-2 mb-3">
-                            <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 truncate group-hover:text-[#D51F10] transition-colors">
+                            <h3 className="text-xl font-black text-gray-900 dark:text-gray-100 truncate group-hover:text-primary transition-colors">
                               {restaurant.restaurantName || restaurant.name}
                             </h3>
                           </div>
 
                           {/* Delivery Time & Distance */}
-                          <div className="flex items-center gap-4 text-[12px] text-gray-500 dark:text-gray-400 mb-4 font-bold uppercase tracking-tight">
+                          <div className="flex items-center gap-2.5 text-[12px] text-gray-500 dark:text-gray-400 mb-4 font-bold uppercase tracking-tight">
                             <div className="flex items-center gap-1.5">
-                              <Clock className="h-4 w-4 text-[#D51F10]" strokeWidth={2.5} />
-                              <span>{restaurant.estimatedDeliveryTime || '25-30 mins'}</span>
+                              <Clock className="h-4 w-4 text-amber-500" strokeWidth={2.5} />
+                              <span>{deliveryTimeStr}</span>
                             </div>
-                            <span className="text-gray-200">•</span>
+                            <span className="text-gray-300">•</span>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-[#D51F10] font-black">{distanceStr} away</span>
+                              <span className="text-amber-600 dark:text-amber-400 font-bold">{distanceStr} away</span>
                             </div>
                           </div>
 
                           {/* Offer Badge */}
                           {restaurant.offer ? (
-                            <div className="flex items-center gap-2.5 px-3 py-2 bg-[#D51F10]/5 dark:bg-[#D51F10]/10 rounded-2xl w-fit">
-                              <BadgePercent className="h-4 w-4 text-[#D51F10]" strokeWidth={3} />
-                              <span className="text-[10px] font-black text-[#D51F10] uppercase tracking-wider">{restaurant.offer}</span>
+                            <div className="flex items-center gap-2.5 px-3 py-2 bg-primary/5 dark:bg-primary/10 rounded-2xl w-fit">
+                              <BadgePercent className="h-4 w-4 text-primary" strokeWidth={3} />
+                              <span className="text-[10px] font-black text-primary uppercase tracking-wider">{restaurant.offer}</span>
                             </div>
                           ) : (
                             <div className="text-[10px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 dark:bg-zinc-900 px-3 py-2 rounded-2xl w-fit">

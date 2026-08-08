@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from "react"
-import { 
-  Search, Plus, Edit, Trash2, ArrowUpDown, 
+import {
+  Search, Plus, Edit, Trash2, ArrowUpDown,
   DollarSign, Percent, Loader2, X, Building2, IndianRupee
 } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@food/components/ui/dialog"
@@ -8,9 +8,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel,
 import { adminAPI } from "@food/api"
 import { API_BASE_URL } from "@food/api/config"
 import { toast } from "sonner"
-const debugLog = (...args) => {}
-const debugWarn = (...args) => {}
-const debugError = (...args) => {}
+const debugLog = (...args) => { }
+const debugWarn = (...args) => { }
+const debugError = (...args) => { }
 
 
 export default function RestaurantCommission() {
@@ -22,6 +22,15 @@ export default function RestaurantCommission() {
   const [deleting, setDeleting] = useState(false)
   const [isAddEditOpen, setIsAddEditOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
+  const [savingGlobal, setSavingGlobal] = useState(false)
+  const [globalSettings, setGlobalSettings] = useState({
+    globalRestaurantCommission: 0,
+    globalGstOnItem: 0,
+    globalGstOnCommission: 18,
+    globalPaymentGatewayFee: 2,
+    globalTcs: 1,
+    applyGlobalTaxes: true
+  })
   const [isRestaurantSelectOpen, setIsRestaurantSelectOpen] = useState(false)
   const [selectedCommission, setSelectedCommission] = useState(null)
   const [selectedRestaurant, setSelectedRestaurant] = useState(null)
@@ -43,24 +52,46 @@ export default function RestaurantCommission() {
     actions: true,
   })
 
+  const combinedList = useMemo(() => {
+    return approvedRestaurants.map((restaurant, index) => {
+      const commission = commissions.find(c =>
+        String(c.restaurantId) === String(restaurant._id) ||
+        (c.restaurant && String(c.restaurant._id) === String(restaurant._id))
+      );
+
+      return {
+        _id: restaurant._id,
+        sl: index + 1,
+        restaurantName: restaurant.name,
+        restaurantId: restaurant.restaurantId,
+        hasCustomCommission: !!commission,
+        commissionData: commission || null,
+        defaultCommission: commission ? commission.defaultCommission : {
+          type: 'percentage',
+          value: globalSettings.globalRestaurantCommission
+        },
+        status: commission ? commission.status : true,
+      };
+    });
+  }, [approvedRestaurants, commissions, globalSettings.globalRestaurantCommission]);
+
   const filteredCommissions = useMemo(() => {
     if (!searchQuery.trim()) {
-      return commissions
+      return combinedList
     }
-    
+
     const query = searchQuery.toLowerCase().trim()
-    return commissions.filter(commission =>
-      commission.restaurantName?.toLowerCase().includes(query) ||
-      commission.restaurantId?.toLowerCase().includes(query) ||
-      commission.restaurant?.name?.toLowerCase().includes(query)
+    return combinedList.filter(item =>
+      item.restaurantName?.toLowerCase().includes(query) ||
+      item.restaurantId?.toLowerCase().includes(query)
     )
-  }, [commissions, searchQuery])
+  }, [combinedList, searchQuery])
 
   const filteredRestaurants = useMemo(() => {
     if (!searchQuery.trim()) {
       return approvedRestaurants
     }
-    
+
     const query = searchQuery.toLowerCase().trim()
     return approvedRestaurants.filter(restaurant =>
       restaurant.name?.toLowerCase().includes(query) ||
@@ -81,7 +112,18 @@ export default function RestaurantCommission() {
       const response = await adminAPI.getRestaurantCommissionBootstrap()
       const data = response?.data?.data
       setCommissions(Array.isArray(data?.commissions) ? data.commissions : [])
+      setCommissions(Array.isArray(data?.commissions) ? data.commissions : [])
       setApprovedRestaurants(Array.isArray(data?.restaurants) ? data.restaurants : [])
+      if (data?.globalSettings) {
+        setGlobalSettings({
+          globalRestaurantCommission: data.globalSettings.globalRestaurantCommission || 0,
+          globalGstOnItem: data.globalSettings.globalGstOnItem || 0,
+          globalGstOnCommission: data.globalSettings.globalGstOnCommission || 0,
+          globalPaymentGatewayFee: data.globalSettings.globalPaymentGatewayFee || 0,
+          globalTcs: data.globalSettings.globalTcs || 0,
+          applyGlobalTaxes: data.globalSettings.applyGlobalTaxes !== false
+        })
+      }
     } catch (error) {
       debugError('Error fetching bootstrap:', error)
       if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
@@ -100,7 +142,7 @@ export default function RestaurantCommission() {
     try {
       setLoading(true)
       const response = await adminAPI.getRestaurantCommissions({})
-      
+
       let commissionsData = null
       if (response?.data?.success && response?.data?.data?.commissions) {
         commissionsData = response.data.data.commissions
@@ -109,7 +151,7 @@ export default function RestaurantCommission() {
       } else if (response?.data?.commissions) {
         commissionsData = response.data.commissions
       }
-      
+
       if (commissionsData && Array.isArray(commissionsData)) {
         setCommissions(commissionsData)
       } else {
@@ -117,7 +159,7 @@ export default function RestaurantCommission() {
       }
     } catch (error) {
       debugError('Error fetching commissions:', error)
-      
+
       // Handle network errors
       if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
         toast.error(`Cannot connect to backend server. Please ensure the backend is running on ${API_BASE_URL.replace('/api', '')}`)
@@ -137,7 +179,7 @@ export default function RestaurantCommission() {
   const fetchApprovedRestaurants = async () => {
     try {
       const response = await adminAPI.getApprovedRestaurants({ limit: 1000 })
-      
+
       let restaurantsData = null
       if (response?.data?.success && response?.data?.data?.restaurants) {
         restaurantsData = response.data.data.restaurants
@@ -146,7 +188,7 @@ export default function RestaurantCommission() {
       } else if (response?.data?.restaurants) {
         restaurantsData = response.data.restaurants
       }
-      
+
       if (restaurantsData && Array.isArray(restaurantsData)) {
         setApprovedRestaurants(restaurantsData)
       } else {
@@ -154,7 +196,7 @@ export default function RestaurantCommission() {
       }
     } catch (error) {
       debugError('Error fetching approved restaurants:', error)
-      
+
       // Handle network errors silently (already handled in fetchCommissions)
       if (error.code !== 'ERR_NETWORK' && error.message !== 'Network Error') {
         toast.error(error.response?.data?.message || 'Failed to fetch approved restaurants')
@@ -162,14 +204,38 @@ export default function RestaurantCommission() {
     }
   }
 
-  const handleToggleStatus = async (commission) => {
+  const handleToggleStatus = async (item) => {
+    if (!item.hasCustomCommission || !item.commissionData) {
+      toast.info('Cannot toggle status of global commission. Add a custom commission first.')
+      return
+    }
     try {
-      await adminAPI.toggleRestaurantCommissionStatus(commission._id)
+      await adminAPI.toggleRestaurantCommissionStatus(item.commissionData._id)
       await fetchCommissions()
       toast.success('Commission status updated successfully')
     } catch (error) {
       debugError('Error toggling status:', error)
       toast.error(error.response?.data?.message || 'Failed to update status')
+    }
+  }
+
+  const handleSaveGlobal = async () => {
+    try {
+      setSavingGlobal(true)
+      await adminAPI.updateGlobalRestaurantCommissionSettings({
+        globalRestaurantCommission: Number(globalSettings.globalRestaurantCommission),
+        globalGstOnItem: Number(globalSettings.globalGstOnItem),
+        globalGstOnCommission: Number(globalSettings.globalGstOnCommission),
+        globalPaymentGatewayFee: Number(globalSettings.globalPaymentGatewayFee),
+        globalTcs: Number(globalSettings.globalTcs),
+        applyGlobalTaxes: Boolean(globalSettings.applyGlobalTaxes)
+      })
+      toast.success('Global settings updated successfully')
+    } catch (error) {
+      debugError('Error saving global settings:', error)
+      toast.error(error.response?.data?.message || 'Failed to update global settings')
+    } finally {
+      setSavingGlobal(false)
     }
   }
 
@@ -202,7 +268,7 @@ export default function RestaurantCommission() {
     try {
       setLoading(true)
       const response = await adminAPI.getRestaurantCommissionById(commission._id)
-      
+
       let commissionData = null
       if (response?.data?.success && response?.data?.data?.commission) {
         commissionData = response.data.data.commission
@@ -215,7 +281,7 @@ export default function RestaurantCommission() {
       if (commissionData) {
         setSelectedCommission(commissionData)
         setSelectedRestaurant(commissionData.restaurant)
-        
+
         // Handle restaurant ID - it can be an object with _id or just an ID string
         let restaurantId = ""
         if (commissionData.restaurant) {
@@ -230,7 +296,7 @@ export default function RestaurantCommission() {
           // Fallback to restaurantId field if restaurant object is not populated
           restaurantId = commissionData.restaurantId || commissionData.restaurant || ""
         }
-        
+
         setFormData({
           restaurantId: restaurantId,
           defaultCommission: {
@@ -275,19 +341,18 @@ export default function RestaurantCommission() {
 
   const validateForm = () => {
     const errors = {}
-    
+
     if (!formData.restaurantId) {
       errors.restaurantId = "Restaurant is required"
     }
 
-    const commVal = parseFloat(formData.defaultCommission.value)
-    if (!formData.defaultCommission.value || isNaN(commVal) || commVal < 0) {
-      errors.defaultCommission = "Valid default commission value is required and cannot be negative"
+    if (!formData.defaultCommission.value || parseFloat(formData.defaultCommission.value) < 0) {
+      errors.defaultCommission = "Default commission value is required"
     }
 
-    if (formData.defaultCommission.type === "percentage" && 
-        (isNaN(commVal) || commVal < 0 || commVal > 100)) {
-      errors.defaultCommission = "Percentage must be a valid number between 0-100"
+    if (formData.defaultCommission.type === "percentage" &&
+      (parseFloat(formData.defaultCommission.value) < 0 || parseFloat(formData.defaultCommission.value) > 100)) {
+      errors.defaultCommission = "Percentage must be between 0-100"
     }
 
     setFormErrors(errors)
@@ -302,7 +367,7 @@ export default function RestaurantCommission() {
 
     try {
       setSaving(true)
-      
+
       const payload = {
         restaurantId: formData.restaurantId,
         defaultCommission: {
@@ -354,12 +419,118 @@ export default function RestaurantCommission() {
             </div>
 
             <div className="flex items-center gap-2">
-              <button 
+              <button
                 onClick={handleAdd}
                 className="px-4 py-2.5 text-sm font-medium rounded-lg bg-blue-600 text-white hover:bg-blue-700 flex items-center gap-2 transition-all shadow-md"
               >
                 <Plus className="w-4 h-4" />
                 Add Commission
+              </button>
+            </div>
+          </div>
+
+          {/* Global Configurations Section */}
+          <div className="bg-slate-50 border border-slate-200 rounded-lg p-5 mb-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-semibold text-slate-800 flex items-center gap-2">
+                <Percent className="w-4 h-4 text-blue-600" />
+                Global Settings (Applied to all restaurants)
+              </h2>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-medium text-slate-700">Apply Taxes</span>
+                <button
+                  onClick={() => setGlobalSettings({ ...globalSettings, applyGlobalTaxes: !globalSettings.applyGlobalTaxes })}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${globalSettings.applyGlobalTaxes ? "bg-blue-600" : "bg-slate-300"
+                    }`}
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${globalSettings.applyGlobalTaxes ? "translate-x-6" : "translate-x-1"
+                      }`}
+                  />
+                </button>
+              </div>
+            </div>
+
+            <div className={`grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 transition-opacity ${!globalSettings.applyGlobalTaxes ? 'opacity-50 pointer-events-none' : ''}`}>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Global Default Commission (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={globalSettings.globalRestaurantCommission}
+                    onChange={(e) => setGlobalSettings({ ...globalSettings, globalRestaurantCommission: e.target.value })}
+                    className="w-full pl-3 pr-8 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">GST on Item (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={globalSettings.globalGstOnItem}
+                    onChange={(e) => setGlobalSettings({ ...globalSettings, globalGstOnItem: e.target.value })}
+                    className="w-full pl-3 pr-8 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">GST on Commission (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={globalSettings.globalGstOnCommission}
+                    onChange={(e) => setGlobalSettings({ ...globalSettings, globalGstOnCommission: e.target.value })}
+                    className="w-full pl-3 pr-8 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">Payment Gateway Fee (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={globalSettings.globalPaymentGatewayFee}
+                    onChange={(e) => setGlobalSettings({ ...globalSettings, globalPaymentGatewayFee: e.target.value })}
+                    className="w-full pl-3 pr-8 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-600 mb-1">TCS (%)</label>
+                <div className="relative">
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    value={globalSettings.globalTcs}
+                    onChange={(e) => setGlobalSettings({ ...globalSettings, globalTcs: e.target.value })}
+                    className="w-full pl-3 pr-8 py-2 text-sm border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <Percent className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                </div>
+              </div>
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={handleSaveGlobal}
+                disabled={savingGlobal}
+                className="px-4 py-2 text-sm font-medium rounded-lg bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              >
+                {savingGlobal && <Loader2 className="w-4 h-4 animate-spin" />}
+                Save Global Settings
               </button>
             </div>
           </div>
@@ -427,48 +598,54 @@ export default function RestaurantCommission() {
                       </td>
                     </tr>
                   ) : (
-                    filteredCommissions.map((commission) => (
-                      <tr key={commission._id} className="hover:bg-slate-50 transition-colors">
+                    filteredCommissions.map((item) => (
+                      <tr key={item._id} className="hover:bg-slate-50 transition-colors">
                         {visibleColumns.si && (
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm font-medium text-slate-700">{commission.sl || '-'}</span>
+                            <span className="text-sm font-medium text-slate-700">{item.sl || '-'}</span>
                           </td>
                         )}
                         {visibleColumns.restaurant && (
                           <td className="px-6 py-4 whitespace-nowrap">
                             <span className="text-sm font-medium text-blue-600">
-                              {commission.restaurantName || commission.restaurant?.name || '-'}
+                              {item.restaurantName || '-'}
                             </span>
                           </td>
                         )}
                         {visibleColumns.restaurantId && (
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm text-slate-700">{commission.restaurantId || '-'}</span>
+                            <span className="text-sm text-slate-700">{item.restaurantId || '-'}</span>
                           </td>
                         )}
                         {visibleColumns.defaultCommission && (
                           <td className="px-6 py-4 whitespace-nowrap">
-                            <span className="text-sm font-medium text-slate-900">
-                              {commission.defaultCommission?.type === 'percentage' ? (
-                                <>{commission.defaultCommission.value}%</>
-                              ) : (
-                                <>${commission.defaultCommission.value}</>
-                              )}
-                            </span>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-medium text-slate-900">
+                                {item.defaultCommission?.type === 'percentage' ? (
+                                  <>{item.defaultCommission.value}%</>
+                                ) : (
+                                  <>${item.defaultCommission.value}</>
+                                )}
+                              </span>
+                              <span className={`text-[10px] font-semibold mt-0.5 px-1.5 py-0.5 rounded-sm inline-block w-fit ${item.hasCustomCommission ? 'bg-indigo-100 text-indigo-700' : 'bg-slate-100 text-slate-600'}`}>
+                                {item.hasCustomCommission ? 'Custom' : 'Global Default'}
+                              </span>
+                            </div>
                           </td>
                         )}
                         {visibleColumns.status && (
                           <td className="px-6 py-4 whitespace-nowrap">
                             <button
-                              onClick={() => handleToggleStatus(commission)}
-                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                                commission.status ? "bg-blue-600" : "bg-slate-300"
-                              }`}
+                              onClick={() => handleToggleStatus(item)}
+                              disabled={!item.hasCustomCommission}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${!item.hasCustomCommission ? "bg-slate-200 cursor-not-allowed opacity-50" :
+                                  item.status ? "bg-blue-600" : "bg-slate-300"
+                                }`}
                             >
                               <span
-                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                                  commission.status ? "translate-x-6" : "translate-x-1"
-                                }`}
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${!item.hasCustomCommission ? "translate-x-6" :
+                                    item.status ? "translate-x-6" : "translate-x-1"
+                                  }`}
                               />
                             </button>
                           </td>
@@ -476,20 +653,35 @@ export default function RestaurantCommission() {
                         {visibleColumns.actions && (
                           <td className="px-6 py-4 whitespace-nowrap text-center">
                             <div className="flex items-center justify-center gap-2">
-                              <button
-                                onClick={() => handleEdit(commission)}
-                                className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
-                                title="Edit"
-                              >
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(commission)}
-                                className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors"
-                                title="Delete"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
+                              {item.hasCustomCommission ? (
+                                <>
+                                  <button
+                                    onClick={() => handleEdit(item.commissionData)}
+                                    className="p-1.5 rounded text-blue-600 hover:bg-blue-50 transition-colors"
+                                    title="Edit"
+                                  >
+                                    <Edit className="w-4 h-4" />
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(item.commissionData)}
+                                    className="p-1.5 rounded text-red-600 hover:bg-red-50 transition-colors"
+                                    title="Delete"
+                                  >
+                                    <Trash2 className="w-4 h-4" />
+                                  </button>
+                                </>
+                              ) : (
+                                <button
+                                  onClick={() => {
+                                    const restaurant = approvedRestaurants.find(r => r._id === item._id);
+                                    handleSelectRestaurant(restaurant);
+                                  }}
+                                  className="px-3 py-1 rounded-md text-xs font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
+                                  title="Configure custom commission"
+                                >
+                                  Configure
+                                </button>
+                              )}
                             </div>
                           </td>
                         )}
@@ -585,31 +777,14 @@ export default function RestaurantCommission() {
                 <div>
                   <input
                     type="number"
-                    min="0"
                     step={formData.defaultCommission.type === "percentage" ? "0.1" : "0.01"}
                     value={formData.defaultCommission.value}
-                    onKeyDown={(e) => {
-                      if (e.key === "-" || e.key === "+" || e.key === "e" || e.key === "E") {
-                        e.preventDefault()
-                      }
-                    }}
-                    onPaste={(e) => {
-                      const pasteData = e.clipboardData.getData("text")
-                      if (pasteData.includes("-") || pasteData.includes("+") || pasteData.includes("e") || pasteData.includes("E")) {
-                        e.preventDefault()
-                      }
-                    }}
-                    onChange={(e) => {
-                      const val = e.target.value
-                      if (val.includes("-") || (val !== "" && parseFloat(val) < 0)) return
-                      setFormData(prev => ({
-                        ...prev,
-                        defaultCommission: { ...prev.defaultCommission, value: val }
-                      }))
-                    }}
-                    className={`w-full px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                      formErrors.defaultCommission ? "border-red-500" : "border-slate-300"
-                    }`}
+                    onChange={(e) => setFormData(prev => ({
+                      ...prev,
+                      defaultCommission: { ...prev.defaultCommission, value: e.target.value }
+                    }))}
+                    className={`w-full px-3 py-2 text-sm border rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${formErrors.defaultCommission ? "border-red-500" : "border-slate-300"
+                      }`}
                     placeholder={formData.defaultCommission.type === "percentage" ? "e.g., 10" : "e.g., 5.00"}
                   />
                   {formErrors.defaultCommission && (

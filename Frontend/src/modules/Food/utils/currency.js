@@ -1,6 +1,6 @@
 /**
  * Currency Conversion Utility
- * Converts USD to INR (Indian Rupees)
+ * Converts USD to INR (tiffinji Rupees)
  */
 
 // Exchange rate: 1 USD = 83 INR (approximate)

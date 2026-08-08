@@ -2,17 +2,11 @@ import { Link } from "react-router-dom"
 import { useState, useEffect } from "react"
 import { MapPin, ShoppingCart, Trophy } from "lucide-react"
 import { Button } from "@food/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@food/components/ui/avatar"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@food/components/ui/dropdown-menu"
+import { Avatar, AvatarFallback } from "@food/components/ui/avatar"
+
 import { useLocation } from "@food/hooks/useLocation"
 import { useCart } from "@food/context/CartContext"
 import { useLocationSelector } from "./UserLayout"
-import { useProfile } from "@food/context/ProfileContext"
 import { getCachedSettings, loadBusinessSettings } from "@food/utils/businessSettings"
 const debugLog = (...args) => {}
 const debugWarn = (...args) => {}
@@ -23,7 +17,6 @@ export default function Navbar() {
   const { location, loading } = useLocation()
   const { getCartCount } = useCart()
   const { openLocationSelector } = useLocationSelector()
-  const { userProfile } = useProfile()
   const cartCount = getCartCount()
   const [logoUrl, setLogoUrl] = useState(null)
   const [companyName, setCompanyName] = useState(null)
@@ -135,9 +128,7 @@ export default function Navbar() {
               <span className="text-sm sm:text-base md:text-lg font-bold text-gray-900">
                 {companyName}
               </span>
-            ) : (
-              <img src={quickSpicyLogo} alt="Logo" className="h-8 w-8 sm:h-10 sm:w-10 md:h-12 md:w-12 object-contain" />
-            )}
+            ) : null}
           </Link>
 
           {/* Right Side Actions - Profile, Points, Cart */}
@@ -170,44 +161,15 @@ export default function Navbar() {
             </Link>
 
             {/* Profile */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 sm:h-11 sm:w-11 md:h-12 md:w-12 hover:bg-gray-100">
-                  <Avatar className="h-8 w-8">
-                    {userProfile?.profileImage && (
-                      <AvatarImage
-                        src={typeof userProfile.profileImage === "string" ? userProfile.profileImage : userProfile.profileImage.url}
-                        alt={userProfile.name || "User"}
-                        className="object-cover"
-                      />
-                    )}
-                    <AvatarFallback className="bg-primary text-white text-xs">
-                      {userProfile?.name?.charAt(0)?.toUpperCase() || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <Link to="/food/user/cart">
-                  <DropdownMenuItem>YOUR CART</DropdownMenuItem>
-                </Link>
-                <Link to="/food/user/profile">
-                  <DropdownMenuItem>Profile</DropdownMenuItem>
-                </Link>
-                <Link to="/food/user/orders">
-                  <DropdownMenuItem>My Orders</DropdownMenuItem>
-                </Link>
-                <Link to="/food/user/offers">
-                  <DropdownMenuItem>Offers</DropdownMenuItem>
-                </Link>
-                <Link to="/food/user/help">
-                  <DropdownMenuItem>Help</DropdownMenuItem>
-                </Link>
-                <Link to="/user/auth/login">
-                  <DropdownMenuItem>Sign Out</DropdownMenuItem>
-                </Link>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Link to="/food/user/profile">
+              <Button variant="ghost" size="icon" className="rounded-full h-10 w-10 sm:h-11 sm:w-11 md:h-12 md:w-12 hover:bg-gray-100">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback className="bg-primary text-white text-xs">
+                    A
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </Link>
           </div>
         </div>
       </div>

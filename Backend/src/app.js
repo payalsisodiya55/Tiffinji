@@ -36,6 +36,7 @@ app.get('/ready', (_req, res) => {
 // Security & parsing middlewares
 app.use(helmet({
     contentSecurityPolicy: { directives: { defaultSrc: ["'self'"] } },
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
     hsts: config.nodeEnv === 'production' ? { maxAge: 31536000, includeSubDomains: true, preload: true } : false,
     xssFilter: true,
     noSniff: true,

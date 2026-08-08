@@ -1,5 +1,5 @@
 import { onValue, ref, set, update } from 'firebase/database';
-import { getFirebaseRealtimeDb, ensureFirebaseInitialized } from '@food/firebase';
+import { firebaseRealtimeDb, ensureFirebaseInitialized } from '@food/firebase';
 
 function sanitizeRealtimeKey(value) {
   return String(value || '').trim().replace(/[.#$/[\]]/g, '_');
@@ -22,15 +22,34 @@ function getOrderTrackingPath(orderId) {
   return `active_orders/${sanitizeRealtimeKey(orderId)}`;
 }
 
+function getDeliveryPartnerOffersPath(deliveryPartnerId) {
+  return `delivery_partner_offers/${sanitizeRealtimeKey(deliveryPartnerId)}`;
+}
+
+export function subscribeDeliveryPartnerOffers(deliveryPartnerId, onChange, onError) {
+  if (!deliveryPartnerId || typeof onChange !== 'function') return () => {};
+  ensureFirebaseInitialized({ enableAuth: false, enableRealtimeDb: true });
+  const path = getDeliveryPartnerOffersPath(deliveryPartnerId);
+  const unsub = onValue(
+    ref(firebaseRealtimeDb, path),
+    (snapshot) => {
+      onChange(snapshot.val() || {}, path);
+    },
+    (error) => {
+      if (typeof onError === 'function') onError(error, path);
+    },
+  );
+  return unsub;
+}
+
 export function subscribeOrderTracking(orderId, onChange, onError) {
   if (!orderId || typeof onChange !== 'function') return () => {};
   // Keep auth disabled on tracking pages to avoid identitytoolkit
   // getProjectConfig calls that can fail for API-key-restricted setups.
   ensureFirebaseInitialized({ enableAuth: false, enableRealtimeDb: true });
   const path = getOrderTrackingPath(orderId);
-  const db = getFirebaseRealtimeDb();
   const unsub = onValue(
-    ref(db, path),
+    ref(firebaseRealtimeDb, path),
     (snapshot) => {
       const data = snapshot.val();
       if (!data) return;
@@ -47,9 +66,8 @@ export function subscribeDeliveryLocation(deliveryId, onChange, onError) {
   if (!deliveryId || typeof onChange !== 'function') return () => {};
   ensureFirebaseInitialized({ enableAuth: false, enableRealtimeDb: true });
   const path = getDeliveryLocationPath(deliveryId);
-  const db = getFirebaseRealtimeDb();
   const unsub = onValue(
-    ref(db, path),
+    ref(firebaseRealtimeDb, path),
     (snapshot) => {
       const data = snapshot.val();
       if (!data) return;
@@ -66,17 +84,9 @@ export function subscribeAllDeliveryLocations(onChange, onError) {
   if (typeof onChange !== 'function') return () => {};
   ensureFirebaseInitialized({ enableAuth: false, enableRealtimeDb: true });
   const path = 'delivery_boys';
-  const db = getFirebaseRealtimeDb();
-  if (!db) {
-    console.error('[realtimeTracking] Firebase Realtime DB failed to initialize');
-    if (typeof onError === 'function') onError(new Error('Firebase Realtime DB not initialized'));
-    return () => {};
-  }
-  console.log('[realtimeTracking] Subscribing to path:', path, 'DB instance:', !!db);
   const unsub = onValue(
-    ref(db, path),
+    ref(firebaseRealtimeDb, path),
     (snapshot) => {
-      console.log('[realtimeTracking] Got snapshot, exists:', snapshot.exists(), 'keys:', Object.keys(snapshot.val() || {}));
       onChange(snapshot.val() || {}, path);
     },
     (error) => {
@@ -90,9 +100,8 @@ export function subscribeRestaurantLocation(restaurantId, onChange, onError) {
   if (!restaurantId || typeof onChange !== 'function') return () => {};
   ensureFirebaseInitialized({ enableAuth: false, enableRealtimeDb: true });
   const path = getRestaurantLocationPath(restaurantId);
-  const db = getFirebaseRealtimeDb();
   const unsub = onValue(
-    ref(db, path),
+    ref(firebaseRealtimeDb, path),
     (snapshot) => {
       const data = snapshot.val();
       if (!data) return;
@@ -115,6 +124,7 @@ export async function writeDeliveryLocation({
   activeOrderId = null,
   accuracy = null,
   timestamp = Date.now(),
+  status = null,
 }) {
   if (!deliveryId) return false;
   ensureFirebaseInitialized({ enableAuth: false, enableRealtimeDb: true });
@@ -129,8 +139,14 @@ export async function writeDeliveryLocation({
     isOnline: Boolean(isOnline),
     activeOrderId: activeOrderId ? String(activeOrderId) : null,
   };
-  const db = getFirebaseRealtimeDb();
-  await set(ref(db, getDeliveryLocationPath(deliveryId)), payload);
+  if (status != null) {
+    payload.status = String(status);
+  } else if (isOnline) {
+    payload.status = 'online';
+  } else {
+    payload.status = 'offline';
+  }
+  await set(ref(firebaseRealtimeDb, getDeliveryLocationPath(deliveryId)), payload);
   return true;
 }
 
@@ -152,7 +168,6 @@ export async function writeOrderTracking(orderId, payload = {}) {
   if (payload.timestamp != null) {
     toWrite.timestamp = toFiniteNumber(payload.timestamp) || Date.now();
   }
-  const db = getFirebaseRealtimeDb();
-  await update(ref(db, getOrderTrackingPath(orderId)), toWrite);
+  await update(ref(firebaseRealtimeDb, getOrderTrackingPath(orderId)), toWrite);
   return true;
 }

@@ -58,6 +58,11 @@ const USER_SESSION_PREFERENCE_KEYS = ["userVegMode", "food-under-250-filters"];
 
 import { registerWebPushForCurrentModule } from "@food/utils/firebaseMessaging";
 
+const profilePageCache = {
+  referralReward: null,
+  walletBalance: null
+};
+
 export default function Profile() {
   const { userProfile, vegMode, setVegMode, getDefaultAddress, addresses } =
     useProfile();
@@ -82,8 +87,8 @@ export default function Profile() {
   const [appearanceOpen, setAppearanceOpen] = useState(false);
   const [logoutConfirmOpen, setLogoutConfirmOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
-  const [referralReward, setReferralReward] = useState(0);
-  const [walletBalance, setWalletBalance] = useState(0);
+  const [referralReward, setReferralReward] = useState(() => profilePageCache.referralReward || 0);
+  const [walletBalance, setWalletBalance] = useState(() => profilePageCache.walletBalance || 0);
   const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [deleteStep, setDeleteStep] = useState(1);
   const [deleteCaptcha, setDeleteCaptcha] = useState("");
@@ -178,20 +183,14 @@ export default function Profile() {
     );
     const hasContact = hasPhone || hasValidEmail;
 
-    // Check profile image - must have URL string or object url
-    const hasImage = (() => {
-      const img = userProfile?.profileImage;
-      if (!img) return false;
-      if (typeof img === "string") {
-        const trimmed = img.trim();
-        return trimmed !== "" && trimmed !== "null" && trimmed !== "undefined";
-      }
-      if (typeof img === "object" && typeof img.url === "string") {
-        const trimmed = img.url.trim();
-        return trimmed !== "" && trimmed !== "null" && trimmed !== "undefined";
-      }
-      return false;
-    })();
+    // Check profile image - must have URL string
+    const hasImage = !!(
+      userProfile.profileImage &&
+      typeof userProfile.profileImage === "string" &&
+      userProfile.profileImage.trim() !== "" &&
+      userProfile.profileImage !== "null" &&
+      userProfile.profileImage !== "undefined"
+    );
 
     // Check date of birth
     const hasDateOfBirth = isDateFilled(userProfile.dateOfBirth);
@@ -205,16 +204,17 @@ export default function Profile() {
       validGenders.includes(userProfile.gender.trim().toLowerCase())
     );
 
-    // Required fields only (anniversary/DOB are NOT counted/removed)
-    // Only these 4 fields count towards 100%
+    // Required fields only (anniversary is NOT counted - it's optional)
+    // Only these 5 fields count towards 100%
     const requiredFields = {
       name: hasName,
       contact: hasContact,
       profileImage: hasImage,
+      dateOfBirth: hasDateOfBirth,
       gender: hasGender,
     };
 
-    const totalRequiredFields = 4; // Fixed: name, contact, profileImage, gender
+    const totalRequiredFields = 5; // Fixed: name, contact, profileImage, dateOfBirth, gender
     const completedRequiredFields =
       Object.values(requiredFields).filter(Boolean).length;
 
@@ -233,6 +233,7 @@ export default function Profile() {
         name: hasName ? "?" : "?",
         contact: hasContact ? "?" : "?",
         profileImage: hasImage ? "?" : "?",
+        dateOfBirth: hasDateOfBirth ? "?" : "?",
         gender: hasGender ? "?" : "?",
       },
       rawData: {
@@ -240,6 +241,9 @@ export default function Profile() {
         phone: userProfile.phone || "missing",
         email: userProfile.email || "missing",
         profileImage: userProfile.profileImage ? "exists" : "missing",
+        dateOfBirth: userProfile.dateOfBirth
+          ? String(userProfile.dateOfBirth)
+          : "missing",
         gender: userProfile.gender || "missing",
       },
     });
@@ -250,12 +254,17 @@ export default function Profile() {
   const profileCompletion = calculateProfileCompletion();
   const isComplete = profileCompletion === 100;
   useEffect(() => {
+    if (profilePageCache.referralReward !== null) {
+      return;
+    }
     let mounted = true;
     userAPI
       .getReferralStats()
       .then((res) => {
         const reward = res?.data?.data?.stats?.rewardAmount;
-        if (mounted) setReferralReward(Number(reward) || 0);
+        const finalReward = Number(reward) || 0;
+        if (mounted) setReferralReward(finalReward);
+        profilePageCache.referralReward = finalReward;
       })
       .catch(() => { });
     return () => {
@@ -264,13 +273,18 @@ export default function Profile() {
   }, []);
 
   useEffect(() => {
+    if (profilePageCache.walletBalance !== null) {
+      return;
+    }
     let mounted = true;
     userAPI
       .getWallet()
       .then((res) => {
         const w = res?.data?.data?.wallet || res?.data?.wallet;
         const bal = Number(w?.balance);
-        if (mounted) setWalletBalance(Number.isFinite(bal) ? bal : 0);
+        const finalBal = Number.isFinite(bal) ? bal : 0;
+        if (mounted) setWalletBalance(finalBal);
+        profilePageCache.walletBalance = finalBal;
       })
       .catch(() => { });
     return () => {
@@ -327,15 +341,23 @@ export default function Profile() {
               ];
               for (const handlerName of handlerNames) {
                 try {
-                  const t = await window.flutter_inappwebview.callHandler(
-                    handlerName,
-                    { module: "user" },
-                  );
+                  const t = await Promise.race([
+                    window.flutter_inappwebview.callHandler(
+                      handlerName,
+                      { module: "user" },
+                    ),
+                    new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout")), 3500))
+                  ]);
                   if (t && typeof t === "string" && t.length > 20) {
                     fcmToken = t.trim();
                     break;
                   }
-                } catch (e) { }
+                } catch (e) {
+                  console.warn(`Bridge handler ${handlerName} failed or timed out`, e);
+                }
+              }
+              if (!fcmToken) {
+                fcmToken = localStorage.getItem("fcm_web_registered_token_user") || null;
               }
             } else {
               fcmToken =
@@ -345,6 +367,16 @@ export default function Profile() {
         } catch (e) {
           console.warn("Failed to get FCM token during logout", e);
         }
+
+        // Add explicit call to removeFcmToken API before logout
+        if (fcmToken) {
+          try {
+            await userAPI.removeFcmToken(fcmToken, { platform });
+          } catch (e) {
+            console.warn("Failed to remove FCM token directly", e);
+          }
+        }
+
         await authAPI.logout(null, fcmToken, platform);
       } catch (apiError) {
         // Continue with logout even if API call fails (network issues, etc.)
@@ -475,18 +507,19 @@ export default function Profile() {
               <motion.div
                 whileHover={{ scale: 1.1, rotate: 5 }}
                 transition={{ duration: 0.3, type: "spring", stiffness: 300 }}>
-                <Avatar className="h-16 w-16 bg-[#7e3866]/20 border-0">
+                <Avatar className="h-16 w-16 bg-primary/20 border-0">
                   {userProfile?.profileImage && (
                     <AvatarImage
                       src={
-                        typeof userProfile.profileImage === "string"
-                          ? userProfile.profileImage.trim() || undefined
-                          : userProfile.profileImage?.url || undefined
+                        userProfile.profileImage &&
+                          userProfile.profileImage.trim()
+                          ? userProfile.profileImage
+                          : undefined
                       }
                       alt={displayName}
                     />
                   )}
-                  <AvatarFallback className="bg-[#7e3866] text-white text-2xl font-semibold">
+                  <AvatarFallback className="bg-primary text-white text-2xl font-semibold">
                     {avatarInitial}
                   </AvatarFallback>
                 </Avatar>
@@ -536,7 +569,7 @@ export default function Profile() {
                       <Wallet className="h-5 w-5 text-gray-700 dark:text-gray-300" />
                     </motion.div>
                     <span className="text-base font-medium text-gray-900 dark:text-white">
-                      {String(companyName).trim().toLowerCase() === "tiffinji" ? "Tiffinji" : companyName} Money
+                      {companyName} Money
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -644,7 +677,7 @@ export default function Profile() {
                       e.stopPropagation();
                       handleShareReferral();
                     }}
-                    className="inline-flex items-center gap-1 text-xs text-[#7e3866] font-medium ml-2 px-2 py-1 rounded-md"
+                    className="inline-flex items-center gap-1 text-xs text-primary font-medium ml-2 px-2 py-1 rounded-md"
                     disabled={!referralLink}>
                     <Share2 className="h-3.5 w-3.5" />
                     Refer
@@ -712,8 +745,8 @@ export default function Profile() {
                   <div className="flex items-center gap-2">
                     <motion.span
                       className={`text-xs font-medium px-2 py-1 rounded transition-colors ${isComplete
-                          ? "bg-[#7e3866] text-white shadow-sm"
-                          : "bg-[#7e386615] text-[#7e3866] border border-[#7e3866]/10"
+                          ? "bg-primary text-white shadow-sm"
+                          : "bg-[#7e386615] text-primary border border-primary/10"
                         }`}
                       whileHover={{ scale: 1.1 }}
                       transition={{ duration: 0.2 }}>
@@ -804,7 +837,7 @@ export default function Profile() {
         {/* Collections Section */}
         <div className="mb-3">
           <div className="flex items-center gap-2 mb-2 px-1">
-            <div className="w-1 h-4 bg-[#7e3866] rounded"></div>
+            <div className="w-1 h-4 bg-primary rounded"></div>
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">
               Collections
             </h3>
@@ -837,10 +870,10 @@ export default function Profile() {
           </Link>
         </div>
 
-        {/* Dining Section */}
+        {/* Dining Section 
         <div className="mb-3">
           <div className="flex items-center gap-2 mb-2 px-1">
-            <div className="w-1 h-4 bg-[#7e3866] rounded"></div>
+            <div className="w-1 h-4 bg-primary rounded"></div>
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">
               Dining Bookings
             </h3>
@@ -875,11 +908,12 @@ export default function Profile() {
             </motion.div>
           </Link>
         </div>
+        */}
 
         {/* Food Orders Section */}
         <div className="mb-3">
           <div className="flex items-center gap-2 mb-2 px-1">
-            <div className="w-1 h-4 bg-[#7e3866] rounded"></div>
+            <div className="w-1 h-4 bg-primary rounded"></div>
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">
               Food Orders
             </h3>
@@ -917,7 +951,7 @@ export default function Profile() {
         {/* More Section */}
         <div className="mb-8 pb-8">
           <div className="flex items-center gap-2 mb-2 px-1">
-            <div className="w-1 h-4 bg-[#7e3866] rounded"></div>
+            <div className="w-1 h-4 bg-primary rounded"></div>
             <h3 className="text-base font-semibold text-gray-900 dark:text-white">
               More
             </h3>
@@ -1096,12 +1130,12 @@ export default function Profile() {
 
       {/* Veg Mode Popup */}
       <Dialog open={vegModeOpen} onOpenChange={setVegModeOpen}>
-        <DialogContent className="max-w-sm md:max-w-md lg:max-w-lg w-[calc(100%-2rem)] rounded-2xl p-0 overflow-hidden bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800">
+        <DialogContent className="max-w-sm md:max-w-md lg:max-w-lg w-[calc(100%-2rem)] rounded-2xl p-0 overflow-hidden">
           <DialogHeader className="p-5 pb-3">
-            <DialogTitle className="text-lg font-bold text-gray-900 dark:text-white">
+            <DialogTitle className="text-lg font-bold text-gray-900">
               Veg Mode
             </DialogTitle>
-            <DialogDescription className="text-sm text-gray-500 dark:text-gray-400">
+            <DialogDescription className="text-sm text-gray-500">
               Filter restaurants and dishes based on your dietary preferences
             </DialogDescription>
           </DialogHeader>
@@ -1112,28 +1146,28 @@ export default function Profile() {
                 setVegModeOpen(false);
               }}
               className={`w-full p-3 rounded-xl border-2 transition-all flex items-center justify-between ${vegMode
-                  ? "border-green-600 bg-green-50 dark:bg-green-950/20"
-                  : "border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] hover:border-gray-300 dark:hover:border-gray-700"
+                  ? "border-green-600 bg-green-50"
+                  : "border-gray-200 bg-white hover:border-gray-300"
                 }`}>
               <div className="flex items-center gap-3">
                 <div
                   className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${vegMode
                       ? "border-green-600 bg-green-600"
-                      : "border-gray-300 dark:border-gray-700"
+                      : "border-gray-300"
                     }`}>
                   {vegMode && <Check className="h-3 w-3 text-white" />}
                 </div>
                 <div className="text-left">
-                  <p className="font-medium text-gray-900 dark:text-white text-sm">
+                  <p className="font-medium text-gray-900 text-sm">
                     Veg Mode ON
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">
+                  <p className="text-xs text-gray-500">
                     Show only vegetarian options
                   </p>
                 </div>
               </div>
               <Leaf
-                className={`h-5 w-5 ${vegMode ? "text-green-600" : "text-gray-400 dark:text-gray-500"}`}
+                className={`h-5 w-5 ${vegMode ? "text-green-600" : "text-gray-400"}`}
               />
             </button>
             <button
@@ -1142,20 +1176,20 @@ export default function Profile() {
                 setVegModeOpen(false);
               }}
               className={`w-full p-3 rounded-xl border-2 transition-all flex items-center justify-between ${!vegMode
-                  ? "border-[#55254b] dark:border-[#9c5a8c] bg-[#fdfafc] dark:bg-[#9c5a8c]/10"
-                  : "border-gray-200 dark:border-gray-800 bg-white dark:bg-[#1a1a1a] hover:border-gray-300 dark:hover:border-gray-700"
+                  ? "border-secondary bg-[#fdfafc] dark:bg-[#3c0f3d]/10"
+                  : "border-gray-200 dark:border-gray-800 bg-white hover:border-gray-300"
                 }`}>
               <div className="flex items-center gap-3">
                 <div
-                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${!vegMode ? "border-[#55254b] dark:border-[#9c5a8c] bg-[#55254b] dark:bg-[#9c5a8c]" : "border-gray-300 dark:border-gray-700"
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${!vegMode ? "border-secondary bg-secondary" : "border-gray-300"
                     }`}>
                   {!vegMode && <Check className="h-3 w-3 text-white" />}
                 </div>
                 <div className="text-left">
-                  <p className="font-medium text-gray-900 dark:text-white text-sm">
+                  <p className="font-medium text-gray-900 text-sm">
                     Veg Mode OFF
                   </p>
-                  <p className="text-xs text-gray-500 dark:text-gray-400">Show all options</p>
+                  <p className="text-xs text-gray-500">Show all options</p>
                 </div>
               </div>
             </button>
@@ -1185,7 +1219,7 @@ export default function Profile() {
               </Button>
               <Button
                 type="button"
-                className="flex-1 rounded-xl bg-[#55254b] hover:bg-[#3c0f3d] text-white"
+                className="flex-1 rounded-xl bg-secondary hover:bg-[#3c0f3d] text-white"
                 onClick={() => {
                   setLogoutConfirmOpen(false);
                   handleLogout();
@@ -1217,12 +1251,12 @@ export default function Profile() {
                 setAppearanceOpen(false);
               }}
               className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${appearance === "light"
-                  ? "border-[#7e3866] bg-[#fdfafc] dark:border-[#b18da5] dark:bg-[#3c0f3d]/20"
+                  ? "border-primary bg-[#fdfafc] dark:border-[#b18da5] dark:bg-[#3c0f3d]/20"
                   : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
                 }`}>
               <div
                 className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${appearance === "light"
-                    ? "border-[#7e3866] bg-[#7e3866] dark:border-[#b18da5] dark:bg-[#b18da5]"
+                    ? "border-primary bg-primary dark:border-[#b18da5] dark:bg-[#b18da5]"
                     : "border-gray-300 dark:border-gray-600"
                   }`}>
                 {appearance === "light" && (
@@ -1245,12 +1279,12 @@ export default function Profile() {
                 setAppearanceOpen(false);
               }}
               className={`w-full p-3 rounded-xl border-2 transition-all flex items-center gap-3 ${appearance === "dark"
-                  ? "border-[#7e3866] dark:border-[#b18da5] bg-[#fdfafc] dark:bg-[#3c0f3d]/20"
+                  ? "border-primary dark:border-[#b18da5] bg-[#fdfafc] dark:bg-[#3c0f3d]/20"
                   : "border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 hover:border-gray-300 dark:hover:border-gray-600"
                 }`}>
               <div
                 className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${appearance === "dark"
-                    ? "border-[#7e3866] bg-[#7e3866] dark:border-[#b18da5] dark:bg-[#b18da5]"
+                    ? "border-primary bg-primary dark:border-[#b18da5] dark:bg-[#b18da5]"
                     : "border-gray-300 dark:border-gray-600"
                   }`}>
                 {appearance === "dark" && (

@@ -6,6 +6,11 @@ const foodHeroBannerSchema = new mongoose.Schema(
             type: String,
             required: true
         },
+        type: {
+            type: String,
+            enum: ['image', 'video'],
+            default: 'image'
+        },
         publicId: {
             type: String,
             required: true
