@@ -95,20 +95,17 @@ export default function DeliverySignIn() {
           transition={{ duration: 0.8, ease: "easeOut" }}
           className="w-full flex flex-col items-center"
         >
-          <div className="relative mb-6 flex justify-center">
-            <div className="absolute inset-0 bg-blue-400/20 rounded-full blur-[40px] scale-150 pointer-events-none" />
+          <div className="relative mb-6 flex justify-center w-full">
             <motion.div
               initial={{ scale: 0.8, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", stiffness: 200, damping: 20 }}
-              className="relative w-36 h-36 sm:w-40 sm:h-40 rounded-full bg-white shadow-[0_8px_30px_rgb(0,0,0,0.12)] overflow-hidden border-4 border-white"
-              style={{ borderRadius: '50%', WebkitMaskImage: '-webkit-radial-gradient(white, black)' }}
+              className="relative w-64 h-24 flex items-center justify-center"
             >
               <img 
                 src={logoNew} 
                 alt="Delivery Logo" 
-                className="w-full h-full object-cover scale-[1.05]"
-                style={{ borderRadius: '50%' }}
+                className="w-full h-full object-contain"
               />
             </motion.div>
           </div>

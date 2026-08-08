@@ -5,7 +5,7 @@ import { ShieldCheck, Utensils, Star, Heart, ArrowRight, Loader2, Store, ShieldQ
 import { Button } from "@food/components/ui/button"
 import { toast } from "sonner"
 import { restaurantAPI } from "@food/api"
-import logoNew from "@/assets/tiffin_icon.png"
+import logoNew from "@/assets/logo.png"
 
 const DEFAULT_COUNTRY_CODE = "+91"
 
@@ -58,7 +58,7 @@ export default function RestaurantLogin() {
   const primaryColor = "#f59e0b"
 
   return (
-    <div className="min-h-screen bg-[#FFFBF5] dark:bg-[#0a0a0a] flex flex-col relative overflow-hidden font-['Poppins']">
+    <div className="min-h-screen bg-[#FFFBF5] dark:bg-[#0a0a0a] flex flex-col relative overflow-hidden font-['Outfit']">
       {/* Decorative Background Elements */}
       <div className="absolute top-0 left-0 w-full h-[600px] bg-gradient-to-b from-amber-500/15 via-amber-500/5 to-transparent pointer-events-none" />
       <div className="absolute top-[-100px] right-[-100px] w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[120px] pointer-events-none animate-pulse" />
@@ -67,7 +67,7 @@ export default function RestaurantLogin() {
       {/* Main Content */}
       <div className="absolute top-6 right-6 z-20">
         <Link to="/restaurant/auth/support">
-          <Button variant="ghost" className="text-gray-600 dark:text-gray-300 hover:text-amber-500 font-semibold flex items-center gap-2">
+          <Button variant="ghost" className="text-gray-600 dark:text-gray-300 hover:text-amber-500 font-semibold flex items-center gap-2 font-['Outfit']">
             <ShieldQuestion className="w-5 h-5 text-amber-500" />
             Support
           </Button>
@@ -87,12 +87,12 @@ export default function RestaurantLogin() {
               initial={{ scale: 0, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ type: "spring", stiffness: 200, damping: 20 }}
-              className="relative w-32 h-32 md:w-36 md:h-36 rounded-full shadow-[0_12px_30px_rgba(245,158,11,0.25)] border-4 border-white dark:border-gray-800 mx-auto mb-4 bg-white flex items-center justify-center overflow-hidden cursor-pointer"
+              className="relative w-64 h-24 mx-auto mb-4 flex items-center justify-center"
             >
               <img
                 src={logoNew}
                 alt="Tiffinji Logo"
-                className="w-[85%] h-[85%] object-contain"
+                className="w-full h-full object-contain"
               />
             </motion.div>
 
@@ -100,9 +100,9 @@ export default function RestaurantLogin() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.5 }}
-              className="text-amber-600 dark:text-amber-400 font-bold text-xs uppercase tracking-[0.3em]"
+              className="text-amber-600 dark:text-amber-400 font-bold text-[13px] uppercase tracking-[0.25em] font-['Outfit']"
             >
-              TIFFINJI RESTAURANT PARTNER
+              RESTAURANT PARTNER
             </motion.p>
           </div>
 

@@ -10,7 +10,9 @@ import {
 import {
     getCurrentUserProfileController,
     updateCurrentUserProfileController,
-    uploadCurrentUserProfileImageController
+    uploadCurrentUserProfileImageController,
+    getUserLocationController,
+    updateUserLocationController
 } from '../controllers/userProfile.controller.js';
 import {
     getUserWalletController,
@@ -36,6 +38,9 @@ const router = express.Router();
 router.get('/profile', getCurrentUserProfileController);
 router.patch('/profile', updateCurrentUserProfileController);
 router.post('/profile/profile-image', upload.single('file'), uploadCurrentUserProfileImageController);
+
+router.get('/location', getUserLocationController);
+router.put('/location', updateUserLocationController);
 
 // Wallet (Bearer USER)
 router.get('/wallet', getUserWalletController);

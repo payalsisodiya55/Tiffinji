@@ -15,6 +15,7 @@ import {
 } from "@food/components/ui/select"
 import loginBg from "@food/assets/loginbanner.png"
 import { useCompanyName } from "@food/hooks/useCompanyName"
+import logoNew from "@/assets/logo.png"
 
 const countryCodes = [
   { code: "+91", country: "IN", flag: "🇮🇳" },
@@ -136,7 +137,7 @@ export default function RestaurantSignup() {
   }
 
   return (
-    <div className="h-screen w-full flex bg-white overflow-hidden">
+    <div className="h-screen w-full flex bg-[#FFFBF5] overflow-hidden font-['Outfit']">
       {/* Left image section */}
       <div className="hidden lg:flex lg:w-1/2 relative">
         <img
@@ -150,12 +151,12 @@ export default function RestaurantSignup() {
             className="bg-primary/80 rounded-r-full py-10 xl:py-20 pl-10 xl:pl-14 pr-10 xl:pr-20 max-w-[70%] shadow-xl backdrop-blur-[1px]"
             style={{ animation: "slideInLeft 0.8s ease-out both" }}
           >
-            <h1 className="text-3xl xl:text-4xl font-extrabold mb-4 tracking-wide leading-tight">
+            <h1 className="text-3xl xl:text-4xl font-extrabold mb-4 tracking-wide leading-tight font-['Outfit']">
               JOIN AS
               <br />
               RESTAURANT PARTNER
             </h1>
-            <p className="text-base xl:text-lg opacity-95 max-w-xl">
+            <p className="text-base xl:text-lg opacity-95 max-w-xl font-['Outfit']">
               Register your restaurant and start serving customers.
             </p>
           </div>
@@ -167,20 +168,14 @@ export default function RestaurantSignup() {
         {/* Top logo and version */}
         <div className="relative flex items-center justify-center px-6 sm:px-10 lg:px-16 pt-6 pb-4">
           <div
-            className="flex items-center gap-3"
+            className="flex items-center justify-center h-20 w-64 md:h-24 md:w-72"
             style={{ animation: "fadeInDown 0.7s ease-out both" }}
           >
-            <div className="h-11 w-11 rounded-xl bg-primary flex items-center justify-center text-white shadow-lg">
-              <UtensilsCrossed className="h-6 w-6" />
-            </div>
-            <div className="flex flex-col items-start">
-              <span className="text-2xl font-bold tracking-wide text-primary">
-                {companyName}
-              </span>
-              <span className="text-xs font-medium text-gray-500">
-                Restaurant Panel
-              </span>
-            </div>
+            <img
+              src={logoNew}
+              alt="Tiffinji Logo"
+              className="h-full w-full object-contain scale-110"
+            />
           </div>
           <div className="absolute right-6 sm:right-10 lg:right-16 top-6 px-3 py-1 rounded-full bg-emerald-50 border border-emerald-200 text-[11px] font-medium text-emerald-700 shadow-sm">
             Software Version : 1.0.0
@@ -194,10 +189,10 @@ export default function RestaurantSignup() {
         >
           {/* Title */}
           <div className="mb-8 text-center">
-            <h2 className="text-2xl sm:text-3xl font-semibold text-gray-900 mb-2">
+            <h2 className="text-2xl sm:text-3xl font-black text-[#4E342E] mb-2 font-['Outfit'] tracking-tight">
               Register Your Restaurant
             </h2>
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-gray-500 font-medium font-['Outfit']">
               Enter your details to get started.
             </p>
           </div>
@@ -209,7 +204,7 @@ export default function RestaurantSignup() {
           >
             {/* Restaurant name input */}
             <div className="space-y-1.5">
-              <Label htmlFor="name" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="name" className="text-sm font-medium text-gray-700 font-['Outfit']">
                 Restaurant Name
               </Label>
               <div className="relative">
@@ -223,12 +218,12 @@ export default function RestaurantSignup() {
                   placeholder="Enter restaurant name"
                   value={formData.name}
                   onChange={handleChange}
-                  className={`h-11 pl-9 border-gray-300 rounded-md shadow-sm focus-visible:ring-primary focus-visible:ring-2 transition-colors placeholder:text-gray-400 ${errors.name ? "border-red-500" : ""}`}
+                  className={`h-11 pl-9 border-gray-300 rounded-md shadow-sm focus-visible:ring-primary focus-visible:ring-2 transition-colors placeholder:text-gray-400 font-['Outfit'] ${errors.name ? "border-red-500" : ""}`}
                   required
                 />
               </div>
               {errors.name && (
-                <div className="flex items-center gap-1 text-xs sm:text-sm text-red-600">
+                <div className="flex items-center gap-1 text-xs sm:text-sm text-red-600 font-['Outfit']">
                   <AlertCircle className="h-3 w-3" />
                   <span>{errors.name}</span>
                 </div>
@@ -237,7 +232,7 @@ export default function RestaurantSignup() {
 
             {/* Phone input */}
             <div className="space-y-1.5">
-              <Label htmlFor="phone" className="text-sm font-medium text-gray-700">
+              <Label htmlFor="phone" className="text-sm font-medium text-gray-700 font-['Outfit']">
                 Phone Number
               </Label>
               <div className="flex gap-2">
@@ -245,12 +240,12 @@ export default function RestaurantSignup() {
                   value={formData.countryCode}
                   onValueChange={handleCountryCodeChange}
                 >
-                  <SelectTrigger className="w-20 sm:w-24 md:w-[100px] text-xs sm:text-sm">
+                  <SelectTrigger className="w-20 sm:w-24 md:w-[100px] text-xs sm:text-sm font-['Outfit']">
                     <SelectValue placeholder="Code" />
                   </SelectTrigger>
                   <SelectContent>
                     {countryCodes.map((country) => (
-                      <SelectItem key={country.code} value={country.code}>
+                      <SelectItem key={country.code} value={country.code} className="font-['Outfit']">
                         <span className="flex items-center gap-2 text-xs sm:text-sm">
                           <span>{country.flag}</span>
                           <span>{country.code}</span>
@@ -271,20 +266,20 @@ export default function RestaurantSignup() {
                       placeholder="Enter phone number"
                       value={formData.phone}
                       onChange={handleChange}
-                      className={`h-11 pl-9 border-gray-300 rounded-md shadow-sm focus-visible:ring-primary focus-visible:ring-2 transition-colors placeholder:text-gray-400 ${errors.phone ? "border-red-500" : ""}`}
+                      className={`h-11 pl-9 border-gray-300 rounded-md shadow-sm focus-visible:ring-primary focus-visible:ring-2 transition-colors placeholder:text-gray-400 font-['Outfit'] ${errors.phone ? "border-red-500" : ""}`}
                       required
                     />
                   </div>
                 </div>
               </div>
               {errors.phone && (
-                <div className="flex items-center gap-1 text-xs sm:text-sm text-red-600">
+                <div className="flex items-center gap-1 text-xs sm:text-sm text-red-600 font-['Outfit']">
                   <AlertCircle className="h-3 w-3" />
                   <span>{errors.phone}</span>
                 </div>
               )}
               {apiError && !errors.phone && (
-                <div className="flex items-center gap-1 text-xs sm:text-sm text-red-600 mt-1">
+                <div className="flex items-center gap-1 text-xs sm:text-sm text-red-600 mt-1 font-['Outfit']">
                   <AlertCircle className="h-3 w-3" />
                   <span>{apiError}</span>
                 </div>
@@ -294,7 +289,7 @@ export default function RestaurantSignup() {
             {/* Sign up button */}
             <Button
               type="submit"
-              className="mt-2 h-11 w-full bg-primary hover:bg-primary/90 text-white text-base font-semibold rounded-md shadow-md transition-colors"
+              className="mt-2 h-11 w-full bg-[#f59e0b] hover:bg-[#d97706] text-white text-base font-semibold rounded-md shadow-md transition-colors font-['Outfit'] shadow-[#f59e0b]/20"
               disabled={isLoading}
             >
               {isLoading ? (
@@ -308,43 +303,27 @@ export default function RestaurantSignup() {
             </Button>
           </form>
 
-          <div className="mt-6 text-center text-sm space-y-2">
+          <div className="mt-6 text-center text-sm space-y-2 font-['Outfit']">
             <p>
               <span className="text-gray-600">Already have an account? </span>
               <button
                 type="button"
                 onClick={() => navigate("/food/restaurant/login")}
-                className="text-primary hover:underline font-medium"
+                className="text-primary hover:underline font-bold"
               >
                 Login
               </button>
             </p>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-gray-500 font-['Outfit']">
               By continuing, you agree to our{" "}
-              <Link to="/food/restaurant/profile/terms" className="text-primary hover:underline">
+              <Link to="/food/restaurant/profile/terms" className="text-primary hover:underline font-medium">
                 Terms of Service
               </Link>
               {" & "}
-              <Link to="/food/restaurant/profile/privacy" className="text-primary hover:underline">
+              <Link to="/food/restaurant/profile/privacy" className="text-primary hover:underline font-medium">
                 Privacy Policy
               </Link>
             </p>
-          </div>
-
-          {/* Demo credentials / info bar */}
-          <div className="mt-8 w-full max-w-lg rounded-lg border border-orange-100 bg-orange-50 px-4 py-3 text-xs sm:text-sm text-gray-800 flex items-start gap-3">
-            <div className="mt-0.5 text-primary">
-              <AlertCircle className="h-4 w-4" />
-            </div>
-            <div>
-              <div className="font-semibold mb-1">Demo Credentials</div>
-              <div>
-                <span className="font-semibold">Phone :</span> +91 9876543210
-              </div>
-              <div>
-                <span className="font-semibold">OTP :</span> 1234
-              </div>
-            </div>
           </div>
         </div>
 

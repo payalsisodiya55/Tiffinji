@@ -2057,7 +2057,7 @@ export default function OrderTracking() {
           {/* Order Items */}
           <div
             className="p-4 border-b border-dashed border-gray-200 dark:border-gray-800 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
-            onClick={() => setShowOrderDetails(true)}
+            onClick={() => navigate(`/user/orders/${orderId}/details`)}
           >
             <div className="flex items-start gap-3">
               <Receipt className="w-5 h-5 text-gray-500 mt-0.5" />
@@ -2193,14 +2193,14 @@ export default function OrderTracking() {
 
       {/* Order Details Dialog */}
       <Dialog open={showOrderDetails} onOpenChange={setShowOrderDetails}>
-        <DialogContent className="max-w-[calc(100vw-32px)] sm:max-w-md bg-white dark:bg-[#1a1a1a] rounded-2xl p-0 overflow-hidden border-none outline-none">
-          <DialogHeader className="p-6 pb-4 border-b border-gray-100 dark:border-gray-800 pr-12">
+        <DialogContent className="max-w-[calc(100vw-32px)] sm:max-w-md bg-white dark:bg-[#1a1a1a] rounded-2xl p-0 overflow-hidden border-none outline-none flex flex-col max-h-[85vh]">
+          <DialogHeader className="p-6 pb-4 border-b border-gray-100 dark:border-gray-800 pr-12 shrink-0">
             <div className="flex items-center justify-between">
               <DialogTitle className="text-xl font-bold text-gray-900">Order Details</DialogTitle>
             </div>
           </DialogHeader>
 
-          <div className="p-6 pt-4 space-y-6 max-h-[70vh] overflow-y-auto">
+          <div className="p-6 pt-4 space-y-6 flex-grow overflow-y-auto">
             {/* Order Meta Info */}
             <div className="flex flex-col gap-1 b">
               <div className="flex items-center gap-4 mt-2">
@@ -2324,7 +2324,7 @@ export default function OrderTracking() {
             )}
           </div>
 
-          <div className="p-6 border-t border-gray-100">
+          <div className="p-6 border-t border-gray-100 shrink-0">
             <Button
               onClick={() => setShowOrderDetails(false)}
               className="w-full bg-gray-900 text-white font-bold h-12 rounded-xl"
