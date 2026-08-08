@@ -19,8 +19,8 @@ export const getConfigByAppName = async (req, res, next) => {
         if (!config) {
             config = {
                 appName,
-                primaryColor: appName === 'restaurant_app' ? '#B80B3D' : appName === 'delivery_app' ? '#0ea5e9' : appName === 'admin_app' ? '#2563eb' : '#e11d48',
-                secondaryColor: appName === 'restaurant_app' ? '#66001D' : appName === 'delivery_app' ? '#0284c7' : appName === 'admin_app' ? '#1d4ed8' : '#be123c',
+                primaryColor: appName === 'restaurant_app' ? '#7e3866' : appName === 'delivery_app' ? '#0ea5e9' : appName === 'admin_app' ? '#2563eb' : '#ff9f1c',
+                secondaryColor: appName === 'restaurant_app' ? '#652b51' : appName === 'delivery_app' ? '#0284c7' : appName === 'admin_app' ? '#1d4ed8' : '#d94e0a',
                 logoUrl: '',
                 fontFamily: "'Poppins', sans-serif"
             };

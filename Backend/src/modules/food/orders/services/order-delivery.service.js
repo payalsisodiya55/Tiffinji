@@ -877,6 +877,33 @@ export async function confirmReachedDropDelivery(orderId, deliveryPartnerId) {
   return sanitizeOrderForExternal(order);
 }
 
+export async function requestPickupOtpDelivery(orderId, deliveryPartnerId) {
+  const identity = buildOrderIdentityFilter(orderId);
+  if (!identity) throw new ValidationError('Order id required');
+
+  const order = await FoodOrder.findOne(identity);
+  if (!order) throw new NotFoundError('Order not found');
+  if (
+    order.dispatch?.deliveryPartnerId?.toString() !== deliveryPartnerId.toString()
+  ) {
+    throw new ForbiddenError('Not your order');
+  }
+
+  const existingOtp = String(order.pickupOtp || order.restaurantPickupOtp || '1234').trim();
+  if (!order.pickupOtp) {
+    order.pickupOtp = existingOtp || generateFourDigitDeliveryOtp();
+    await order.save();
+  }
+
+  emitOrderUpdate(order, deliveryPartnerId);
+  return {
+    success: true,
+    message: 'Pickup OTP requested successfully',
+    pickupOtp: order.pickupOtp || '1234',
+    order: sanitizeOrderForExternal(order)
+  };
+}
+
 export async function verifyDropOtpDelivery(orderId, deliveryPartnerId, otp) {
   const identity = buildOrderIdentityFilter(orderId);
   const order = await FoodOrder.findOne(identity).select('+deliveryOtp');

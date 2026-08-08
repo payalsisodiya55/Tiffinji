@@ -16,9 +16,9 @@ export default function ThemeSettings() {
   const [saving, setSaving] = useState(false);
   
   const [configs, setConfigs] = useState({
-    user_app: { primaryColor: '#e11d48', secondaryColor: '#be123c', logoUrl: '', fontFamily: "'Poppins', sans-serif" },
+    user_app: { primaryColor: '#ff9f1c', secondaryColor: '#d94e0a', logoUrl: '', fontFamily: "'Poppins', sans-serif" },
     delivery_app: { primaryColor: '#0ea5e9', secondaryColor: '#0284c7', logoUrl: '', fontFamily: "'Poppins', sans-serif" },
-    restaurant_app: { primaryColor: '#B80B3D', secondaryColor: '#66001D', logoUrl: '', fontFamily: "'Poppins', sans-serif" },
+    restaurant_app: { primaryColor: '#7e3866', secondaryColor: '#652b51', logoUrl: '', fontFamily: "'Poppins', sans-serif" },
     admin_app: { primaryColor: '#2563eb', secondaryColor: '#1d4ed8', logoUrl: '', fontFamily: "'Poppins', sans-serif" },
   });
 

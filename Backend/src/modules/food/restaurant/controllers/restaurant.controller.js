@@ -11,7 +11,8 @@ import {
     uploadRestaurantCoverImages,
     uploadRestaurantMenuImages,
     listPublicOffers,
-    getRestaurantComplaints
+    getRestaurantComplaints,
+    getRestaurantDashboardStats
 } from '../services/restaurant.service.js';
 import {
     createDiningRequest,
@@ -164,6 +165,16 @@ export const getPendingDiningRequestController = async (req, res, next) => {
         const restaurantId = req.user?.userId;
         const request = await getPendingDiningRequest(restaurantId);
         return sendResponse(res, 200, 'Pending request fetched successfully', request);
+    } catch (error) {
+        next(error);
+    }
+};
+
+export const getRestaurantDashboardStatsController = async (req, res, next) => {
+    try {
+        const restaurantId = req.user?.userId;
+        const data = await getRestaurantDashboardStats(restaurantId, req.query);
+        return sendResponse(res, 200, 'Dashboard stats fetched successfully', data);
     } catch (error) {
         next(error);
     }

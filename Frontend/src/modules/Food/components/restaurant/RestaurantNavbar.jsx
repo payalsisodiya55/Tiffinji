@@ -363,7 +363,10 @@ export default function RestaurantNavbar({
   }
 
   return (
-    <div className="w-full bg-gradient-to-r from-[#B80B3D] to-[#66001D] rounded-b-[24px] shadow-lg px-3 pt-4 pb-4 sm:px-4 sm:pt-5 sm:pb-5 flex items-center justify-between gap-2 relative">
+    <div 
+      className="w-full rounded-b-[24px] shadow-lg px-3 pt-4 pb-4 sm:px-4 sm:pt-5 sm:pb-5 flex items-center justify-between gap-2 relative"
+      style={{ backgroundColor: "var(--rt-primary, #7e3866)" }}
+    >
       {/* Search Overlay */}
       {isSearchActive && (
         <div className="absolute inset-0 bg-white z-50 flex items-center px-4 gap-3">

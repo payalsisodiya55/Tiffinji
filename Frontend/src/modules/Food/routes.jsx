@@ -7,6 +7,7 @@ import MenuScanAnimation from "@food/components/user/MenuScanAnimation"
 import AuthInitializer from "@food/components/AuthInitializer"
 import PushSoundEnableButton from "@food/components/PushSoundEnableButton"
 import { registerWebPushForCurrentModule } from "@food/utils/firebaseMessaging"
+import Splash from "@food/pages/user/Splash"
 
 // Lazy Loading Components
 const UserRouter = lazy(() => import("@food/components/user/UserRouter"))
@@ -107,6 +108,7 @@ export default function App() {
         <PushSoundEnableButton />
         <Suspense fallback={<Loader />}>
           <Routes>
+            <Route path="user/splash" element={<Splash />} />
             {/* Restaurant Module - Already mapped to /restaurant */}
             <Route
               path="restaurant/*"

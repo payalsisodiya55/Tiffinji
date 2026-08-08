@@ -4,11 +4,11 @@ import { UtensilsCrossed, ChevronRight, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 const CookingAnimation = memo(() => (
-  <div className="relative w-12 h-12 flex items-center justify-center rounded-xl bg-orange-50 border border-orange-100 overflow-visible shadow-[0_4px_15px_rgba(235,89,14,0.15)] shrink-0">
+  <div className="relative w-12 h-12 flex items-center justify-center rounded-xl bg-primary/10 border border-primary/20 overflow-visible shadow-sm shadow-primary/15 shrink-0">
     <div className="absolute -top-3 flex gap-1.5">
-      <motion.div animate={{ opacity: [0, 0.8, 0], y: [0, -8, -12], scale: [0.8, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0, ease: "easeOut" }} className="w-1.5 h-3 bg-orange-400/60 rounded-full blur-[1px]" />
-      <motion.div animate={{ opacity: [0, 0.8, 0], y: [0, -10, -15], scale: [0.8, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.5, ease: "easeOut" }} className="w-1.5 h-3 bg-orange-400/60 rounded-full blur-[1px]" />
-      <motion.div animate={{ opacity: [0, 0.8, 0], y: [0, -8, -12], scale: [0.8, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity, delay: 1, ease: "easeOut" }} className="w-1.5 h-3 bg-orange-400/60 rounded-full blur-[1px]" />
+      <motion.div animate={{ opacity: [0, 0.8, 0], y: [0, -8, -12], scale: [0.8, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0, ease: "easeOut" }} className="w-1.5 h-3 bg-primary/60 rounded-full blur-[1px]" />
+      <motion.div animate={{ opacity: [0, 0.8, 0], y: [0, -10, -15], scale: [0.8, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity, delay: 0.5, ease: "easeOut" }} className="w-1.5 h-3 bg-primary/60 rounded-full blur-[1px]" />
+      <motion.div animate={{ opacity: [0, 0.8, 0], y: [0, -8, -12], scale: [0.8, 1.2, 1] }} transition={{ duration: 1.5, repeat: Infinity, delay: 1, ease: "easeOut" }} className="w-1.5 h-3 bg-primary/60 rounded-full blur-[1px]" />
     </div>
     <motion.div animate={{ rotate: [-2, 2, -2] }} transition={{ duration: 0.6, repeat: Infinity, ease: "easeInOut" }} className="relative z-10 mt-1">
       <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-primary drop-shadow-sm">
@@ -100,6 +100,14 @@ const isActiveOrder = (order) => {
     return false;
   }
 
+  // Don't show live tracker for orders older than 6 hours (stuck/stale orders)
+  const orderTime = new Date(
+    order.scheduledAt || order.createdAt || order.orderDate || order.created_at || order.date || Date.now()
+  );
+  if (Date.now() - orderTime.getTime() > 6 * 60 * 60 * 1000) {
+    return false;
+  }
+
   // Some refresh payloads provide live phase but sparse status; keep tracking visible.
   if (!status && phase) return ACTIVE_PHASES.has(phase);
   if (!status) return false;
@@ -147,7 +155,11 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
   const [invalidOrderIds, setInvalidOrderIds] = useState(new Set());
 
   const fetchOrders = useCallback(async () => {
-    const token = localStorage.getItem("food_user_token") || localStorage.getItem("token");
+    const token = 
+      localStorage.getItem("food_user_token") || 
+      localStorage.getItem("user_accessToken") || 
+      localStorage.getItem("accessToken") || 
+      localStorage.getItem("token");
     if (!token) return;
     try {
       const response = await orderAPI.getOrders({ limit: 10, page: 1 });
@@ -365,7 +377,14 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
 
   const orderStatus = getOrderStatus(activeOrder) || "preparing";
   const orderPhase = getOrderPhase(activeOrder);
-  if (TERMINAL_STATUSES.has(orderStatus) || orderPhase === "cancelled" || orderPhase === "canceled") {
+  if (
+    TERMINAL_STATUSES.has(orderStatus) || 
+    orderPhase === "cancelled" || 
+    orderPhase === "canceled" || 
+    orderPhase === "delivered" || 
+    orderPhase === "completed" ||
+    !isActiveOrder(activeOrder)
+  ) {
     return null;
   }
 
@@ -402,14 +421,14 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
               `/food/user/orders/${activeOrder.id || activeOrder._id || activeOrder.orderId}`,
             )
           }
-          className="relative bg-white/95 backdrop-blur-xl rounded-[20px] p-4 shadow-[0_8px_30px_rgba(235,89,14,0.15)] border border-orange-100/60 overflow-visible cursor-pointer group"
+          className="relative bg-white/95 backdrop-blur-xl rounded-[20px] p-4 shadow-lg shadow-primary/12 border border-primary/15 overflow-visible cursor-pointer group"
         >
           {/* Subtle gradient background mesh */}
-          <div className="absolute inset-0 bg-gradient-to-r from-orange-50/50 via-white/40 to-white/80 opacity-60 pointer-events-none rounded-[20px]" />
+          <div className="absolute inset-0 bg-gradient-to-r from-primary/5 via-white/40 to-white/80 opacity-60 pointer-events-none rounded-[20px]" />
           
           <button 
              onClick={(e) => { e.stopPropagation(); setDismissedKey(currentOrderKey); }}
-             className="absolute top-2 right-2 p-1.5 rounded-full bg-orange-50/80 text-orange-400 hover:text-#55254b hover:bg-orange-100/80 transition-colors z-20 shadow-sm"
+             className="absolute top-2 right-2 p-1.5 rounded-full bg-primary/10 text-primary hover:text-secondary hover:bg-primary/20 transition-colors z-20 shadow-sm"
           >
             <X className="w-3.5 h-3.5 pointer-events-none" />
           </button>
@@ -425,8 +444,8 @@ function OrderTrackingCardInner({ hasBottomNav = true }) {
               </div>
             </div>
 
-            <div className="bg-gradient-to-br from-primary to-[#D94E0A] shadow-lg shadow-primary/20 rounded-xl px-4 py-2 shrink-0 flex flex-col items-center justify-center border border-orange-200">
-              <p className="text-orange-50 text-[10px] font-bold uppercase tracking-wider opacity-95 leading-tight mb-[2px]">
+            <div className="bg-gradient-to-br from-primary to-secondary shadow-lg shadow-primary/20 rounded-xl px-4 py-2 shrink-0 flex flex-col items-center justify-center border border-primary/20">
+              <p className="text-white/80 text-[10px] font-bold uppercase tracking-wider opacity-95 leading-tight mb-[2px]">
                 arriving in
               </p>
               <p className="text-white text-base md:text-[17px] font-black leading-tight drop-shadow-sm">

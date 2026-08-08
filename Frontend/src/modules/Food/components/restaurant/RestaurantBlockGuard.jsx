@@ -54,12 +54,7 @@ export default function RestaurantBlockGuard() {
   }, [navigate, status])
 
   if (status === "loading") {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mb-4" />
-        <p className="text-slate-500 font-medium">Checking account status...</p>
-      </div>
-    )
+    return <Outlet />
   }
 
   if (status === "blocked") {

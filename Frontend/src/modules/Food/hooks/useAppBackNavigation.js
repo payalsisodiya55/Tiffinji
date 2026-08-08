@@ -137,6 +137,6 @@ export default function useAppBackNavigation() {
   const location = useLocation()
 
   return useCallback(() => {
-    navigate(resolveBackPath(location))
+    navigate(resolveBackPath(location), { replace: true })
   }, [location, navigate])
 }

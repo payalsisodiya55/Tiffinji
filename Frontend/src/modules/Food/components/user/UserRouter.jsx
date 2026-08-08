@@ -92,10 +92,14 @@ const Wallet = lazy(() => import("@food/pages/user/Wallet"))
 // Complaints
 const SubmitComplaint = lazy(() => import("@food/pages/user/complaints/SubmitComplaint"))
 
+// Splash Screen
+import Splash from "@food/pages/user/Splash"
+
 export default function UserRouter() {
   return (
     <Suspense fallback={<Loader />}>
       <Routes>
+        <Route path="splash" element={<Splash />} />
         <Route element={<UserLayout />}>
           {/* Home & Discovery */}
           <Route path="" element={<Home />} />

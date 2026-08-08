@@ -44,7 +44,9 @@ export default function AuthInitializer({ children }) {
   }, []);
 
   // Show loader while rehydrating auth state on app initialization
-  if (isRehydrating) {
+  // Bypassed on the splash screen page so the splash screen renders instantly.
+  const isSplashPage = typeof window !== "undefined" && window.location.pathname.includes("/splash");
+  if (isRehydrating && !isSplashPage) {
     return <Loader />;
   }
 

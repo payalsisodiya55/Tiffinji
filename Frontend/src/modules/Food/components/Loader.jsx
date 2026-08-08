@@ -5,6 +5,8 @@ export default function Loader() {
   if (typeof window !== 'undefined') {
     const path = window.location.pathname.toLowerCase()
     if (
+      path.includes('/restaurant') ||
+      path.includes('/delivery') ||
       path.includes('/terms') ||
       path.includes('/privacy') ||
       path.includes('/support')

@@ -1506,3 +1506,135 @@ export const getRestaurantComplaints = async (restaurantId, query = {}) => {
     return getComplaintsInternal({ ...query, restaurantId });
 };
 
+/**
+ * Get dashboard statistics for a specific restaurant.
+ */
+export const getRestaurantDashboardStats = async (restaurantId, query = {}) => {
+    const period = query.period || 'month';
+    const now = new Date();
+    let startDate = new Date();
+
+    if (period === 'today') {
+        startDate.setHours(0, 0, 0, 0);
+    } else if (period === 'week') {
+        startDate.setDate(now.getDate() - 7);
+    } else if (period === 'year') {
+        startDate.setFullYear(now.getFullYear() - 1);
+    } else {
+        startDate.setDate(now.getDate() - 30);
+    }
+
+    const { FoodOrder } = await import('../../orders/models/order.model.js');
+    const rId = new mongoose.Types.ObjectId(restaurantId);
+
+    const filter = {
+        restaurantId: rId,
+        createdAt: { $gte: startDate }
+    };
+
+    const orders = await FoodOrder.find(filter).lean();
+
+    const totalOrders = orders.length;
+    const deliveredOrders = orders.filter(o => o.status === 'delivered').length;
+    const cancelledOrders = orders.filter(o => o.status === 'cancelled' || o.status === 'restaurant_cancelled').length;
+
+    let totalRevenue = 0;
+    const itemsMap = {};
+    const paymentMap = {};
+    const statusMap = {};
+
+    orders.forEach(o => {
+        const amt = Number(o.amount || o.payableAmount || o.pricing?.total || 0) || 0;
+        if (o.status === 'delivered') {
+            totalRevenue += amt;
+        }
+
+        const st = o.status || 'pending';
+        statusMap[st] = (statusMap[st] || 0) + 1;
+
+        const pm = o.payment?.method || o.paymentMethod || 'cash';
+        paymentMap[pm] = (paymentMap[pm] || 0) + 1;
+
+        if (Array.isArray(o.items)) {
+            o.items.forEach(it => {
+                const name = it.name || it.title || 'Item';
+                const qty = Number(it.quantity || it.qty || 1);
+                const itemPrice = Number(it.price || it.unitPrice || 0) * qty;
+                if (!itemsMap[name]) {
+                    itemsMap[name] = { name, quantity: 0, revenue: 0 };
+                }
+                itemsMap[name].quantity += qty;
+                itemsMap[name].revenue += itemPrice;
+            });
+        }
+    });
+
+    const avgOrderValue = totalOrders > 0 ? Math.round(totalRevenue / totalOrders) : 0;
+
+    const orderStatusBreakdown = Object.keys(statusMap).map(k => ({
+        name: k.replace(/_/g, ' ').toUpperCase(),
+        value: statusMap[k]
+    }));
+
+    const paymentMethodBreakdown = Object.keys(paymentMap).map(k => ({
+        name: k.toUpperCase(),
+        value: paymentMap[k]
+    }));
+
+    const topItems = Object.values(itemsMap)
+        .sort((a, b) => b.quantity - a.quantity)
+        .slice(0, 5);
+
+    const trendDays = [];
+    for (let i = 6; i >= 0; i--) {
+        const d = new Date();
+        d.setDate(d.getDate() - i);
+        const dayStr = d.toLocaleDateString('en-US', { weekday: 'short' });
+        const dateStr = d.toISOString().split('T')[0];
+
+        const dayOrders = orders.filter(o => {
+            const oDate = new Date(o.createdAt).toISOString().split('T')[0];
+            return oDate === dateStr;
+        });
+
+        const dayRev = dayOrders
+            .filter(o => o.status === 'delivered')
+            .reduce((acc, o) => acc + (Number(o.amount || o.payableAmount || 0) || 0), 0);
+
+        trendDays.push({
+            name: dayStr,
+            revenue: dayRev,
+            orders: dayOrders.length
+        });
+    }
+
+    const recentOrders = orders
+        .slice(-10)
+        .reverse()
+        .map(o => ({
+            id: String(o._id),
+            orderId: o.orderId || String(o._id),
+            customerName: o.address?.name || o.userName || 'Customer',
+            items: o.items || [],
+            amount: o.amount || o.payableAmount || 0,
+            status: o.status,
+            createdAt: o.createdAt
+        }));
+
+    return {
+        kpis: {
+            totalRevenue,
+            totalOrders,
+            avgOrderValue,
+            deliveredOrders,
+            cancelledOrders
+        },
+        orderStatusBreakdown,
+        paymentMethodBreakdown,
+        revenueTrend: trendDays,
+        monthlyTrend: trendDays,
+        topItems,
+        recentOrders
+    };
+};
+

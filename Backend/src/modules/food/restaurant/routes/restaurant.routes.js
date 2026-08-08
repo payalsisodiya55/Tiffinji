@@ -15,7 +15,8 @@ import {
     uploadRestaurantMenuImagesController,
     getRestaurantComplaintsController,
     createDiningRequestController,
-    getPendingDiningRequestController
+    getPendingDiningRequestController,
+    getRestaurantDashboardStatsController
 } from '../controllers/restaurant.controller.js';
 import {
     createRestaurantSupportTicketController,
@@ -90,6 +91,7 @@ router.get('/offers', cacheResponse(300, 'offers'), listPublicOffersController);
 router.get('/categories/public', cacheResponse(600, 'categories'), listCategoriesController);
 
 // Restaurant dashboard/profile (Bearer token + RESTAURANT role)
+router.get('/dashboard-stats', authMiddleware, requireRestaurant, getRestaurantDashboardStatsController);
 router.get('/current', authMiddleware, requireRestaurant, getCurrentRestaurantController);
 router.patch('/profile', authMiddleware, requireRestaurant, async (req, res, next) => {
     // Invalidate caches when profile is updated

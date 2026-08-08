@@ -988,6 +988,27 @@ export async function listOrdersRestaurant(restaurantId, query) {
     ],
   };
 
+  if (query.status && query.status !== 'all') {
+    const s = String(query.status).toLowerCase();
+    if (s === 'new') {
+      filter.orderStatus = { $in: ['created', 'confirmed', 'pending', 'new'] };
+    } else if (s === 'preparing') {
+      filter.orderStatus = { $in: ['preparing', 'accepted', 'in_preparation'] };
+    } else if (s === 'ready') {
+      filter.orderStatus = { $in: ['ready', 'ready_for_pickup'] };
+    } else if (s === 'out_for_delivery' || s === 'out-for-delivery') {
+      filter.orderStatus = { $in: ['picked_up', 'out_for_delivery', 'en_route_to_delivery', 'reached_drop'] };
+    } else if (s === 'completed') {
+      filter.orderStatus = { $in: ['delivered', 'completed'] };
+    } else if (s === 'cancelled') {
+      filter.orderStatus = { $in: ['cancelled', 'cancelled_by_restaurant', 'cancelled_by_user', 'cancelled_by_admin', 'rejected'] };
+    } else if (s === 'scheduled') {
+      filter.scheduledAt = { $ne: null };
+    } else {
+      filter.orderStatus = s;
+    }
+  }
+
   if (query.search && String(query.search).trim()) {
     const term = String(query.search).trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const searchRegex = new RegExp(term, 'i');
@@ -1333,6 +1354,10 @@ export async function rejectOrderDelivery(orderId, deliveryPartnerId) {
 
 export async function confirmReachedPickupDelivery(orderId, deliveryPartnerId) {
   return deliveryService.confirmReachedPickupDelivery(orderId, deliveryPartnerId);
+}
+
+export async function requestPickupOtpDelivery(orderId, deliveryPartnerId) {
+  return deliveryService.requestPickupOtpDelivery(orderId, deliveryPartnerId);
 }
 
 /**
