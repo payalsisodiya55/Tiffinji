@@ -146,8 +146,13 @@ export async function writeDeliveryLocation({
   } else {
     payload.status = 'offline';
   }
-  await set(ref(firebaseRealtimeDb, getDeliveryLocationPath(deliveryId)), payload);
-  return true;
+  try {
+    await set(ref(firebaseRealtimeDb, getDeliveryLocationPath(deliveryId)), payload);
+    return true;
+  } catch (err) {
+    console.warn('[Firebase Realtime DB] Could not write delivery location:', err?.message || err);
+    return false;
+  }
 }
 
 /**
@@ -168,6 +173,11 @@ export async function writeOrderTracking(orderId, payload = {}) {
   if (payload.timestamp != null) {
     toWrite.timestamp = toFiniteNumber(payload.timestamp) || Date.now();
   }
-  await update(ref(firebaseRealtimeDb, getOrderTrackingPath(orderId)), toWrite);
-  return true;
+  try {
+    await update(ref(firebaseRealtimeDb, getOrderTrackingPath(orderId)), toWrite);
+    return true;
+  } catch (err) {
+    console.warn('[Firebase Realtime DB] Could not write order tracking:', err?.message || err);
+    return false;
+  }
 }
