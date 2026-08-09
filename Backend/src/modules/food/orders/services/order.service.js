@@ -4,6 +4,8 @@ import { FoodOrder, FoodSettings } from '../models/order.model.js';
 import { logger } from '../../../../utils/logger.js';
 import { FoodUser } from '../../../../core/users/user.model.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
+import { FoodRestaurantOutletTimings } from '../../restaurant/models/outletTimings.model.js';
+import { computeRestaurantAvailability } from '../../restaurant/services/restaurantAvailability.helper.js';
 import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model.js';
 import { FoodZone } from '../../admin/models/zone.model.js';
 import { FoodFeeSettings } from '../../admin/models/feeSettings.model.js';
@@ -128,13 +130,27 @@ export async function calculateOrder(userId, dto) {
 // ----- Create order -----
 export async function createOrder(userId, dto) {
   const restaurant = await FoodRestaurant.findById(dto.restaurantId)
-    .select("status restaurantName zoneId location isAcceptingOrders")
+    .select("status restaurantName zoneId location isAcceptingOrders openingTime closingTime openDays")
     .lean();
   if (!restaurant) throw new ValidationError("Restaurant not found");
-  if (restaurant.status !== "approved")
-    throw new ValidationError("Restaurant not accepting orders");
-  if (restaurant.isAcceptingOrders === false)
-    throw new ValidationError("Restaurant not accepting orders");
+
+  // Server-side enforcement of operating hours and manual toggle
+  const timing = await FoodRestaurantOutletTimings.findOne({ restaurantId: restaurant._id }).lean();
+  const availability = computeRestaurantAvailability(restaurant, timing);
+
+  if (!availability.isOpen) {
+    if (availability.reason === 'manual-close' || availability.reason === 'not-approved') {
+      throw new ValidationError("Restaurant not accepting orders");
+    } else if (availability.reason === 'day-closed') {
+      throw new ValidationError("Restaurant is closed today");
+    } else if (availability.reason === 'outside-hours') {
+      throw new ValidationError("Restaurant is currently closed (outside operating hours)");
+    } else if (availability.reason === 'invalid-timings') {
+      throw new ValidationError("Restaurant is currently closed due to invalid configuration");
+    } else {
+      throw new ValidationError("Restaurant is currently unavailable");
+    }
+  }
 
 
   const settings = await getDispatchSettings();

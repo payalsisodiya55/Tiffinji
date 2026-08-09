@@ -1,6 +1,8 @@
 import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodRestaurant } from '../../restaurant/models/restaurant.model.js';
+import { FoodRestaurantOutletTimings } from '../../restaurant/models/outletTimings.model.js';
+import { computeRestaurantAvailability } from '../../restaurant/services/restaurantAvailability.helper.js';
 import { buildRawDownloadUrlFromFileUrl } from '../../../../services/cloudinary.service.js';
 import { FoodDeliveryPartner } from '../../delivery/models/deliveryPartner.model.js';
 import { DeliverySupportTicket } from '../../delivery/models/supportTicket.model.js';
@@ -282,16 +284,33 @@ export async function getRestaurants(query) {
     if (status && ['pending', 'approved', 'rejected'].includes(status)) {
         filter.status = status;
     }
-    const [restaurants, total] = await Promise.all([
+    const [restaurantsRaw, total] = await Promise.all([
         FoodRestaurant.find(filter)
             .sort({ createdAt: -1 })
             .skip(skip)
             .limit(limit)
-            .select('restaurantName location area city profileImage coverImages menuImages menuPdf status ownerName ownerPhone zoneId')
+            .select('restaurantName location area city profileImage coverImages menuImages menuPdf status ownerName ownerPhone zoneId isAcceptingOrders openingTime closingTime openDays')
             .populate('zoneId', 'name zoneName')
             .lean(),
         FoodRestaurant.countDocuments(filter)
     ]);
+
+    const restaurantIds = (restaurantsRaw || []).map(r => r._id);
+    const timingsList = await FoodRestaurantOutletTimings.find({ restaurantId: { $in: restaurantIds } }).lean();
+    const timingsMap = new Map(timingsList.map(t => [String(t.restaurantId), t]));
+
+    const restaurants = (restaurantsRaw || []).map((r) => {
+        const timing = timingsMap.get(String(r._id)) || null;
+        const availability = computeRestaurantAvailability(r, timing);
+        return {
+            ...r,
+            id: r._id,
+            outletTimings: timing || null,
+            isOpen: availability.isOpen,
+            closedReason: availability.reason
+        };
+    });
+
     return { restaurants, total, page, limit };
 }
 
@@ -2160,10 +2179,21 @@ export async function getRestaurantReviews(query = {}) {
 
 export async function getRestaurantById(id) {
     if (!id || !mongoose.Types.ObjectId.isValid(id)) return null;
-    return FoodRestaurant.findById(id)
+    const doc = await FoodRestaurant.findById(id)
         .select('-__v')
         .populate('zoneId', 'name zoneName serviceLocation isActive')
         .lean();
+    if (!doc) return null;
+
+    const timing = await FoodRestaurantOutletTimings.findOne({ restaurantId: doc._id }).lean();
+    const availability = computeRestaurantAvailability(doc, timing);
+
+    return {
+        ...doc,
+        outletTimings: timing || null,
+        isOpen: availability.isOpen,
+        closedReason: availability.reason
+    };
 }
 
 export async function getRestaurantAnalytics(restaurantId) {

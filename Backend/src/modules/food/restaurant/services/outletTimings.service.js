@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { ValidationError } from '../../../../core/auth/errors.js';
 import { FoodRestaurantOutletTimings } from '../models/outletTimings.model.js';
 import { FoodRestaurant } from '../models/restaurant.model.js';
+import { invalidateCache } from '../../../../middleware/cache.js';
 
 const DAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
 
@@ -109,6 +110,14 @@ export async function upsertOutletTimingsForRestaurant(restaurantId, outletTimin
         { $set: { timings } },
         { upsert: true, new: true, setDefaultsOnInsert: true, projection: 'timings updatedAt' }
     ).lean();
+
+    try {
+        await invalidateCache('restaurants:*');
+        await invalidateCache('restaurant_detail:*');
+        await invalidateCache('restaurant_timings:*');
+    } catch (err) {
+        console.error('Error invalidating caches in upsertOutletTimingsForRestaurant:', err);
+    }
 
     return { outletTimings: toClientShape(doc) };
 }

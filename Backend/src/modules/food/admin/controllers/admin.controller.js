@@ -1576,11 +1576,15 @@ export async function getLiveMonitorStatus(req, res, next) {
         // 1. Fetch approved restaurants
         const rawRestaurants = await FoodRestaurant.find({ status: 'approved' }).lean();
 
+        // Fetch timings for these restaurants
+        const { FoodRestaurantOutletTimings } = await import('../../restaurant/models/outletTimings.model.js');
+        const { computeRestaurantAvailability } = await import('../../restaurant/services/restaurantAvailability.helper.js');
+        const restaurantIds = rawRestaurants.map(r => r._id);
+        const timingsList = await FoodRestaurantOutletTimings.find({ restaurantId: { $in: restaurantIds } }).lean();
+        const timingsMap = new Map(timingsList.map(t => [String(t.restaurantId), t]));
+
         // 2. Fetch approved delivery partners
         const rawPartners = await FoodDeliveryPartner.find({ status: 'approved' }).lean();
-
-        // 3. Compute stats for restaurants using orders
-        const restaurantIds = rawRestaurants.map(r => r._id);
         const restaurantStats = await FoodOrder.aggregate([
             { $match: { restaurantId: { $in: restaurantIds } } },
             {
@@ -1647,16 +1651,23 @@ export async function getLiveMonitorStatus(req, res, next) {
             };
         });
 
-        const restaurants = rawRestaurants.map(r => ({
-            ...r,
-            stats: statsMap[r._id.toString()] || {
-                totalOrders: 0,
-                activeOrders: 0,
-                deliveredOrders: 0,
-                cancelledOrders: 0,
-                revenue: 0
-            }
-        }));
+        const restaurants = rawRestaurants.map(r => {
+            const timing = timingsMap.get(String(r._id)) || null;
+            const availability = computeRestaurantAvailability(r, timing);
+            return {
+                ...r,
+                outletTimings: timing || null,
+                isOpen: availability.isOpen,
+                closedReason: availability.reason,
+                stats: statsMap[r._id.toString()] || {
+                    totalOrders: 0,
+                    activeOrders: 0,
+                    deliveredOrders: 0,
+                    cancelledOrders: 0,
+                    revenue: 0
+                }
+            };
+        });
 
         // 4. Compute stats for delivery partners
         const partnerIds = rawPartners.map(p => p._id);

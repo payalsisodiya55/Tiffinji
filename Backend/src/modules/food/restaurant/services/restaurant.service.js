@@ -1,6 +1,9 @@
 import { FoodRestaurant } from '../models/restaurant.model.js';
+import { FoodRestaurantOutletTimings } from '../models/outletTimings.model.js';
+import { computeRestaurantAvailability } from './restaurantAvailability.helper.js';
 import { uploadImageBuffer, uploadFileBuffer } from '../../../../services/cloudinary.service.js';
 import { ValidationError } from '../../../../core/auth/errors.js';
+import { invalidateCache } from '../../../../middleware/cache.js';
 import mongoose from 'mongoose';
 import { FoodZone } from '../../admin/models/zone.model.js';
 import { FoodOffer } from '../../admin/models/offer.model.js';
@@ -483,7 +486,18 @@ export const getCurrentRestaurantProfile = async (restaurantId) => {
             ].join(' ')
         )
         .lean();
-    return toRestaurantProfile(doc);
+
+    if (!doc) return null;
+
+    const profile = toRestaurantProfile(doc);
+    const timing = await FoodRestaurantOutletTimings.findOne({ restaurantId: doc._id }).lean();
+    const availability = computeRestaurantAvailability(doc, timing);
+
+    profile.isOpen = availability.isOpen;
+    profile.closedReason = availability.reason;
+    profile.outletTimings = timing || null;
+
+    return profile;
 };
 
 export const updateRestaurantAcceptingOrders = async (restaurantId, isAcceptingOrders) => {
@@ -535,6 +549,12 @@ export const updateRestaurantAcceptingOrders = async (restaurantId, isAcceptingO
             ].join(' ')
         }
     ).lean();
+
+    if (doc) {
+        await invalidateCache('restaurants:*');
+        await invalidateCache('restaurant_detail:*');
+    }
+
     return toRestaurantProfile(doc);
 };
 
@@ -1374,7 +1394,35 @@ export const listApprovedRestaurants = async (query = {}) => {
         ]);
 
         const total = totalDocs?.[0]?.count || 0;
-        return { restaurants: pageDocs, total, page, limit };
+        
+        // Batch fetch outlet timings for the returned page
+        const restaurantIds = pageDocs.map(r => r._id);
+        const timingsList = await FoodRestaurantOutletTimings.find({ restaurantId: { $in: restaurantIds } }).lean();
+        const timingsMap = new Map(timingsList.map(t => [String(t.restaurantId), t]));
+
+        const restaurants = pageDocs.map((r) => {
+            const timing = timingsMap.get(String(r._id)) || null;
+            const availability = computeRestaurantAvailability(r, timing);
+            return {
+                ...r,
+                restaurantId: r._id,
+                id: r._id,
+                name: r.restaurantName || '',
+                rating: normalizeRatingValue(r.rating),
+                totalRatings: normalizeTotalRatingsValue(r.totalRatings),
+                profileImage: r.profileImage ? { url: r.profileImage } : null,
+                coverImages: Array.isArray(r.coverImages) ? r.coverImages : [],
+                openingTime: r.openingTime || null,
+                closingTime: r.closingTime || null,
+                openDays: Array.isArray(r.openDays) ? r.openDays : [],
+                menuImages: Array.isArray(r.menuImages) ? r.menuImages : [],
+                outletTimings: timing || null,
+                isOpen: availability.isOpen,
+                closedReason: availability.reason
+            };
+        });
+
+        return { restaurants, total, page, limit };
     }
 
     // Non-geo path: normal query + sort.
@@ -1397,22 +1445,32 @@ export const listApprovedRestaurants = async (query = {}) => {
         FoodRestaurant.countDocuments(filter)
     ]);
 
-    const restaurants = (restaurantsRaw || []).map((r) => ({
-        ...r,
-        // Frontend user app expects `name` and often checks `profileImage.url`
-        restaurantId: r._id,
-        id: r._id,
-        name: r.restaurantName || '',
-        rating: normalizeRatingValue(r.rating),
-        totalRatings: normalizeTotalRatingsValue(r.totalRatings),
-        profileImage: r.profileImage ? { url: r.profileImage } : null,
-        coverImages: Array.isArray(r.coverImages) ? r.coverImages : [],
-        openingTime: r.openingTime || null,
-        closingTime: r.closingTime || null,
-        openDays: Array.isArray(r.openDays) ? r.openDays : [],
-        // Keep menuImages as an array for fallbacks; allow both string and {url} on client.
-        menuImages: Array.isArray(r.menuImages) ? r.menuImages : []
-    }));
+    // Batch fetch outlet timings for the returned page
+    const restaurantIds = (restaurantsRaw || []).map(r => r._id);
+    const timingsList = await FoodRestaurantOutletTimings.find({ restaurantId: { $in: restaurantIds } }).lean();
+    const timingsMap = new Map(timingsList.map(t => [String(t.restaurantId), t]));
+
+    const restaurants = (restaurantsRaw || []).map((r) => {
+        const timing = timingsMap.get(String(r._id)) || null;
+        const availability = computeRestaurantAvailability(r, timing);
+        return {
+            ...r,
+            restaurantId: r._id,
+            id: r._id,
+            name: r.restaurantName || '',
+            rating: normalizeRatingValue(r.rating),
+            totalRatings: normalizeTotalRatingsValue(r.totalRatings),
+            profileImage: r.profileImage ? { url: r.profileImage } : null,
+            coverImages: Array.isArray(r.coverImages) ? r.coverImages : [],
+            openingTime: r.openingTime || null,
+            closingTime: r.closingTime || null,
+            openDays: Array.isArray(r.openDays) ? r.openDays : [],
+            menuImages: Array.isArray(r.menuImages) ? r.menuImages : [],
+            outletTimings: timing || null,
+            isOpen: availability.isOpen,
+            closedReason: availability.reason
+        };
+    });
 
     return { restaurants, total, page, limit };
 };
@@ -1421,30 +1479,34 @@ export const getApprovedRestaurantByIdOrSlug = async (idOrSlug) => {
     const value = String(idOrSlug || '').trim();
     if (!value) return null;
 
+    let doc = null;
     // ObjectId path
     if (/^[0-9a-fA-F]{24}$/.test(value)) {
-        const doc = await FoodRestaurant.findOne({ _id: value, status: 'approved' }).lean();
-        if (!doc) return null;
-        return {
-            ...doc,
-            rating: normalizeRatingValue(doc.rating),
-            totalRatings: normalizeTotalRatingsValue(doc.totalRatings)
-        };
+        doc = await FoodRestaurant.findOne({ _id: value, status: 'approved' }).lean();
+    } else {
+        // Slug path: use normalized field for index-friendly exact match.
+        const restaurantNameNormalized = normalizeName(value);
+        if (restaurantNameNormalized) {
+            doc = await FoodRestaurant.findOne({
+                status: 'approved',
+                restaurantNameNormalized
+            }).lean();
+        }
     }
 
-    // Slug path: use normalized field for index-friendly exact match.
-    const restaurantNameNormalized = normalizeName(value);
-    if (!restaurantNameNormalized) return null;
-
-    const doc = await FoodRestaurant.findOne({
-        status: 'approved',
-        restaurantNameNormalized
-    }).lean();
     if (!doc) return null;
+
+    // Fetch outlet timings
+    const timing = await FoodRestaurantOutletTimings.findOne({ restaurantId: doc._id }).lean();
+    const availability = computeRestaurantAvailability(doc, timing);
+
     return {
         ...doc,
         rating: normalizeRatingValue(doc.rating),
-        totalRatings: normalizeTotalRatingsValue(doc.totalRatings)
+        totalRatings: normalizeTotalRatingsValue(doc.totalRatings),
+        outletTimings: timing || null,
+        isOpen: availability.isOpen,
+        closedReason: availability.reason
     };
 };
 
