@@ -73,7 +73,7 @@ export function ensureFirebaseInitialized(options = {}) {
   }
 
   if (enableRealtimeDb && !firebaseRealtimeDb) {
-    firebaseRealtimeDb = getDatabase(firebaseApp);
+    firebaseRealtimeDb = getDatabase(firebaseApp, databaseURL);
   }
   
   return firebaseApp;
