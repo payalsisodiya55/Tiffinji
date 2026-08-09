@@ -817,12 +817,6 @@ export default function Home() {
 
         const data = response?.data?.data || response?.data || response;
         const list = data?.categories || (Array.isArray(data) ? data : []);
-        console.log("DEBUG_HOME_CATEGORIES:", {
-          effectiveZoneId,
-          data,
-          listLength: list?.length,
-          list
-        });
         const categories = Array.isArray(list)
           ? list.map((cat, idx) => ({
             id: String(cat?.id || cat?._id || cat?.slug || idx),
@@ -1475,6 +1469,8 @@ export default function Home() {
                 location: restaurant.location, // Store location for distance recalculation
                 isActive: restaurant.isActive !== false, // Default to true if not specified
                 isAcceptingOrders: restaurant.isAcceptingOrders !== false, // Default to true if not specified
+                isOpen: restaurant.isOpen,
+                closedReason: restaurant.closedReason,
                 openDays: Array.isArray(restaurant.openDays)
                   ? restaurant.openDays
                   : [],
@@ -1497,12 +1493,10 @@ export default function Home() {
               const aAvailable = getRestaurantAvailabilityStatus(
                 a,
                 new Date(),
-                { ignoreOperationalStatus: true },
               ).isOpen;
               const bAvailable = getRestaurantAvailabilityStatus(
                 b,
                 new Date(),
-                { ignoreOperationalStatus: true },
               ).isOpen;
 
               if (aAvailable !== bAvailable) {
@@ -1752,8 +1746,8 @@ export default function Home() {
 
       // Re-sort data based on updated distances
       return [...updatedRestaurants].sort((a, b) => {
-        const aAvailable = getRestaurantAvailabilityStatus(a, new Date(), { ignoreOperationalStatus: true }).isOpen;
-        const bAvailable = getRestaurantAvailabilityStatus(b, new Date(), { ignoreOperationalStatus: true }).isOpen;
+        const aAvailable = getRestaurantAvailabilityStatus(a, new Date()).isOpen;
+        const bAvailable = getRestaurantAvailabilityStatus(b, new Date()).isOpen;
         if (aAvailable !== bAvailable) return aAvailable ? -1 : 1;
 
         if (appliedFilters.sortBy === "price-low") return (a.featuredPrice || 0) - (b.featuredPrice || 0);

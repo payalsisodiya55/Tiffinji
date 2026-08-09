@@ -822,6 +822,8 @@ export default function Under250() {
                 discountRules: Array.isArray(restaurant?.discountRules) ? restaurant.discountRules : [],
                 isActive: restaurant?.isActive !== false,
                 isAcceptingOrders: restaurant?.isAcceptingOrders !== false,
+                isOpen: restaurant?.isOpen,
+                closedReason: restaurant?.closedReason,
                 openDays: Array.isArray(restaurant?.openDays) ? restaurant.openDays : [],
                 outletTimings: restaurant?.outletTimings || null,
                 deliveryTimings: restaurant?.deliveryTimings || null,

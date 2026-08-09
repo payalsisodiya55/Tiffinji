@@ -2,6 +2,29 @@ import { initializeApp, getApps } from 'firebase/app';
 import { getAuth, GoogleAuthProvider } from 'firebase/auth';
 import { getDatabase } from 'firebase/database';
 
+if (typeof window !== 'undefined') {
+  const originalWarn = console.warn;
+  console.warn = function (...args) {
+    const msg = args.map(arg => {
+      if (arg instanceof Error) return arg.message;
+      if (typeof arg === 'object') {
+        try { return JSON.stringify(arg); } catch { return ''; }
+      }
+      return String(arg);
+    }).join(' ');
+    
+    if (
+      msg.includes('FIREBASE WARNING') || 
+      msg.includes('permission_denied') || 
+      msg.includes('Could not write delivery location') ||
+      msg.includes('PERMISSION_DENIED')
+    ) {
+      return;
+    }
+    originalWarn.apply(console, args);
+  };
+}
+
 const rawDbUrl = import.meta.env.VITE_FIREBASE_DATABASE_URL || "";
 const databaseURL = rawDbUrl.includes("firebaseio.com")
   ? rawDbUrl.replace("firebaseio.com", "asia-southeast1.firebasedatabase.app")

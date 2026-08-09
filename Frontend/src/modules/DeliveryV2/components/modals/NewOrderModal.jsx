@@ -115,20 +115,7 @@ export const NewOrderModal = ({ order, queuedOrders = [], onSelectOrder, onAccep
 
   if (!order) return null;
 
-  useEffect(() => {
-    console.log('[DeliveryPopupTrace] NewOrderModal mounted', {
-      popupOrderId: orderKey,
-      displayId: getOrderDisplayId(order),
-      queuedCount: queuedOrders.length,
-    });
-
-    return () => {
-      console.log('[DeliveryPopupTrace] NewOrderModal unmounted', {
-        popupOrderId: orderKey,
-        displayId: getOrderDisplayId(order),
-      });
-    };
-  }, [orderKey, order, queuedOrders.length]);
+  // Modal lifecycle hooks
 
   const bonus = order.deliveryBonusAmount || 0;
   const earnings = order.earnings || order.riderEarning || (order.orderAmount ? order.orderAmount * 0.1 : 0);

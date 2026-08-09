@@ -10,9 +10,14 @@ import {
 } from '@food/utils/userSocketManager';
 
 const debugLog = (...args) => {
-  if (import.meta.env.DEV) {
-    console.log('📬 [UserSocket]', ...args);
-  }
+  try {
+    if (
+      window.localStorage.getItem('user_socket_debug') === '1' ||
+      window.location.search.includes('user_socket_debug=1')
+    ) {
+      console.log('📬 [UserSocket]', ...args);
+    }
+  } catch {}
 };
 
 /**

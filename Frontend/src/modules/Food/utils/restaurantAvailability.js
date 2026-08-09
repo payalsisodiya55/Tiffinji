@@ -148,9 +148,9 @@ export const getRestaurantAvailabilityStatus = (restaurant, now = new Date(), op
     }
   }
 
-  const ignoreOperationalStatus = options?.ignoreOperationalStatus === true
-  const isActive = restaurant.isActive !== false
-  const isAcceptingOrders = restaurant.isAcceptingOrders !== false
+  const ignoreOperationalStatus = options?.ignoreOperationalStatus === true;
+  const isActive = restaurant.status === "approved" || restaurant.isActive !== false;
+  const isAcceptingOrders = restaurant.isAcceptingOrders !== false;
 
   if (!ignoreOperationalStatus && !isActive) {
     return {
@@ -172,73 +172,189 @@ export const getRestaurantAvailabilityStatus = (restaurant, now = new Date(), op
     }
   }
 
-  const dayName = DAY_NAMES[now.getDay()]
-  const todayTiming = getTodayTiming(restaurant, dayName)
+  const hasBackendIsOpen = typeof restaurant.isOpen === "boolean";
+  const backendIsOpen = restaurant.isOpen;
 
-  // Legacy openDays can get stale; enforce only when no explicit outlet timing exists for today.
-  const openDays = Array.isArray(restaurant.openDays) ? restaurant.openDays : []
-  if (!todayTiming && openDays.length > 0) {
-    const normalizedOpenDays = new Set(openDays.map((day) => normalizeDay(day)).filter(Boolean))
-    if (normalizedOpenDays.size > 0 && !normalizedOpenDays.has(dayName)) {
+  const todayIdx = now.getDay();
+  const yesterdayIdx = (todayIdx - 1 + 7) % 7;
+  const dayName = DAY_NAMES[todayIdx];
+  const yesterdayDayName = DAY_NAMES[yesterdayIdx];
+
+  const getWindow = (timing) => {
+    if (!timing) return null;
+    const { isOpen, openingTime, closingTime } = timing;
+    if (isOpen === false) return { isOpen: false };
+
+    if (!timing.source && Array.isArray(restaurant.openDays)) {
+      const normalizedOpenDays = new Set(restaurant.openDays.map(d => normalizeDay(d)).filter(Boolean));
+      if (normalizedOpenDays.size > 0 && !normalizedOpenDays.has(timing.day || dayName)) {
+        return { isOpen: false };
+      }
+    }
+
+    const openMin = parseTimeToMinutes(openingTime);
+    const closeMin = parseTimeToMinutes(closingTime);
+    if ((openingTime && openMin === null) || (closingTime && closeMin === null)) {
+      return { isOpen: true, isMalformed: true };
+    }
+    return {
+      isOpen: true,
+      openMin: openMin ?? null,
+      closeMin: closeMin ?? null,
+      openingTime,
+      closingTime
+    };
+  };
+
+  const getDayDetails = (dayVal) => {
+    const timing = getTodayTiming(restaurant, dayVal);
+    if (timing) {
       return {
-        isOpen: false,
-        isActive,
-        isAcceptingOrders,
-        isWithinTimings: false,
-        reason: "closed-day",
+        day: dayVal,
+        isOpen: timing.isOpen !== false,
+        openingTime: timing.openingTime || null,
+        closingTime: timing.closingTime || null,
+        source: 'outletTimings'
+      };
+    }
+    const openDays = Array.isArray(restaurant.openDays) ? restaurant.openDays : [];
+    const normalizedOpenDays = new Set(openDays.map(d => normalizeDay(d)).filter(Boolean));
+    const hasLegacyConfig = normalizedOpenDays.size > 0 || restaurant.openingTime || restaurant.closingTime;
+    if (hasLegacyConfig) {
+      const isDayOpen = normalizedOpenDays.size === 0 || normalizedOpenDays.has(dayVal);
+      return {
+        day: dayVal,
+        isOpen: isDayOpen,
+        openingTime: restaurant.openingTime || null,
+        closingTime: restaurant.closingTime || null,
+        source: 'legacy'
+      };
+    }
+    return null;
+  };
+
+  const todayDetails = getDayDetails(dayName);
+  const yesterdayDetails = getDayDetails(yesterdayDayName);
+
+  if (!todayDetails && !yesterdayDetails) {
+    const isOpen = hasBackendIsOpen ? backendIsOpen : true;
+    return {
+      isOpen,
+      isActive,
+      isAcceptingOrders,
+      isWithinTimings: isOpen,
+      openingTime: null,
+      closingTime: null,
+      minutesUntilClose: null,
+      closingCountdownLabel: null,
+      reason: restaurant.closedReason || "no-timings",
+    };
+  }
+
+  const todayParsed = getWindow(todayDetails);
+  const yesterdayParsed = getWindow(yesterdayDetails);
+
+  if ((todayParsed && todayParsed.isMalformed) || (yesterdayParsed && yesterdayParsed.isMalformed)) {
+    const isOpen = hasBackendIsOpen ? backendIsOpen : false;
+    return {
+      isOpen,
+      isActive,
+      isAcceptingOrders,
+      isWithinTimings: isOpen,
+      openingTime: null,
+      closingTime: null,
+      minutesUntilClose: null,
+      closingCountdownLabel: null,
+      reason: "invalid-timings",
+    };
+  }
+
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  let openByYesterdayOvernight = false;
+  let yesterdayClosingTime = null;
+  let minutesUntilYesterdayClose = null;
+
+  if (yesterdayParsed && yesterdayParsed.isOpen) {
+    const { openMin, closeMin, closingTime } = yesterdayParsed;
+    if (openMin !== null && closeMin !== null) {
+      if (closeMin <= openMin) {
+        if (nowMinutes < closeMin) {
+          openByYesterdayOvernight = true;
+          yesterdayClosingTime = closingTime;
+          minutesUntilYesterdayClose = closeMin - nowMinutes;
+        }
       }
     }
   }
 
-  if (todayTiming?.isOpen === false) {
-    return {
-      isOpen: false,
-      isActive,
-      isAcceptingOrders,
-      isWithinTimings: false,
-      reason: "day-closed",
+  let openByToday = false;
+  let todayOpeningTime = null;
+  let todayClosingTime = null;
+  let minutesUntilTodayClose = null;
+
+  if (todayParsed && todayParsed.isOpen) {
+    const { openMin, closeMin, openingTime, closingTime } = todayParsed;
+    if (openMin === null && closeMin === null) {
+      openByToday = true;
+    } else if (openMin !== null && closeMin !== null) {
+      if (openMin < closeMin) {
+        if (nowMinutes >= openMin && nowMinutes < closeMin) {
+          openByToday = true;
+          todayOpeningTime = openingTime;
+          todayClosingTime = closingTime;
+          minutesUntilTodayClose = closeMin - nowMinutes;
+        }
+      } else {
+        if (nowMinutes >= openMin) {
+          openByToday = true;
+          todayOpeningTime = openingTime;
+          todayClosingTime = closingTime;
+          minutesUntilTodayClose = (24 * 60 - nowMinutes) + closeMin;
+        }
+      }
     }
   }
 
-  const openingTime =
-    todayTiming?.openingTime ||
-    restaurant?.deliveryTimings?.openingTime ||
-    restaurant?.openingTime ||
-    null
-  const closingTime =
-    todayTiming?.closingTime ||
-    restaurant?.deliveryTimings?.closingTime ||
-    restaurant?.closingTime ||
-    null
+  const clientIsOpen = openByYesterdayOvernight || openByToday;
+  const isOpen = hasBackendIsOpen ? backendIsOpen : clientIsOpen;
 
-  const openingMinutes = parseTimeToMinutes(openingTime)
-  const closingMinutes = parseTimeToMinutes(closingTime)
-  const nowMinutes = now.getHours() * 60 + now.getMinutes()
-  const hasExplicitWindow = Boolean(openingTime || closingTime)
-  // If a restaurant provides only one side of the window, treat timings as not enforced
-  // (prevents accidental "offline" due to partial data).
-  const isWithinTimings = hasExplicitWindow
-    ? (openingMinutes !== null && closingMinutes !== null
-      ? isWithinTimeWindow(nowMinutes, openingMinutes, closingMinutes)
-      : true)
-    : true
-  const minutesUntilClose = isWithinTimings
-    ? getMinutesUntilClosing(nowMinutes, openingMinutes, closingMinutes)
-    : null
+  let activeClosingTime = null;
+  let minutesUntilClose = null;
+
+  if (isOpen) {
+    if (openByYesterdayOvernight) {
+      activeClosingTime = yesterdayClosingTime;
+      minutesUntilClose = minutesUntilYesterdayClose;
+    } else if (openByToday) {
+      activeClosingTime = todayClosingTime;
+      minutesUntilClose = minutesUntilTodayClose;
+    } else {
+      activeClosingTime = todayParsed?.closingTime || null;
+      if (activeClosingTime) {
+        const closeMin = parseTimeToMinutes(activeClosingTime);
+        if (closeMin !== null) {
+          minutesUntilClose = closeMin > nowMinutes ? closeMin - nowMinutes : null;
+        }
+      }
+    }
+  }
+
+  const reason = isOpen 
+    ? "open" 
+    : (todayDetails && todayDetails.isOpen === false ? "day-closed" : "outside-hours");
 
   return {
-    isOpen: isWithinTimings,
+    isOpen,
     isActive,
     isAcceptingOrders,
-    isWithinTimings,
-    openingTime,
-    closingTime,
+    isWithinTimings: isOpen,
+    openingTime: todayParsed?.openingTime || null,
+    closingTime: activeClosingTime || todayParsed?.closingTime || null,
     minutesUntilClose,
-    closingCountdownLabel: isWithinTimings
-      ? formatClosingCountdown(minutesUntilClose, closingTime)
+    closingCountdownLabel: isOpen && minutesUntilClose !== null && activeClosingTime
+      ? formatClosingCountdown(minutesUntilClose, activeClosingTime)
       : null,
-    reason: isWithinTimings
-      ? (isAcceptingOrders ? "open" : "open-by-timings")
-      : (hasExplicitWindow ? "outside-hours" : "no-timings"),
-  }
+    reason: restaurant.closedReason || reason,
+  };
 }

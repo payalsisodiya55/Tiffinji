@@ -16,7 +16,7 @@ import {
 } from '@food/utils/orderDispatchId';
 import { toast } from 'sonner';
 
-const debugDeliveryPopup = (...args) => console.log('[DeliveryPopupTrace]', ...args);
+const debugDeliveryPopup = () => {};
 
 // Components
 import LiveMap from '@/modules/DeliveryV2/components/map/LiveMap';
@@ -283,8 +283,6 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   useEffect(() => {
     let interval;
     if (isSimMode && simPath.length > 1 && simIndex < simPath.length - 1) {
-      console.log('[SimAuto] Glide Active âˆš');
-      
       interval = setInterval(() => {
         setSimProgress(prev => {
           const nextProgress = prev + 0.08; // 8% movement per tick
@@ -363,7 +361,6 @@ export default function DeliveryHomeV2({ tab = 'feed' }) {
   // Do not reset on each route refresh, otherwise marker appears frozen.
   useEffect(() => {
     if (isSimMode) {
-      console.log('[SimAuto] Resetting simulation playhead...');
       setSimIndex(0);
       setSimProgress(0);
       simInitializedRef.current = false;
