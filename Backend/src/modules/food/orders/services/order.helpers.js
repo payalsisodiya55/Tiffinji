@@ -134,7 +134,7 @@ export function normalizeOrderForClient(orderDoc) {
       order?.dispatch?.deliveryPartnerId || order?.deliveryPartnerId || null,
     rating: order?.ratings?.restaurant?.rating ?? order?.rating ?? null,
     restaurantNote: order?.restaurantNote || "",
-    pickupOtp: order?.pickupOtp || order?.restaurantPickupOtp || order?.deliveryOtp || "1234",
+    pickupOtp: order?.pickupOtp || order?.restaurantPickupOtp || order?.deliveryOtp || generateFourDigitDeliveryOtp(),
     cancellationReason: (order?.orderStatus?.includes('cancel') || order?.status?.includes('cancel')) 
       ? (order.statusHistory?.findLast(h => h.to?.includes('cancel'))?.note || "")
       : null,

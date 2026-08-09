@@ -889,7 +889,7 @@ export async function requestPickupOtpDelivery(orderId, deliveryPartnerId) {
     throw new ForbiddenError('Not your order');
   }
 
-  const existingOtp = String(order.pickupOtp || order.restaurantPickupOtp || '1234').trim();
+  const existingOtp = String(order.pickupOtp || order.restaurantPickupOtp || '').trim();
   if (!order.pickupOtp) {
     order.pickupOtp = existingOtp || generateFourDigitDeliveryOtp();
     await order.save();

@@ -7,6 +7,7 @@ import { getPublicDiningCategories, getPublicDiningRestaurants, getPublicRestaur
 import { createBooking, getMyBookings, createReview, getRestaurantBookings, updateBookingStatus } from '../modules/food/dining/controllers/diningBooking.controller.js';
 import uploadRoutes from '../modules/uploads/routes/upload.routes.js';
 import restaurantAdminRoutes from '../modules/food/admin/routes/admin.routes.js';
+import * as adminController from '../modules/food/admin/controllers/admin.controller.js';
 import userRoutes from '../modules/food/user/routes/user.routes.js';
 import orderUserRoutes from '../modules/food/orders/routes/order.routes.user.js';
 import paymentRoutes from '../core/payments/payment.routes.js';
@@ -37,6 +38,7 @@ router.use('/v1/food/restaurant', restaurantRoutes);
 router.use('/v1/food', landingRoutes);
 router.use('/v1/food/search', searchRoutes);
 router.get('/v1/food/dining/categories/public', getPublicDiningCategories);
+router.get('/v1/food/admin/fee-settings/public', adminController.getFeeSettings);
 router.get('/v1/food/dining/restaurants/public', getPublicDiningRestaurants);
 router.get('/v1/food/dining/restaurants/:restaurantId/occupied-seats/public', getPublicRestaurantOccupiedSeats);
 

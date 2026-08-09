@@ -157,7 +157,7 @@ const transformOrderForList = (order) => ({
   sortTimestamp: new Date(getAllOrdersTimestamp(order)).getTime(),
   scheduledAt: order.scheduledAt || null,
   restaurantNote: order.restaurantNote || null,
-  pickupOtp: order.pickupOtp || order.restaurantPickupOtp || order.deliveryOtp || "1234",
+  pickupOtp: order.pickupOtp || order.restaurantPickupOtp || order.deliveryOtp || null,
 });
 
 // Completed Orders List Component
@@ -3846,7 +3846,7 @@ function OrderCard({
           {pickupOtp || (isReady || isPreparing || normalizedStatus === "confirmed") ? (
             <div className="px-3 py-2 bg-emerald-50 border border-emerald-200 rounded-xl flex justify-between items-center w-full" onClick={(e) => e.stopPropagation()}>
               <span className="text-[10px] font-extrabold text-emerald-700 uppercase tracking-wider">Pickup OTP</span>
-              <span className="text-[15px] font-black text-emerald-900 tracking-[0.25em]">{pickupOtp || "1234"}</span>
+              <span className="text-[15px] font-black text-emerald-900 tracking-[0.25em]">{pickupOtp || "----"}</span>
             </div>
           ) : null}
 
@@ -4014,7 +4014,7 @@ function PreparingOrders({
         paymentMethod: order.paymentMethod || order.payment?.method || null,
         scheduledAt: order.scheduledAt || null,
         restaurantNote: order.restaurantNote || null,
-        pickupOtp: order.pickupOtp || order.restaurantPickupOtp || order.deliveryOtp || "1234",
+        pickupOtp: order.pickupOtp || order.restaurantPickupOtp || order.deliveryOtp || null,
       };
     })
     .filter((order) => !hiddenOrderIds.has(order.mongoId || order.orderId));
@@ -4272,7 +4272,7 @@ function ReadyOrders({ onSelectOrder, refreshToken = 0 }) {
     dispatchStatus: order.dispatch?.status || null,
     scheduledAt: order.scheduledAt || null,
     restaurantNote: order.restaurantNote || null,
-    pickupOtp: order.pickupOtp || order.restaurantPickupOtp || order.deliveryOtp || "1234",
+    pickupOtp: order.pickupOtp || order.restaurantPickupOtp || order.deliveryOtp || null,
   }));
 
   if (loading) {

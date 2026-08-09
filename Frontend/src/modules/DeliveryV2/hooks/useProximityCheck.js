@@ -57,10 +57,15 @@ export const useProximityCheck = () => {
     );
   }, [riderPoint, targetLocation]);
 
-  const isDevMode =
-    import.meta.env.VITE_APP_MODE === 'developer' ||
-    import.meta.env.VITE_ENABLE_RANGE_BYPASS === 'true' ||
-    import.meta.env.DEV;
+  const isLocalhost = typeof window !== 'undefined' && (
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  );
+
+  const isDevMode = import.meta.env.DEV || (isLocalhost && (
+    window.location?.search?.includes('bypass_range=true') ||
+    localStorage?.getItem('bypass_range') === 'true'
+  ));
 
   const isWithinRange = isDevMode ? true : distanceToTarget <= actionLimit;
 

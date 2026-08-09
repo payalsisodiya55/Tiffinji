@@ -56,6 +56,8 @@ export const initializeFirebaseRealtime = () => {
             databaseURL = databaseURL.replace('firebaseio.com', 'asia-southeast1.firebasedatabase.app');
         }
 
+        const serviceAccount = getServiceAccountFromEnv();
+
         if (!serviceAccount) {
             logger.warn('⚠️ Firebase service account not configured. Firebase features may not work.');
             return null;
