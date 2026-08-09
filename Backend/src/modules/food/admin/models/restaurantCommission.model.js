@@ -6,8 +6,7 @@ const restaurantCommissionSchema = new mongoose.Schema(
             type: mongoose.Schema.Types.ObjectId,
             ref: 'FoodRestaurant',
             required: true,
-            unique: true,
-            index: true
+            unique: true
         },
         defaultCommission: {
             type: {
