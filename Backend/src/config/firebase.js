@@ -51,8 +51,10 @@ export const initializeFirebaseRealtime = () => {
             return { db, messaging };
         }
 
-        const serviceAccount = getServiceAccountFromEnv();
-        const databaseURL = config.firebaseDatabaseUrl;
+        let databaseURL = config.firebaseDatabaseUrl || 'https://tiffinji-default-rtdb.asia-southeast1.firebasedatabase.app';
+        if (databaseURL && databaseURL.includes('firebaseio.com')) {
+            databaseURL = databaseURL.replace('firebaseio.com', 'asia-southeast1.firebasedatabase.app');
+        }
 
         if (!serviceAccount) {
             logger.warn('⚠️ Firebase service account not configured. Firebase features may not work.');
