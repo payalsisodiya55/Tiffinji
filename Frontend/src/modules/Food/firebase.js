@@ -10,7 +10,7 @@ const firebaseConfig = {
   messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "",
   storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "",
   measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID || "",
-  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || ""
+  databaseURL: import.meta.env.VITE_FIREBASE_DATABASE_URL || "https://tiffinji-default-rtdb.asia-southeast1.firebasedatabase.app"
 };
 
 // Internal state
